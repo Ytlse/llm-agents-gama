@@ -203,7 +203,7 @@ c'est le gros du travail et c'est ce qui rend chaque chiffre du § 5 attribuable
 - Trois planchers : hasard uniforme sur l'offre, tout-voiture, durée minimale.
 - Quatre références tabulaires ajustées sur les microdonnées : logit multinomial, gradient
   boosté, régression logistique à noyau, forêt aléatoire. Parité stricte d'estimation. Aucune
-  ne domine sur les trois lectures ; le plafond se lit lecture par lecture.
+  ne domine sur les deux lectures ; le plafond se lit lecture par lecture.
 - Trois familles de décideurs sous test : **modèles de langue sous prompt minimal** (factuel,
   sans consigne d'arbitrage), **les mêmes sous prompt expert** (quatre principes d'arbitrage
   qualitatifs, sans seuil numérique ni label d'enquête, réglés sur une population de
@@ -212,7 +212,7 @@ c'est le gros du travail et c'est ce qui rend chaque chiffre du § 5 attribuable
 - Comment le prompt expert a été obtenu : cinq phrases sur les mutations réflexives et les
   trois garde-fous. Le texte intégral en annexe D. **Dire ici que le prompt du classifieur typé
   a été réglé séparément, et que le § 5.3 le mesure hors échantillon `[c2]`.**
-- **Tableau 1** : les quinze décideurs, trois lectures, plus une colonne « étendue sur trois
+- **Tableau 1** : les quinze décideurs, deux lectures, plus une colonne « étendue sur trois
   graines » pour les décideurs qui l'ont (ticket 103, lot B). Caption au-dessus.
 
 ---
@@ -235,7 +235,7 @@ de tête. Le § 5 s'ouvre par ces quatre phrases, puis les développe.
   pour le même texte. Une phrase, en constat, pas en découverte (deux versions d'une famille).
 
 ### 5.2 Ce que la calibration déplace, et ce qu'elle ne déplace pas — 350 mots
-- **Tableau 2** : gains appariés du prompt expert sur le prompt minimal, trois lectures,
+- **Tableau 2** : gains appariés du prompt expert sur le prompt minimal, deux lectures,
   intervalles à 95 %. +2,27 [+1,40 ; +3,22], +3,37, +7,25 sur le composite ; tous excluent zéro ;
   de une fois et demie à cinq fois et demie la variation de cohorte.
 - **Figure 3** : la part voiture par tranche de distance. Le prompt minimal est plat entre 40
@@ -387,8 +387,8 @@ manque, et la campagne de presse.
 ### Tableaux (3)
 | # | Contenu | Largeur | Caption |
 |---|---|---|---|
-| 1 | Quinze décideurs, trois lectures, étendue inter-graines | pleine | au-dessus |
-| 2 | Gains appariés du prompt expert, trois lectures, IC 95 % | pleine | au-dessus |
+| 1 | Quinze décideurs, deux lectures, étendue inter-graines | pleine | au-dessus |
+| 2 | Gains appariés du prompt expert, deux lectures, IC 95 % | pleine | au-dessus |
 | 3 | Accord unitaire, six décideurs | colonne | au-dessus |
 
 ### Annexes (matériel supplémentaire, hors des 8 pages)

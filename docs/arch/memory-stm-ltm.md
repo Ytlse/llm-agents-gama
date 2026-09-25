@@ -979,15 +979,22 @@ complété de deux ou trois entrées épisodiques rappelées pour la décision e
 *working context* de MemGPT (Packer et al., 2023, § 2.1).
 
 ```
-Mes habitudes                                 [ produit par le JOURNAL DES TRAJETS ]
-- work le matin : à vélo, 9 fois sur 11. 2 retard(s) de plus de 10 min
+My habits                                     [ produit par le JOURNAL DES TRAJETS ]
+- work in the morning: by bike, 9 times out of 11. 2 delay(s) of more than 10 min
 
-Ce que je sais                                        [ produit par les CONCEPTS ]
-- Le bus 401 est fiable, sauf les jours de pluie.                          (12 obs.)
+What I know                                           [ produit par les CONCEPTS ]
+- Bus 401 is reliable, except on rainy days.                               (12 obs.)
 
-Ce qui a changé récemment                    [ produit par les CHOCS et les MISES À L'ÉCART ]
-- Je ne crois plus que : la ligne A est fiable
+What changed recently                        [ produit par les CHOCS et les MISES À L'ÉCART ]
+- I no longer believe that: line A is reliable
 ```
+
+**Le bloc parle la langue du prompt** depuis le 2026-09-25 : titres, créneaux, modes et formules
+étaient restés en français (« Mes habitudes », « à vélo, 9 fois sur 11 ») dans un prompt de
+décision entièrement anglais. Les runs d'avant cette date portent donc les titres français. Les
+lecteurs de prompts (`scripts/analysis/mesures/souvenir.py`,
+`scripts/analysis/tableau_quatre_voies.py`) reconnaissent les deux langues. Le reste de cette
+page cite les titres sous leur nom français d'origine.
 
 **Les trois blocs sont CALCULÉS, aucun n'est écrit par le modèle**, et le lot ne coûte donc
 aucune inférence supplémentaire. La spécification ne calculait que les habitudes et confiait les
@@ -1034,7 +1041,7 @@ pendant ses jours de service, sans passer par le rappel ni par le seuil de gravi
 
 ```
 Ce qui a changé récemment
-- [ PRESSE ] This morning I read in the paper: « (Translated from French) Gusts… »
+- [ PRESSE ] I read in the paper: « (Translated from French) Gusts… »
 - Je ne crois plus que : la ligne A est fiable
 ```
 

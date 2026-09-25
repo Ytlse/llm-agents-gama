@@ -119,6 +119,8 @@ def _runtime(leve, taches, par_pop=2):
                 saturation_retries=0,
                 saturation_retry_seconds=1.0,
                 abandon_when_busy=True,
+                client_wait_seconds=120.0,
+                client_wait_margin_seconds=10.0,
             ),
         ),
         balancer=_Balancer(leve),

@@ -95,9 +95,15 @@ def lecteurs(exposition, evenement_id: str, population) -> dict[str, tuple[str, 
     Le tirage est déterministe et se fait sur l'ordre NUMÉRIQUE des identifiants, comme
     `extraire_sous_population.py` : un ordre d'insertion ferait de deux chargements de la même
     cohorte deux expériences différentes.
+
+    LECTEURS DÉSIGNÉS (2026-09-25). Si `exposition.lecteurs` est déclaré, il remplace le tirage
+    dans TOUS les foyers : un article sur le métro lu par le seul adulte qui ne le prend jamais
+    ne mesure rien. Un désigné mineur, immobile ou absent du foyer n'est pas remplacé par un
+    tiré : le foyer reste sans lecteur, et l'alarme dit de ne pas le compter comme exposé.
     """
     from loguru import logger
 
+    designes = {str(d) for d in (getattr(exposition, "lecteurs", None) or ())}
     retenus: dict[str, tuple[str, str]] = {}
     par_foyer: dict[str, list] = {}
     for personne in population:
@@ -134,6 +140,9 @@ def lecteurs(exposition, evenement_id: str, population) -> dict[str, tuple[str, 
                 f"comme exposé dans l'analyse."
             )
             continue
+        if designes:
+            _designes_du_foyer(designes, foyer, membres, adultes, evenement_id, retenus, logger)
+            continue
         ordonnes = sorted(adultes, key=lambda p: (len(str(p.person_id)), str(p.person_id)))
         combien = max(1, min(int(exposition.lecteurs_par_foyer), len(ordonnes)))
         classes = sorted(
@@ -151,6 +160,17 @@ def lecteurs(exposition, evenement_id: str, population) -> dict[str, tuple[str, 
             f"{[str(p.person_id) for p in classes[:combien]]}, co-résident(s) témoin(s) "
             f"{ecartes or 'aucun'}, mineur(s) hors tirage {enfants or 'aucun'}"
         )
+    if designes:
+        dans_les_foyers = {
+            str(p.person_id) for membres in par_foyer.values() for p in membres
+        }
+        hors = sorted(designes - dans_les_foyers)
+        if hors:
+            logger.error(
+                f"[ALARME] [evenements] « {evenement_id} » : lecteur(s) désigné(s) {hors} "
+                f"absent(s) des foyers exposés {sorted(exposition.foyers)} de la population "
+                f"chargée. Ils ne liront pas : vérifier la déclaration contre le MANIFEST."
+            )
     if not retenus:
         logger.error(
             f"[ALARME] [evenements] « {evenement_id} » : règle `foyers` sur "
@@ -159,3 +179,32 @@ def lecteurs(exposition, evenement_id: str, population) -> dict[str, tuple[str, 
             f"Vérifiez que la population chargée porte bien `household.id`."
         )
     return retenus
+
+
+def _designes_du_foyer(designes, foyer, membres, adultes, evenement_id, retenus, logger) -> None:
+    """Retient les lecteurs désignés de ce foyer, s'ils sont des adultes mobiles."""
+    nommes = [p for p in membres if str(p.person_id) in designes]
+    if not nommes:
+        logger.error(
+            f"[ALARME] [evenements] « {evenement_id} » : lecteurs désignés {sorted(designes)}, "
+            f"AUCUN dans le foyer {foyer} (membres {[str(p.person_id) for p in membres]}). "
+            f"Personne n'y lira, aucun tirage ne le remplace : ne pas compter ce foyer comme "
+            f"exposé dans l'analyse."
+        )
+        return
+    admis = [p for p in nommes if p in adultes]
+    for p in nommes:
+        if p not in admis:
+            motif = "immobile" if getattr(p, "immobile", False) else f"mineur ({age_de(p)} ans)"
+            logger.error(
+                f"[ALARME] [evenements] « {evenement_id} » : lecteur désigné {p.person_id} du "
+                f"foyer {foyer} écarté — {motif}. Aucun tirage ne le remplace."
+            )
+    for p in admis:
+        retenus[str(p.person_id)] = (foyer, f"foyer:{foyer}")
+    if admis:
+        temoins = [str(p.person_id) for p in membres if p not in admis]
+        logger.info(
+            f"[evenements] « {evenement_id} » : foyer {foyer} — lecteur(s) DÉSIGNÉ(S) "
+            f"{[str(p.person_id) for p in admis]}, co-résident(s) témoin(s) {temoins or 'aucun'}"
+        )

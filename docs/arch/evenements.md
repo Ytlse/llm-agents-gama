@@ -55,7 +55,12 @@ dépendait donc de **l'âge de la mémoire le jour de lecture**, pas de l'articl
 **Le mécanisme.** La ligne est posée **au rendu du prompt**, pas en mémoire, et le pré-calcul
 n'est pas touché :
 
-    [ PRESSE ] This morning I read in the paper: « (Translated from French) … »
+    [ PRESSE ] I read in the paper: « (Translated from French) … »
+
+La ligne ne dit plus « this morning » depuis le 2026-09-25 : elle est servie cinq jours et reste
+en mémoire longue, et « ce matin » y devenait faux dès le lendemain. Les archives d'avant cette
+date portent l'ancienne formulation ; `scripts/analysis/lecture_avant_decision.py` reconnaît les
+deux.
 
 - elle vient de la déclaration, pas du rappel : elle est là quelle que soit la gravité jugée ;
 - elle est **en tête** du bloc « Ce qui a changé récemment », et `memoire__changements_max` ne
@@ -104,8 +109,8 @@ mobile — prénom, âge, occupation, `(CHILD)` pour un mineur, modes habituels,
 trajet d'un enfant ; une version simplifiée de l'article ne le ferait pas changer. Le gabarit
 demande donc au lecteur de « décider pour l'enfant ». Le membre reçoit :
 
-    [ FOYER ] Claire told me this morning: « Take the tram today, the wind is dangerous. »
-    [ FOYER ] My parents decided this morning: « We'll drive you to school today. »
+    [ FOYER ] Claire told me: « Take the tram today, the wind is dangerous. »
+    [ FOYER ] My parents decided: « We'll drive you to school today. »
 
 Chaque membre informé :
 
@@ -382,9 +387,13 @@ scellée** comme `population_20_foyers_059`, en plus d'un persona unitaire. Ce q
   `a09_vent_autan` déclare les six foyers de `population_20_foyers_059` : sur une autre
   population, aucun ne serait présent et personne ne lirait. La cohorte prend alors
   `groupes.expose` du `MANIFEST.yaml` de la population, et refuse le bras s'il n'y en a pas.
+- **Les lecteurs désignés viennent du même MANIFEST** (2026-09-25). Si `groupes.expose[]`
+  porte `lecteurs: [...]`, la cohorte les écrit dans `exposition.lecteurs` de l'événement dérivé.
+  Des lecteurs déclarés dans l'événement mais absents de la population sont ceux d'une autre
+  population : ils cèdent la place à ceux du manifeste, et le bras est refusé s'il n'y en a pas.
 - **Le contrôle d'injections (ticket 108) compte un lecteur par foyer exposé**
-  (`foyers × lecteurs_par_foyer`), sur l'événement DÉRIVÉ réellement joué ; un écart lève
-  `[ALARME] [108]` en fin d'expérience.
+  (`foyers × lecteurs_par_foyer`), ou un par lecteur désigné, sur l'événement DÉRIVÉ réellement
+  joué ; un écart lève `[ALARME] [108]` en fin d'expérience.
 - **L'essai à blanc (`DRY_RUN=1`) ne touche ni à l'état ni aux bras** (2026-09-24). Il vérifie le
   routage des modèles et le refus du partage sans foyer, sans simulation ni appel, et range ses
   traces synthétiques sous `essai_a_blanc/`. Jusque-là il écrivait `etat.json` et un faux
@@ -393,8 +402,10 @@ scellée** comme `population_20_foyers_059`, en plus d'un persona unitaire. Ce q
 - **Enchaîner plusieurs expériences sans surveillance :** `make experience-memoire-nuit` joue,
   une par une et en arrière-plan, toutes les expériences déclarées non terminées, dans l'ordre de
   création, ou `EXP="a b c"` dans cet ordre. Un bras suspendu pour saturation (503) est relancé
-  toutes les 30 min (`ATTENTE_S`), au plus 6 fois sans jour simulé gagné (`ESSAIS_MAX`). Un quota
-  épuisé fait passer à l'expérience suivante. La commande refuse de partir si une campagne tourne
+  toutes les 30 min (`ATTENTE_S`), au plus 6 fois sans jour simulé gagné (`ESSAIS_MAX`). Cela ne
+  marche que depuis le 2026-09-25 : la chaîne passait par `make`, qui rendait 2 au lieu du code 7
+  de suspension, et classait le bras « en échec ». Elle appelle maintenant l'orchestrateur
+  directement. Un quota épuisé fait passer à l'expérience suivante. La commande refuse de partir si une campagne tourne
   déjà et empêche la mise en veille du Mac (`caffeinate`). Le journal
   `experiments/enchainement_nuit_<date>.log` se termine par un bilan : terminées, suspendues à
   relancer, en échec.
@@ -412,11 +423,29 @@ quatre à deux adultes, un lecteur est tiré parmi les deux parents ; l'autre pa
 sont les témoins internes. Un âge absent n'exclut pas (il est signalé en WARNING) ; un foyer
 exposé sans adulte mobile lève `[ALARME]` et n'a pas de lecteur.
 
+**Le lecteur peut être désigné** (2026-09-25). Un article sur le métro lu par le seul adulte
+qui ne le prend jamais ne mesure rien. `exposition.lecteurs: ['1320713', '1127260']` remplace
+alors le tirage dans **tous** les foyers exposés. Exemple : dans le couple 643030, 1320713
+(abonné TC, dont toutes les options TC passent par le métro) lit ; sa conjointe 1320712 est le
+témoin interne. Un désigné mineur, immobile ou absent du foyer n'est **pas** remplacé par un
+tiré : le foyer reste sans lecteur, avec une `[ALARME]` qui dit de ne pas le compter comme
+exposé. Un foyer exposé sans désigné est dans le même cas. `lecteurs` n'est admis que sous la
+règle `foyers`, et pas avec `lecteurs_par_foyer` ≠ 1 : les deux champs diraient combien lisent.
+
 Population de mise au point : `population_4_foyer_133048` — un foyer de quatre (Arthur, 40 ans,
 et sa conjointe, 42 ans, cyclistes réguliers qui prennent aussi voiture, TC et marche ; deux
 enfants de 6 et 9 ans, surtout conduits). Extraite par
 `extraire_foyers.py --taille 4 --adultes 2 --menage 133048 --temoins 0 --motif …` ; le motif est
 écrit au manifeste.
+
+Population de l'expérience a13 (2026-09-25) : `population_6_foyers_a13` — le couple 643030
+(lecteur désigné 1320713) et la famille de quatre 534995 (lectrice désignée 1127260, 35 ans,
+abonnée TC ; le père roule en voiture, enfants de 5 et 8 ans). Les deux lecteurs prennent le
+métro dans les bancs du 16 au 22/09. Extraite par
+`extraire_foyers.py --taille 2 --taille 4 --adultes 2 --menage 643030 --menage 534995
+--lecteur 1320713 --lecteur 1127260 --temoins 0 --motif …` : `--taille` se répète pour mêler
+les tailles, `--lecteur` refuse un mineur ou un membre d'un foyer non exposé, et chaque
+lecteur est écrit au manifeste sous son foyer.
 
 Répartition Gemini par défaut (2026-09-24), mesurée sur 861500 (111 agents-jours) :
 
@@ -497,7 +526,7 @@ figure dans ses souvenirs rappelés. Trois conditions, et chacune a coûté un f
 
 1. *Le souvenir de l'événement*, et non un souvenir quelconque. Il se retrouve dans la mémoire
    longue de l'agent (`long_term_memory/user_metadata/`) : **exact** quand l'entrée contient le
-   texte — le `lu` dépose `[ PRESSE ] This morning I read in the paper: « … »` tel quel —,
+   texte — le `lu` dépose `[ PRESSE ] I read in the paper: « … »` tel quel —,
    **indicatif** (`~`) quand elle est datée du jour de l'exposition ou après et porte deux mots
    saillants — le vécu, reformulé. Aucun identifiant ne relie l'entrée à l'événement.
 2. *Servi pour cette décision.* La trace (`trace_rappel.jsonl`) est datée de l'heure de départ

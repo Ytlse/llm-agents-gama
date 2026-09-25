@@ -23,7 +23,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "services" / "llm-agents"))
-from experiences import memoire
+from experiences import memoire, rejeu_ab
 
 logging.basicConfig(
     level=logging.INFO,
@@ -96,6 +96,74 @@ def estimer_cout(config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+RACINE_REJEU = REPO_ROOT / "experiments" / "rejeu_ab"
+
+
+def espace_rejeu(nom_exp: str, config: dict[str, Any]) -> str | None:
+    """L'espace de rejeu de l'expérience : son nom, si elle déclare `rejeu_ab: true`."""
+    return nom_exp if config.get("rejeu_ab") else None
+
+
+def mettre_de_cote_magasin(nom_exp: str) -> Path | None:
+    """Un traité qui repart de zéro ne doit pas rejouer une tentative précédente.
+
+    Le magasin d'une tentative avortée est RENOMMÉ, jamais effacé : ses réponses ont été payées
+    et disent ce que le modèle a répondu. Rien à faire s'il est absent ou vide.
+    """
+    magasin = RACINE_REJEU / nom_exp
+    if not magasin.is_dir() or not any(magasin.glob("*.json")):
+        return None
+    cible = RACINE_REJEU / f"{nom_exp}.mis_de_cote_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    magasin.rename(cible)
+    logger.warning(
+        f"[{nom_exp}] magasin de rejeu d'une tentative précédente mis de côté → {cible.name} : "
+        f"le traité repart de zéro, il ne rejoue pas l'ancien."
+    )
+    return cible
+
+
+def archive_du_bras(nom_exp: str, branche: str) -> Path | None:
+    """Le répertoire d'archive qu'a produit le bras, d'après le manifeste de la cohorte."""
+    manifeste = REPO_ROOT / "experiments" / "runs" / f"{nom_exp}_{branche}" / "manifeste.json"
+    try:
+        entrees = json.loads(manifeste.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    for e in reversed(entrees):
+        if e.get("branche") == branche and e.get("archive"):
+            return Path(e["archive"])
+    return None
+
+
+def controler_rejeu(nom_exp: str, racine_bras: Path) -> dict[str, Any] | None:
+    """Après le témoin : chaque appel d'avant l'événement doit avoir été servi par rejeu."""
+    archive = archive_du_bras(nom_exp, "control")
+    journal = archive / "llm_exchanges.jsonl" if archive else None
+    if journal is None or not journal.is_file():
+        logger.error(
+            f"[ALARME] [{nom_exp}] rejeu : journal des échanges du témoin introuvable "
+            f"({journal or 'aucune archive au manifeste'}) — le rejeu ne peut pas être vérifié."
+        )
+        return None
+    date_evt = rejeu_ab.date_premiere_injection(racine_bras / "traite" / "evenements.jsonl")
+    resultat = rejeu_ab.bilan(rejeu_ab.lire_echanges(journal), date_evt)
+    resultat["consignes"] = len(list((RACINE_REJEU / nom_exp).glob("*.json")))
+    resultat["archive_temoin"] = str(archive)
+    if resultat["payes_avant_evenement"]:
+        logger.error(
+            f"[ALARME] [{nom_exp}] rejeu : {resultat['payes_avant_evenement']} appel(s) du témoin "
+            f"PAYÉS avant l'événement ({date_evt}) — les bras ont divergé pour une autre raison "
+            f"que lui. Premiers : {resultat['premiers_payes_avant'][:3]}"
+        )
+    else:
+        logger.info(
+            f"[{nom_exp}] rejeu conforme : témoin servi à {resultat['servis']}/"
+            f"{resultat['servis'] + resultat['payes']} par rejeu, aucun appel payé avant "
+            f"l'événement ({date_evt}) ; {resultat['consignes']} réponses consignées."
+        )
+    return resultat
+
+
 def executer_bras(
     nom_exp: str,
     branche: str,
@@ -133,6 +201,11 @@ def executer_bras(
     env = dict(os.environ)
     if routage:
         env["INSTANCES_ADMISES"] = json.dumps(routage)
+    # Rejeu à prompt exact : le MÊME espace pour les deux bras, sinon le témoin ne voit rien.
+    espace = espace_rejeu(nom_exp, config)
+    env["REJEU_AB"] = espace or ""
+    if espace:
+        logger.info(f"[{nom_exp}_{branche}] rejeu à prompt exact : espace {espace}")
     if "memoire_importance_choc" in config:
         env["MEMOIRE__IMPORTANCE_CHOC"] = str(config["memoire_importance_choc"])
     if "stm_reflection_min_entries" in config:
@@ -226,7 +299,10 @@ def rapprochement_injections(config: dict[str, Any], workdir_traite: Path) -> di
                 # Un article se lit une fois par LECTEUR : un par foyer exposé (règle `foyers`),
                 # un par agent désigné (règle `agents`). Compter 1 faisait passer six lectures
                 # attendues pour une seule.
-                if expo.get("regle") == "foyers":
+                if expo.get("regle") == "foyers" and expo.get("lecteurs"):
+                    # Lecteurs désignés : chacun lit une fois, quel que soit son foyer.
+                    declarees = len(expo.get("lecteurs") or [])
+                elif expo.get("regle") == "foyers":
                     declarees = len(expo.get("foyers") or []) * int(expo.get("lecteurs_par_foyer") or 1)
                 elif expo.get("regle") == "agents":
                     declarees = len(expo.get("agents") or [])
@@ -344,6 +420,8 @@ def main() -> None:
         ecrire_etat()
         if reprise:
             logger.info(f"[{nom_exp}] reprise du bras {br}, suspendu le {etat_data[cle].get('suspendu_le')}.")
+        elif br == "treated" and espace_rejeu(nom_exp, config) and not args.dry_run:
+            mettre_de_cote_magasin(nom_exp)
 
         ret = executer_bras(nom_exp, br, config, cible, dry_run=args.dry_run)
         if ret == CODE_BRAS_SUSPENDU:
@@ -389,6 +467,8 @@ def main() -> None:
         etat_data["etat"] = "traite_ok" if traite_ok else "partielle"
     etat_data["fin"] = datetime.now(timezone.utc).isoformat()
     etat_data["rapprochement_ticket108"] = rappr
+    if traite_ok and temoin_ok and espace_rejeu(nom_exp, config) and not args.dry_run:
+        etat_data["rejeu_ab"] = controler_rejeu(nom_exp, racine_bras)
     ecrire_etat()
 
     logger.info("=" * 60)

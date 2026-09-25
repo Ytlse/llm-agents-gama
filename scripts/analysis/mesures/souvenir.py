@@ -90,7 +90,11 @@ CALENDRIER = frozenset({
 _MENTION = re.compile(r"^\s*\((?:translated|traduit)[^)]*\)\s*", re.IGNORECASE)
 LONGUEUR_EXTRAIT = 60
 
+# Titres anglais depuis le 2026-09-25 (`llm/noyau.py`), français dans les archives d'avant.
 SECTIONS = {
+    "My habits": "habitudes",
+    "What I know": "connaissances",
+    "What changed recently": "changements",
     "Mes habitudes": "habitudes",
     "Ce que je sais": "connaissances",
     "Ce qui a changé récemment": "changements",

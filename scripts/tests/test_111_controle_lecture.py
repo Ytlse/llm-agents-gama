@@ -209,3 +209,12 @@ def test_le_tableau_des_quatre_voies_separe_informes_et_non_informes(tmp_path):
     roles = {p: lad.sous_role(r, p, informes) for p, r in t4.roles_du_run(run).items()}
     assert roles == {LECTEUR: "expose", ENFANT: "co_resident_informe",
                      SILENCIEUX: "co_resident_non_informe"}
+
+
+def test_la_marque_de_lecture_reconnait_les_deux_formulations():
+    """« This morning » a disparu de la ligne le 2026-09-25 ; les archives d'avant le portent."""
+    from llm.evenements.injection import ligne_de_lecture
+
+    assert lad.MARQUE_LECTURE.search(ligne_de_lecture("Punaises de lit dans le métro"))
+    assert lad.MARQUE_LECTURE.search("[ PRESSE ] This morning I read in the paper: « x »")
+    assert not lad.MARQUE_LECTURE.search("[ FOYER ] Claire told me: « x »")

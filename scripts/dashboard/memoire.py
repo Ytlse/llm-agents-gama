@@ -268,7 +268,7 @@ def render(
                     "mem_mod_stm", "mem_mod_ltm", "mem_mod_enquete", "mem_stm_min",
                     "mem_pop_choisie", "mem_horizon_jours", "mem_importance_choc",
                     "mem_arret_extinction", "mem_jours_ext", "mem_partage_foyer",
-                    "mem_branche",
+                    "mem_rejeu_ab", "mem_branche",
                 ]
                 for k in cles_a_purger:
                     st.session_state.pop(k, None)
@@ -542,6 +542,16 @@ def render(
         help="Ticket 100, lot 4 : le récit du soir d'un habitant atteint ses co-résidents. "
              f"{foyers_partages} foyer(s) d'au moins deux membres dans cette population.",
     )
+    rejeu_ab = st.checkbox(
+        "Rejeu à prompt exact : le témoin reprend les réponses du traité tant que ses prompts "
+        "sont identiques",
+        value=bool(etat_base.get("rejeu_ab", True)),
+        key="mem_rejeu_ab",
+        help="Les deux bras restent le même monde jusqu'à l'événement : une question posée mot "
+             "pour mot par le témoin reçoit la réponse déjà obtenue par le traité, sans appel. "
+             "Sans lui, un modèle qui répond autrement au même prompt (gemini-3.5 en réflexion) "
+             "fait diverger les bras dès le premier soir.",
+    )
 
     st.info(
         "⚖️ **Orchestration contrefactuelle A/B (D3)** : « ▶ Lancer » exécute d'abord le "
@@ -599,6 +609,7 @@ def render(
         "stm_reflection_min_entries": int(stm_min),
         "contrefactuel_ab": True,
         "partage_foyer": bool(partage_foyer),
+        "rejeu_ab": bool(rejeu_ab),
         "adaptateur": adaptateur,
     }
 

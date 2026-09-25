@@ -112,12 +112,28 @@ class TestLogiqueDArret:
 
     def test_le_chemin_quota_du_077_est_preserve(self):
         """Lui seul connaît l'heure de réouverture : il ne doit pas être absorbé par le neuf."""
-        assert '_trace_decision.get("genre_erreur") == "quota_journalier"' in SOURCE
-        bloc = SOURCE.split(
-            '_trace_decision.get("genre_erreur") == "quota_journalier"'
-        )[1][:500]
-        assert 'motif="quota_journalier"' in bloc
+        garde = 'if _genre in ("quota_journalier", "surcharge_fournisseur"):'
+        assert '_genre = _trace_decision.get("genre_erreur")' in SOURCE
+        assert garde in SOURCE
+        bloc = SOURCE.split(garde)[1][:500]
+        assert "motif=_genre" in bloc, "le marqueur dit lequel des deux a arrêté le run"
         assert "reprise_a" in bloc, "l'heure de réouverture doit continuer de voyager"
+
+    def test_une_surcharge_qualifiee_arrete_au_premier_echec(self):
+        """2026-09-25 — le worker rend le lot `surcharge_fournisseur` avant l'abandon du client.
+
+        Sans ce genre, trois `Timeout expiré` muets entraient d'abord dans la mesure en replis
+        (2026-09-23 : 16 mars 05:00, 07:48, puis le troisième) avant que le seuil n'arrête le run.
+        """
+        bloc = SOURCE.split("if _arret_sur_repli_arme():")[1][:1500]
+        assert "surcharge_fournisseur" in bloc
+        assert bloc.index("surcharge_fournisseur") < bloc.index(
+            "self._replis_consecutifs >= settings.agent.replis_consecutifs_max"
+        ), "la surcharge qualifiée s'arrête AVANT le seuil des replis, pas après"
+
+    def test_l_arret_pour_surcharge_le_dit_en_alarme(self):
+        bloc = SOURCE.split('elif motif == "surcharge_fournisseur":')[1][:600]
+        assert "[ALARME] [hibernation]" in bloc
 
     def test_les_deux_arrets_rendent_la_main_sans_choisir(self):
         """Un `return None, None` : surtout pas un plan_index=0 après avoir décidé d'arrêter."""
@@ -162,3 +178,18 @@ class TestMarqueurDArret:
     def test_l_arret_reste_un_sigterm(self):
         """`sys.exit` se ravale en erreur de requête sous l'ASGI ; l'orchestrateur attend un 0."""
         assert "os.kill(os.getpid(), signal.SIGTERM)" in SOURCE
+
+
+# ── Le banc : une surcharge qualifiée reste transitoire ──────────────────────────────────
+
+
+def test_le_banc_range_la_surcharge_qualifiee_en_passerelle_occupee():
+    """R2 : transitoire, jamais `epuise` — et sans dépendre de la formulation du motif."""
+    import inspect
+
+    from experiences import decideurs as D
+
+    source = inspect.getsource(D)
+    branche = source.split('genre_erreur") == "surcharge_fournisseur"')[1][:600]
+    assert '"passerelle_occupee: "' in branche
+    assert "epuise" not in branche.split("elif")[0].replace("jamais `epuise`", "")

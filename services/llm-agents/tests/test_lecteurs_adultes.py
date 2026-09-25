@@ -56,3 +56,72 @@ def test_un_age_absent_n_exclut_pas():
     """Les populations sans âge gardent leur lecteur : l'écarter viderait le run sans bruit."""
     pop = [_membre("31", "H", None), _membre("32", "H", None)]
     assert len(lecteurs(_expo({"H"}), "a09", pop)) == 1
+
+
+# ── Lecteurs désignés (2026-09-25) ────────────────────────────────────────────────────────
+# a13 parle du métro : le lecteur doit en être usager, et le tirage parmi les adultes peut
+# tomber sur celui qui ne le prend jamais.
+
+
+def _designes(foyers, lecteurs_, graine=59):
+    return SimpleNamespace(foyers=set(foyers), lecteurs_par_foyer=1, graine=graine,
+                           lecteurs=frozenset(lecteurs_))
+
+
+def _alarmes():
+    messages: list[str] = []
+    return messages, logger.add(lambda m: messages.append(m.record["message"]), level="ERROR")
+
+
+COUPLE = [_membre("21", "C", 28), _membre("22", "C", 28)]
+
+
+def test_le_lecteur_designe_lit_quelle_que_soit_la_graine():
+    for graine in range(40):
+        lus = lecteurs(_designes({"F", "C"}, {"12", "22"}, graine=graine), "a13", FAMILLE + COUPLE)
+        assert lus == {"12": ("F", "foyer:F"), "22": ("C", "foyer:C")}
+
+
+def test_un_designe_mineur_n_est_pas_remplace_par_un_tire():
+    """Remplacer le désigné par un tiré changerait le protocole sans le dire."""
+    messages, sink = _alarmes()
+    try:
+        assert lecteurs(_designes({"F"}, {"13"}), "a13", FAMILLE) == {}
+    finally:
+        logger.remove(sink)
+    assert any("13" in m and "mineur" in m for m in messages)
+
+
+def test_un_foyer_sans_designe_reste_sans_lecteur():
+    messages, sink = _alarmes()
+    try:
+        lus = lecteurs(_designes({"F", "C"}, {"12"}), "a13", FAMILLE + COUPLE)
+    finally:
+        logger.remove(sink)
+    assert set(lus) == {"12"}
+    assert any("AUCUN dans le foyer C" in m for m in messages)
+
+
+def test_un_designe_hors_des_foyers_exposes_est_denonce():
+    messages, sink = _alarmes()
+    try:
+        lus = lecteurs(_designes({"F"}, {"12", "99"}), "a13", FAMILLE)
+    finally:
+        logger.remove(sink)
+    assert set(lus) == {"12"}
+    assert any("['99']" in m and "absent" in m for m in messages)
+
+
+def test_la_declaration_refuse_une_designation_sans_effet():
+    import pytest
+
+    from llm.evenements.declaration import RefusDEvenement, _lire_exposition
+
+    expo = _lire_exposition({"regle": "foyers", "foyers": ["F"], "lecteurs": ["12"]}, "a13")
+    assert expo.lecteurs == frozenset({"12"})
+    with pytest.raises(RefusDEvenement, match="règle `agents`"):
+        _lire_exposition({"regle": "agents", "agents": ["12"], "lecteurs": ["12"]}, "a13")
+    with pytest.raises(RefusDEvenement, match="combien lisent"):
+        _lire_exposition(
+            {"regle": "foyers", "foyers": ["F"], "lecteurs": ["12"], "lecteurs_par_foyer": 2}, "a13"
+        )

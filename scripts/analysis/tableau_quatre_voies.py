@@ -79,10 +79,13 @@ from scripts.analysis.memoire.sources import (
 # Les en-têtes que `llm/noyau.py` pose dans le prompt. LUS ICI, et il faut qu'ils restent
 # alignés : un en-tête renommé ferait sortir une voie à zéro sans qu'aucune erreur n'apparaisse.
 # Le test `scripts/tests/test_100_lot5_sorties.py` les compare à ceux de `noyau.py`.
+#
+# Chaque voie porte ses DEUX en-têtes : anglais depuis le 2026-09-25, français dans les archives
+# d'avant. Le premier est celui que pose `noyau.py` aujourd'hui.
 EN_TETES = {
-    "habitudes": "Mes habitudes",
-    "connaissances": "Ce que je sais",
-    "changements": "Ce qui a changé récemment",
+    "habitudes": ("My habits", "Mes habitudes"),
+    "connaissances": ("What I know", "Ce que je sais"),
+    "changements": ("What changed recently", "Ce qui a changé récemment"),
 }
 VOIES = ("habitudes", "connaissances", "changements", "rappel")
 CATEGORIE_DECISION = "itinary_multi_agent"
@@ -295,11 +298,15 @@ def _bloc(section: str, voie: str) -> str:
     """
     rappel = _LIGNE_RAPPEL.search(section)
     noyau = section[: rappel.start()] if rappel else section
-    debut = noyau.find(EN_TETES[voie])
-    if debut < 0:
+    for en_tete in EN_TETES[voie]:
+        debut = noyau.find(en_tete)
+        if debut >= 0:
+            break
+    else:
         return ""
-    reste = noyau[debut + len(EN_TETES[voie]):]
-    fins = [i for i in (reste.find(t) for t in EN_TETES.values()) if i > 0]
+    reste = noyau[debut + len(en_tete):]
+    tous = [t for alternatives in EN_TETES.values() for t in alternatives]
+    fins = [i for i in (reste.find(t) for t in tous) if i > 0]
     return reste[: min(fins)] if fins else reste
 
 

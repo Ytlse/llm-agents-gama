@@ -255,6 +255,26 @@ def foyers_de_la_population(persona_or_pop_id: str) -> tuple[set[str], list[str]
     return presents, exposes
 
 
+def lecteurs_du_manifeste(persona_or_pop_id: str, foyers: list[str]) -> list[str]:
+    """Les lecteurs que le MANIFEST désigne pour ces foyers exposés (`expose[].lecteurs`).
+
+    Vide si le manifeste n'en désigne pas : le lecteur se tire alors parmi les adultes.
+    """
+    import yaml
+
+    manifeste = POPULATIONS_DIR / str(persona_or_pop_id) / "MANIFEST.yaml"
+    if not manifeste.is_file():
+        return []
+    groupes = (yaml.safe_load(manifeste.read_text(encoding="utf-8")) or {}).get("groupes") or {}
+    voulus = {str(f) for f in foyers}
+    return [
+        str(pid)
+        for g in (groupes.get("expose") or [])
+        if str(g.get("household_id")) in voulus
+        for pid in (g.get("lecteurs") or [])
+    ]
+
+
 def choc_pour_persona(persona_id: str, evenement: str = CHOC_REFERENCE) -> str:
     """Écrit l'événement de référence restreint à ce run, et rend son nom pour `make run`.
 
@@ -316,6 +336,26 @@ def choc_pour_persona(persona_id: str, evenement: str = CHOC_REFERENCE) -> str:
                     f"population — exposition prise au MANIFEST : {exposes_manifeste}."
                 )
                 exposition["foyers"] = exposes_manifeste
+            # Les lecteurs désignés viennent du même manifeste que les foyers. Ceux que déclare
+            # l'événement, s'ils ne sont pas dans la population, sont ceux d'une autre.
+            du_manifeste = lecteurs_du_manifeste(persona_id, exposition.get("foyers") or [])
+            declares_l = [str(x) for x in exposition.get("lecteurs") or []]
+            if declares_l and not set(declares_l) & set(ids):
+                if not du_manifeste:
+                    message = (
+                        f"[ALARME] [{persona_id}] « {evenement} » désigne les lecteurs "
+                        f"{declares_l}, AUCUN n'est dans la population, et son MANIFEST n'en "
+                        f"désigne pas — le run se déroulerait sans lecteur."
+                    )
+                    logger.error(message)
+                    raise ValueError(message)
+                declares_l = []
+            if du_manifeste and not declares_l:
+                exposition["lecteurs"] = du_manifeste
+                logger.info(
+                    f"[{persona_id}] « {evenement} » : lecteurs désignés par le MANIFEST : "
+                    f"{du_manifeste} (au lieu d'un tirage parmi les adultes)."
+                )
         if regle_origine == "agents":
             presents = set(map(str, exposition.get("agents") or [])) & set(ids)
             if not presents:
@@ -528,6 +568,8 @@ def executer_run_persona(
             "MEMOIRE__PARTAGE_FOYER_ENABLED",
             # Tâches en vol : elles fixent la taille des micro-lots, donc les prompts servis.
             "WORLD__WORKER_CONCURRENCY",
+            # 2026-09-25 — espace de rejeu à prompt exact, partagé par les deux bras.
+            "REJEU_AB",
         ]:
             if var in os.environ:
                 extra_env[var] = os.environ[var]
@@ -1099,6 +1141,9 @@ def reglages_attendus(extra_env: dict[str, str] | None = None) -> dict[str, Any]
             attendus["partage_foyer"] = str(brut).strip().lower() in ("1", "true", "yes", "on")
         elif nom == "WORLD__WORKER_CONCURRENCY":
             attendus["taches_en_vol"] = int(brut)
+        elif nom == "REJEU_AB":
+            # Un conteneur qui ne l'a pas reçu paierait tout le témoin sans le dire.
+            attendus["rejeu_ab"] = brut
     return attendus
 
 

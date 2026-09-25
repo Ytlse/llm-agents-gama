@@ -50,7 +50,7 @@ from pathlib import Path
 from typing import Any
 
 from loguru import logger
-from llm.noyau import memoire_noyau
+from llm.noyau import TITRE_CHANGEMENTS, memoire_noyau
 from sim_clock import wall_clock
 from urban_mobility_agents.utils.ancre_run import jours_ecoules
 from urban_mobility_agents.utils.modeles import modele_de_instance
@@ -283,7 +283,7 @@ def perception_de(
             f"[ALARME] [enquete] mémoire noyau non construite pour {pid} ({err}) — la réponse "
             f"mesurerait le modèle de base et non l'agent."
         )
-        bloc = ["Ce qui a changé récemment", *(f"- {l}" for l in lignes)] if lignes else []
+        bloc = [TITRE_CHANGEMENTS, *(f"- {l}" for l in lignes)] if lignes else []
     if bloc:
         morceaux.append("\n".join(bloc))
     return "\n\n".join(morceaux)

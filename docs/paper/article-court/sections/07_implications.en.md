@@ -1,6 +1,8 @@
 # 7. Implications, limitations, conclusion
 
-<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 15:41:33 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 21:22:31 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+
+<!-- Relecture des gallicismes du 2026-09-25, accord de l'auteur (« Corrige ») : tics récurrents (« against » comparatif, « one » pour « un même », « carry », « bound », « under » devant un seuil, « rejoin », « from one X to another », « execute », « brings »), faux-amis (agenda, control, hypothesis, legibility, designate, demanding, chain, globally, bends, recedes), calques de construction et typographie à la française (« 0.9 point », « [a ; b] », « 30.3 % », « 1.06 dollars »). Aucun chiffre ne change ; les prompts et le message de l'annexe D ne sont pas touchés. -->
 
 <!-- Brouillon anglais, article court AAMAS 2027, PLAN.md § 7 — budget 550 mots
      (7.1 250, 7.2 150, 7.3 150). Rédigé le 2026-09-22 par l'agent article-writer.
@@ -9,17 +11,19 @@
      écrit, mais deux énoncés en dépendent, signalés au compte-rendu.
      Pas de figure de cascade, pas de part de flux, par consigne du PLAN § 7.1. -->
 
-## 7.1 What these results say about an architecture
+## 7.1 What it costs to let generative agents decide
 
-With the models used, the cost of one simulated day fixes where deliberation can be
-afforded. One weekday over 1,000 personas asks the language model 2,108 times and consumes
-3 million tokens, with memory disabled. Turning memory on adds some 2.5 million more. Scaled
-to the whole study area, one simulated day would ask 2.9 million times, for 2.6 to 4.2
-billion tokens. One published answer to that cost asks the model once per behavioural
+With the models used, the cost of one simulated day determines where deliberation can be
+afforded. One weekday for 1,000 personas requires 2,108 calls to the language model and
+consumes 3 million tokens, with memory disabled. The 702 trips with a single option never
+reach the model, and the measured run reused part of an earlier day. Turning memory on adds
+some 2.5 million tokens more. Scaled to the whole study area (1.32 million residents aged five
+and over), one simulated day would require 2.9 million calls, for 2.6 to 4.2 billion
+tokens. One published answer to that cost asks the model once per behavioural
 archetype rather than once per agent (Chopra et al., 2025). There, 8.4 million agents cost
-some 400 queries. Agents of one archetype share an estimated probability, and each draws its
-own action from it. That saving is closed to us here, since a non-tabulated event is exactly
-what no attribute records.
+some 400 queries. Agents of the same archetype share an estimated probability, and each draws its
+own action from it. This saving does not apply here: archetypes are defined by attributes,
+and an off-survey event is precisely what no attribute records.
 
 <!-- Audit des citations du 2026-09-23. Chopra et al. est paru à AAMAS 2025 (pp. 500-509),
      d'où l'année 2025 ; c'est aussi le PDF déposé. « agents with the same attributes sharing
@@ -62,14 +66,55 @@ what no attribute records.
      tabulé contredit par définition. Chiffre arrondi à « eight million » dans le corps, la
      précision décimale n'ajoutant rien. -->
 
-Our measurements suggest a division of labour by regime rather than one decision-maker
-everywhere. We propose this as a possible implementation, though not yet implemented in our
-system.
+At city scale, one way to afford generative agents would be to call them only when an event
+occurs, and let a cheaper decision-maker handle the ordinary day. Our system does not include
+this, and we do not estimate the share of trips that would reach the generative agent.
 
-- A machine learning model on structured data would hold the nominal regime.
-- A typed classifier would rate the severity of what happens. It would also say whether the
-  case has left that regime (Section 6.2), and choose the itinerary once it has.
-- The language model would receive what no variable carries and write it into memory.
+Such a split would also have to decide which parts of the memory need a language model. When
+the model rates the severity of an event (Section 6.2), it only picks one of five levels, a
+label that a typed classifier could return as well. Recording the trace of what happened and
+maintaining the belief drawn from it, by contrast, take written prose. Whether a classifier
+could also do this is an open question.
+
+<!-- Relecture éditoriale du 2026-09-25, accord de l'auteur (« Corrige », point C2) : venu du
+     § 6.2, dont il interrompait la description du mécanisme. Même contenu, même réserve
+     (question ouverte, pas d'impossibilité de principe) ; l'attaque le rattache à
+     l'architecture à deux étages du paragraphe précédent. Commentaires d'origine ci-dessous,
+     déplacés avec lui. -->
+
+<!-- source: fr/01_Introduction.md l. 81, commentaire de périmètre du ticket 101 § 2 : la
+     consolidation — écrire la trace, entretenir la croyance — est une génération de texte
+     que le classifieur à sortie typée ne produit pas ; « un classifieur à sortie typée
+     pourrait en principe les rendre aussi, et aucune expérience de cet article ne l'a
+     testé. Ne pas durcir cette phrase en une impossibilité de principe. » Ordre des deux
+     énoncés imposé par le PLAN § 6.2.
+     ⚠ Correction de l'auteur, 2026-09-23, EN DEUX TEMPS. « Rating the severity is not
+     established as one » était illisible : « one » reprenait « text generation » par-dessus
+     une frontière de phrase, et la phrase disait qu'on n'a pas ÉTABLI le contraire sans dire
+     de quoi il s'agissait. Première réécriture : la gravité est un échelon parmi cinq
+     (llm/gravite.py, NIVEAUX), donc une valeur dans une grille close.
+     ⚠ Seconde passe, même jour, objection de l'auteur : « toujours pas clair, actuellement
+     c'est fait par le LLM ». C'était vrai et la phrase le cachait. Le modèle REND bien la
+     gravité aujourd'hui, dans la réflexion du soir pour les concepts (llm/gravite.py,
+     gravite_jugee) et par un appel dédié pour les événements (llm/evenements/jugement.py,
+     juger). Ce qui s'énonce n'est donc pas qui le fait, mais ce que le maillon DEMANDE : un
+     échelon dans une grille close, que n'importe quel classifieur rend, là où écrire la trace
+     et entretenir la croyance demandent de la prose. Le corps le dit dans cet ordre — le
+     modèle le fait, et ce maillon n'est pas pour autant une génération de texte. La réserve
+     du ticket 101 tient, retournée en question ouverte plutôt qu'en constat d'absence
+     d'expérience. -->
+
+<!-- Message final, arbitrage de l'auteur du 2026-09-25 (relecture éditoriale, point 1.5) :
+     le papier évalue les agents génératifs, qui décident ; les modèles de référence et le
+     classifieur typé sont des points de comparaison. La division du travail en trois étages
+     (modèle de référence sur le jour ordinaire, classifieur typé qui note, aiguille et choisit
+     l'itinéraire, modèle de langue qui n'écrit qu'en mémoire) retirait la décision à l'agent
+     génératif et distribuait des rôles aux comparateurs : elle sort, avec le paragraphe qui
+     suivait (« On the ordinary day, our measurements point to a reference model… »). Reste une
+     seule piste, dite comme une conséquence du coût, où l'agent génératif garde la décision
+     quand un événement survient. Le titre suit. L'ancien texte et ses commentaires, gardés
+     ci-dessous pour l'historique, sont dans git. Le PLAN § 7.1 porte encore l'ancien titre et
+     l'architecture en cascade. -->
 
 <!-- source: fr/08_Limitations.md § 8.4, premier paragraphe : « un premier étage déterministe
      élague les alternatives physiquement ou légalement impossibles, absence de permis,
@@ -110,14 +155,6 @@ system.
      passent en liste. Il n'y a donc plus quatre étages mais trois ; le « then » du premier,
      qui suivait l'étage déterministe, tombe avec lui, et le paragraphe suivant dit « The
      nominal stage » là où il disait « The second stage ». -->
-
-On the ordinary day, our measurements point to the machine learning model on structured
-data. It does best at both scales. It reproduces the modal split of the cohort, and it gets
-the most trips right, 71.5 % against 66.7 % for a rule that sends everyone by car
-(Section 5.4). The typed classifier also reproduces the modal split, but it gets fewer trips
-right than the all-car rule, at 64.7 %. It cannot replace the machine learning model on the
-ordinary day. Its place is the second stage: rating what happens, and detecting when a case
-leaves that day. We do not estimate the share of trips each stage would take.
 
 <!-- ⚠ Auteur, 2026-09-25 : paragraphe réécrit, jugé illisible. Deux corrections de fond.
      (1) La question n'est pas ouverte : sur la journée ordinaire, le modèle tabulaire est le
@@ -164,27 +201,32 @@ leaves that day. We do not estimate the share of trips each stage would take.
 
 ## 7.2 Limitations
 
-Four limitations bound what these measurements support.
+Four limitations constrain what these measurements support.
 
-**A local survey behind every calibration.** Prompt calibration, the training of the machine
-learning models on structured data and the scoring of the bench all rest on a local travel
-survey. Toulouse has one, available to researchers on request. Such surveys are collected very
-unevenly from one country to another. Where none exists, prompts cannot be calibrated, and
-their error on that territory stays unknown.
+**A local survey behind every step.** Prompt tuning, the training of the reference models
+and the scoring of the benchmark all rest on a local travel survey. Toulouse has one,
+available to researchers on request. Such surveys are collected very unevenly across countries. Where none exists, prompts cannot be tuned, and their error on that
+territory stays unknown. Generative agents therefore do not spare a territory the need for
+local calibration data.
 
-**A sampled and declared reference.** The reference is a sample of trips that residents
-declare the day after, from memory. It therefore carries a sampling error, largest in the
-smallest strata, and misses the trips respondents forget. Bench scores measure a distance to
-these declared shares, not to the trips actually made.
+<!-- Relecture éditoriale du 2026-09-25, accord de l'auteur (« Corrige ») : la phrase renvoyait
+     à « the promise of Section 1.1, that generative agents would work without local calibration
+     data », promesse que l'auteur a retirée du § 1.1 le même jour parce que le papier défend
+     l'inverse (commentaire du § 1.1). La limite dit maintenant ce qu'elle établit, sans
+     renvoi à une phrase disparue. -->
+
+**A sampled and reported reference.** The reference is a sample of trips that residents
+report the day after, from memory. It therefore contains a sampling error, largest in the
+smallest strata, and misses the trips respondents forget. Benchmark scores measure a distance
+to these reported shares, not to the trips actually made.
 
 **One weekday as the reference.** The survey describes a single weekday outside school
 holidays, for residents aged five and over, and our results hold for that day alone. Extending
-the bench to weekends or holidays would need a reference for their activities, which differ
+the benchmark to weekends or holidays would need a reference for their activities, which differ
 from those of a working day.
 
 **No observed reaction to compare with.** Our survey records no reaction to an incident or to
-an article. Section 6 therefore shows that an agent reacts to an event none of the 21
-variables carries. It does not show that the agent reacts as a resident would.
+an article. Section 6 therefore shows that an agent reacts to an event none of the 21 variables records. It does not show that the agent reacts as a resident would.
 
 <!-- ⚠ § 7.2 RÉÉCRIT en quatre sous-paragraphes titrés, décisions de l'auteur du 2026-09-25.
      (1) L'écart d'information sort des limites : les modèles sur données structurées sont la
@@ -281,21 +323,47 @@ variables carries. It does not show that the agent reacts as a resident would.
 
 ## 7.3 Conclusion
 
-We asked what verbalised deliberation brings to urban simulation, and where it earns its
-place in a mobility agent. On the ordinary day, it brings no measurable gain. A calibrated
-generative agent reaches the machine learning models on structured data, fitted on that
-survey, without passing them. The two sit within the resolution of our cohort, and later
-language models may close the remaining distance or go beyond it. Such an agent remains
-usable in small simulations, where a few dozen travellers can afford one call per decision.
-A city multiplies the bill, in money and in energy, in proportion to its population. A
-smaller model served on local hardware could bring that bill within reach. Whatever the
-model, what a decision-maker consumes weighs in the choice of an architecture as much as its
-accuracy. A typed classifier that writes no text reaches the same band, for a fiftieth of
-the cost. Billions of tokens per simulated day are not justified to reproduce what the
-survey already tabulates. Deliberation earns its price on what the survey does not tabulate,
-and a hybrid architecture is what confines it there. An event no variable carries enters the
-agent's memory and bends its choices over time, then fades. We show through which channel,
-on one case traced end to end, within a population calibrated to that survey.
+We asked what verbalised deliberation adds to urban simulation, and where it earns its place
+in a mobility agent. Published evaluations of generative mobility agents rarely confront them
+with a real population. We confronted generative agents with a field survey, the 2023
+household travel survey of the Toulouse area, in France. We placed them between simple
+baselines and four reference models fitted on that survey, all reading the same 21 variables,
+then pushed them as far as prompt tuning allowed.
+
+On the ordinary day the survey describes, deliberation yields no measurable gain. A tuned
+generative agent comes within the cohort resolution of the reference models, without
+outperforming them. A typed classifier that writes no text reaches the same range for a
+fiftieth of the cost. Without reference models on the same survey, none of these three
+positions could have been read.
+
+The modal split does not tell the whole story. The tuned agent and the gradient boosting model
+score within the cohort resolution of each other, yet pick a different mode on one trip in
+three. The typed classifier gets more reported trips wrong than a baseline that sends everyone
+by car. An evaluation that scores the modal split alone, or one mode per trip, cannot see this
+gap between shares and decisions.
+
+The cost of deliberation grows with the population it simulates. One call per decision stays
+affordable for a few dozen travellers, whereas a city multiplies the bill, in money and in
+energy. A smaller model served on local hardware could bring that bill within reach, and later
+language models may close the remaining gap. Whatever the model, what a decision-maker
+consumes matters as much as its accuracy when choosing an architecture. Billions of tokens per
+simulated day cannot be justified just to reproduce what the survey already tabulates.
+
+Deliberation is worth its cost where the survey is silent. We traced one agent end to end over
+several weeks. An engine failure entered its memory and cut its car use for fifteen days,
+although the car stayed on offer, then faded.
+
+<!-- Conclusion refaite le 2026-09-25, relecture éditoriale, accord de l'auteur (« OK met à
+     jour ») : l'ancien bloc unique est découpé en cinq paragraphes (question et apport face à
+     l'état de l'art, jour ordinaire, parts contre décisions, coût, canal). Tous les éléments du
+     complément de l'auteur du même jour sont gardés (proche des modèles classiques, modèles à
+     venir, petite simulation, argent et énergie, modèle local, « what a decision-maker
+     consumes »). Ajouts : la contribution 2 (§ 5.4, désaccord sur un trajet sur trois,
+     classifieur sous le tout-voiture), et la réponse à l'état de l'art (§§ 1.2 et 2.2).
+     Premier paragraphe dans le texte de l'auteur : les phrases sur GTA, CitySim, CityReal et
+     Alves et al. de la proposition sont retirées par lui, « in France » ajouté. « over several
+     weeks » : § 6.3. Dernière phrase : limite « No observed reaction » du § 7.2. Budget levé
+     par l'auteur pour cette section. Ancienne version dans git. -->
 
 <!-- Complément de l'auteur, 2026-09-25 : fidélité proche des modèles classiques et ouverte
      aux modèles à venir, usage en petite simulation, coût financier et énergétique à l'échelle

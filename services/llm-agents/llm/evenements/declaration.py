@@ -193,7 +193,8 @@ class Exposition:
     `mode` — tout agent dont le trajet qui arrive a été fait dans l'un des modes déclarés.
     `tirage` — une part des agents, tirée de façon DÉTERMINISTE et stable d'un run à l'autre.
     `agents` — des identifiants nommés, pour un incident individuel reproductible.
-    `foyers` — un ou plusieurs membres par ménage désigné (lot 2).
+    `foyers` — un ou plusieurs membres par ménage désigné (lot 2). `lecteurs`, s'il est
+    déclaré, nomme qui lit dans chaque foyer à la place du tirage (2026-09-25).
     """
 
     regle: str
@@ -203,6 +204,7 @@ class Exposition:
     agents: frozenset[str] = frozenset()
     foyers: frozenset[str] = frozenset()
     lecteurs_par_foyer: int = 1
+    lecteurs: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -356,6 +358,21 @@ def _lire_exposition(brut: dict, evenement_id: str) -> Exposition:
 
     foyers = frozenset(str(f).strip() for f in (brut.get("foyers") or []) if str(f).strip())
 
+    # Lecteurs DÉSIGNÉS (2026-09-25) : quand l'article vise un mode, le lecteur doit en être
+    # usager, et un tirage parmi les adultes peut tomber sur celui qui ne le prend jamais.
+    lecteurs = frozenset(str(a).strip() for a in (brut.get("lecteurs") or []) if str(a).strip())
+    lecteurs_par_foyer = int(brut.get("lecteurs_par_foyer", 1))
+    if lecteurs and regle != "foyers":
+        raise RefusDEvenement(
+            f"événement « {evenement_id} » : `lecteurs` déclaré avec la règle `{regle}` — il ne "
+            f"désigne quelqu'un que sous la règle `foyers`, et resterait sans effet"
+        )
+    if lecteurs and lecteurs_par_foyer != 1:
+        raise RefusDEvenement(
+            f"événement « {evenement_id} » : `lecteurs` et `lecteurs_par_foyer` = "
+            f"{lecteurs_par_foyer} disent tous deux combien lisent — désigner les lecteurs suffit"
+        )
+
     return Exposition(
         regle=regle,
         modes=modes,
@@ -363,7 +380,8 @@ def _lire_exposition(brut: dict, evenement_id: str) -> Exposition:
         graine=int(brut.get("graine", 79)),
         agents=agents,
         foyers=foyers,
-        lecteurs_par_foyer=int(brut.get("lecteurs_par_foyer", 1)),
+        lecteurs_par_foyer=lecteurs_par_foyer,
+        lecteurs=lecteurs,
     )
 
 

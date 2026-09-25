@@ -341,7 +341,7 @@ def test_T1_la_decision_calculee_la_veille_porte_l_article(dispositif, monkeypat
         agent.query_past_experiences_for_travel(_contexte(lecteur, ts(4)), [_Option()], servies)
     )
     rendu = "\n".join(history)
-    assert f"{PREFIXE_LU} This morning I read in the paper:" in rendu
+    assert f"{PREFIXE_LU} I read in the paper:" in rendu
     # Le journal dit que la décision a été calculée avant l'injection, et de combien.
     assert any("calculée 17 h avant l'injection" in m for _, m in journal_logs)
     assert d.registre._compteurs.servies_avant_injection == 1
@@ -365,7 +365,7 @@ def test_T1_apres_l_injection_la_ligne_n_apparait_qu_une_fois(dispositif, monkey
     history = asyncio.run(
         agent.query_past_experiences_for_travel(_contexte(lecteur, ts(5)), [_Option()], servies)
     )
-    assert "\n".join(history).count("This morning I read in the paper:") == 1
+    assert "\n".join(history).count("I read in the paper:") == 1
 
 
 # ═════════════ T2 — cinq jours de déplacement, week-end exclu ═════════════════════════════
@@ -405,11 +405,11 @@ def test_T3_chaque_membre_voit_ce_qui_lui_a_ete_dit(dispositif):
     prenom = "Arthur" if d.lecteur == LECTEUR else "Claire"
 
     assert lignes(adulte, ts(4)) == [
-        f"{PREFIXE_FOYER} {prenom} told me this morning: "
+        f"{PREFIXE_FOYER} {prenom} told me: "
         f"« The parks close at six tonight because of the wind. »"
     ]
     assert lignes(ENFANT, ts(4)) == [
-        f"{PREFIXE_FOYER} My parents decided this morning: "
+        f"{PREFIXE_FOYER} My parents decided: "
         f"« We decided you'll go to school by bus today, not through the park. »"
     ]
     assert lignes(SILENCIEUX, ts(4)) == []
@@ -653,7 +653,7 @@ def test_T10_sans_lignes_le_bloc_est_identique_octet_pour_octet():
 def test_T10_lignes_en_tete_jamais_evincees(monkeypatch):
     monkeypatch.setattr(settings.agent, "memoire__changements_max", 1)
     bloc = memoire_noyau({}, _entrees_types(), wall_clock(ts(5)), "1", ["[ PRESSE ] x"])
-    i = bloc.index("Ce qui a changé récemment")
+    i = bloc.index("What changed recently")
     assert bloc[i + 1] == "- [ PRESSE ] x" and bloc[i + 2] == "- choc grave"
 
 
@@ -818,7 +818,7 @@ def test_T1_la_ligne_part_dans_le_payload_de_la_vraie_decision(dispositif, monke
     agent.llm_cache = _CacheComplet()
     _decision_complete(monkeypatch, agent, lecteur, ts(4, 7, 30), memoire)
     history = agent.llm_client.payloads[0]["agents"][0]["history"]
-    assert any(f"{PREFIXE_LU} This morning I read in the paper:" in h for h in history)
+    assert any(f"{PREFIXE_LU} I read in the paper:" in h for h in history)
     assert agent.llm_cache.lookups == 0 and agent.llm_cache.stores == 0
     assert d.registre._compteurs.decisions_sans_ligne == 0
 

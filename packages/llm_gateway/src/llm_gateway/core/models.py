@@ -69,6 +69,11 @@ class LLMRequest(BaseModel):
     # `llm_exchanges.jsonl` les appels d'un autre client servis pendant qu'il tournait (97
     # échanges d'une population de 1 000 agents dans un bras de 20, le 2026-09-24).
     origine: str | None = None
+    # Optionnel : espace de rejeu à prompt exact (core/rejeu_ab.py). Une tâche dont le prompt a
+    # déjà été servi dans cet espace reçoit la réponse consignée, sans appel au fournisseur. Les
+    # deux bras d'un A/B le partagent : ils restent le même monde tant que rien ne les sépare.
+    # Hors de la clé de lot : la consignation est par tâche, la fusion n'y change rien.
+    espace_rejeu: str | None = None
     context: str | None = Field(default=None, description="Contexte global de la ville (ex: trafic, météo)")
 
 
@@ -104,6 +109,8 @@ class Task(BaseModel):
     tokens_out: int | None = None
     # Pipeline timing segments measured inside the worker (P4_4, P5_1, P5_3, P5_4, P5_5)
     timing_p5: dict[str, Any] | None = None
+    # Rejeu à prompt exact : l'espace qui a servi la réponse, None si un fournisseur l'a servie.
+    rejeu: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -186,6 +193,7 @@ class TaskStatusResponse(BaseModel):
     provider_used: str | None = None
     latency_ms: float | None = None
     timing_p5: dict[str, Any] | None = None
+    rejeu: str | None = None
 
 
 # ---------------------------------------------------------------------------

@@ -326,6 +326,40 @@ La seconde vise le défaut du 2026-09-15 : un `moves.csv` tronqué à 274 lignes
 portait les 3 299 décisions. Le taux se calcule ainsi, et non `appariables / communes`, parce que
 les choix uniques feraient chuter ce dernier alors qu'ils sont légitimes.
 
+**Dérive entre bras d'un A/B mémoire** (`scripts/analysis/figure_derive_bras.py`, 2026-09-25).
+`apparier` compare deux exécutions d'une même condition ; ce script compare les deux bras d'une
+expérience mémoire (traité, témoin), qui ne partagent le même monde que jusqu'à l'événement —
+en principe. Il dit, jour par jour, quelle part des prompts de décision est identique octet pour
+octet dans les deux bras (et, parmi eux, quelle part des réponses), la même chose pour les
+souvenirs du soir, puis l'écart décision par décision (variation totale entre les distributions
+déclarées). Le test de Fisher compare l'après-événement aux **trois derniers jours d'avant**, pas
+à toute la période : la dérive grandit avec le temps, et la période entière l'avantagerait.
+Première mesure, presse a09 V2 : les souvenirs du lundi 16 (gemini-3.5-flash-lite, température 0)
+reviennent différents 8 fois sur 8 à prompt identique, les décisions (gemini-3.1-flash-lite)
+identiques 7 fois sur 7, et plus aucun prompt de décision n'est commun aux deux bras à partir du
+troisième jour — le cache étant désactivé, la mémoïsation du ticket 012 ne joue pas. Lecture
+seule ; sortie HTML autonome et bilan en console.
+
+```bash
+python3 scripts/analysis/figure_derive_bras.py TRAITE TEMOIN SORTIE.html --evenement AAAA-MM-JJ [--suivre PERSONNE@HH:MM]
+```
+
+**Rejeu à prompt exact entre les bras** (2026-09-25). Une expérience qui déclare `rejeu_ab: true`
+(case cochée par défaut dans le formulaire pour une expérience neuve ; une déclaration sans la clé
+tourne sans rejeu) donne aux deux bras le même espace de rejeu, son nom. Le traité paie ses
+appels, et la passerelle consigne chaque réponse sous l'empreinte du prompt exact de la tâche
+(`experiments/rejeu_ab/<expérience>/<empreinte>.json`). Le témoin reçoit ensuite, sans appel, la
+réponse du traité à toute question posée mot pour mot. Avant l'événement, les deux bras restent
+donc le même monde, souvenirs du soir compris. Après, seuls les agents que l'événement a touchés
+divergent, et le témoin ne paie que leurs appels.
+
+L'orchestrateur met de côté (renomme, n'efface pas) le magasin d'une tentative précédente quand
+le traité repart de zéro. Après le témoin, il écrit le bilan dans `etat.json` (clé `rejeu_ab`) :
+part des appels servis par rejeu, par catégorie, et appels **payés avant l'événement**. Ceux-là
+lèvent `[ALARME]`, car ils disent que les bras ont divergé pour une autre raison que l'événement.
+Le script de dérive compte un appel rejoué comme un prompt et une réponse identiques par
+construction.
+
 ## 5. Spec 03 + 05 — le runner (`experiences/runner.py`, `experiences/decideurs.py`)
 
 Boucle asynchrone : `parallelisme` personnes en vol (sémaphore), les déplacements d'une personne

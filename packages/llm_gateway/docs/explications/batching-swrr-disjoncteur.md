@@ -59,8 +59,15 @@ réserve gagne. Aucun sur un tour complet → `RuntimeError` « Tous les fournis
 saturés… », que le worker gère par attente locale (`provider_wait_seconds`, un essai toutes les
 `saturation_poll_seconds`) puis `saturation_retries` réessais. Ensuite, **occupé n'est pas en
 panne** : si un provider éligible n'est ni en cooldown, ni désactivé, ni au quota du jour, le lot
-continue d'attendre la fenêtre (borné par `max_retries`) au lieu d'être abandonné ; il n'est
-échoué que si tous sont réellement indisponibles, ou si `abandon_when_busy` l'impose.
+continue d'attendre la fenêtre au lieu d'être abandonné ; il attend aussi une instance en
+cooldown qui rouvre à temps. **Éligible** veut dire : l'instance épinglée, sinon les instances
+admises, sinon toutes — une instance exclue par la restriction ne rend pas le lot « occupé ».
+
+Toute attente est **bornée par celle du client** (`client_wait_seconds`, ou le `wait_timeout` de
+l'instance épinglée, moins `client_wait_margin_seconds`), mesurée depuis le premier essai du lot :
+au-delà, le résultat ne servirait plus personne. Le lot est alors rendu **qualifié** —
+`surcharge_fournisseur` (5xx, 429 par minute, fenêtre qui ne se libère pas à temps) ou
+`quota_journalier` — avec une heure de reprise, au lieu du « Timeout expiré » muet du client.
 
 ## Réservation RPM/TPM atomique
 

@@ -149,8 +149,8 @@ def test_D1_la_perception_porte_les_trois_blocs_de_la_memoire_noyau():
         noter_trajet(journal, "work", "matin", "car")
     agent = _agent(entrees=[_choc()], journal=journal)
     perception = enquetes.perception_de(agent, _personne(), T0)
-    assert "Mes habitudes" in perception
-    assert "Ce qui a changé récemment" in perception
+    assert "My habits" in perception
+    assert "What changed recently" in perception
     assert "panne sur voie rapide" in perception
 
 
@@ -163,8 +163,8 @@ def test_D2_la_perception_porte_le_recit_d_identite_complet():
 def test_D3_un_bloc_memoire_vide_ne_fabrique_pas_de_titre_creux():
     """D3 — un titre sans contenu dit au modèle qu'il devrait y avoir quelque chose."""
     perception = enquetes.perception_de(_agent(entrees=[], journal={}), _personne(), T0)
-    assert "Ce qui a changé récemment" not in perception
-    assert "Mes habitudes" not in perception
+    assert "What changed recently" not in perception
+    assert "My habits" not in perception
 
 
 def test_D4_la_sonde_voit_passer_le_temps():

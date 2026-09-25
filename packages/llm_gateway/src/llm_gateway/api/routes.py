@@ -15,6 +15,7 @@ composées par create_app(), jamais importées comme singletons.
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
@@ -24,9 +25,17 @@ from llm_gateway.api.deps import GatewayDeps
 from llm_gateway.api.metrics import AGENTS_RECEIVED
 from llm_gateway.config import redacted_dump
 from llm_gateway.core.batching import compute_batch_key
-from llm_gateway.core.models import LLMRequest, Task, TaskStatusResponse
+from llm_gateway.core.models import (
+    _FALLBACK_PRIORITY_SCORE,
+    AgentResponse,
+    LLMRequest,
+    Task,
+    TaskStatus,
+    TaskStatusResponse,
+)
+from llm_gateway.core.rejeu_ab import cle_rejeu, espace_valide, magasin_rejeu
 from llm_gateway.prompts.registry import UnknownCategoryError
-from llm_gateway.telemetry.logger import get_logger
+from llm_gateway.telemetry.logger import get_logger, log_llm_exchange
 
 logger = get_logger(__name__)
 
@@ -35,6 +44,62 @@ router = APIRouter()
 
 def _deps(request: Request) -> GatewayDeps:
     return request.app.state.deps
+
+
+_ESPACES_REFUSES: set[str] = set()
+
+
+async def _servir_par_rejeu(deps: GatewayDeps, handle, items, payload: LLMRequest, task: Task) -> bool:
+    """Rejeu à prompt exact (core/rejeu_ab.py) : sert la tâche si son prompt est déjà consigné.
+
+    Servie, la tâche est terminée avant d'entrer en file : ni lot, ni créneau RPM, ni appel. Le
+    journal des échanges la consigne quand même, fournisseur préfixé `rejeu_ab:` et zéro jeton,
+    pour que la comparaison des deux bras lise le même journal qu'avant.
+    """
+    if not payload.espace_rejeu:
+        return False
+    magasin = magasin_rejeu(deps.settings)
+    espace = espace_valide(payload.espace_rejeu)
+    if espace is None:
+        if payload.espace_rejeu not in _ESPACES_REFUSES:
+            _ESPACES_REFUSES.add(payload.espace_rejeu)
+            logger.error(
+                f"[ALARME] Espace de rejeu refusé (caractères hors [A-Za-z0-9._-]) : les tâches "
+                f"partent au fournisseur | espace={payload.espace_rejeu!r}"
+            )
+        return False
+    if magasin is None:
+        return False
+    messages = handle.render(items, payload.parameters)
+    cle = cle_rejeu(payload, messages)
+    rec = await asyncio.to_thread(magasin.lire, espace, cle)
+    if rec is None:
+        await asyncio.to_thread(deps.metrics.incr, f"rejeu_ab_absent_total:{payload.category}")
+        return False
+    task.status = TaskStatus.SUCCESS
+    task.result = [AgentResponse(**a) for a in rec.get("agents") or []]
+    task.provider_used = rec.get("provider")
+    task.latency_ms = 0.0
+    task.tokens_in = 0
+    task.tokens_out = 0
+    task.rejeu = espace
+    task.updated_at = datetime.now(UTC)
+    await deps.store.save(task)
+    await asyncio.to_thread(deps.metrics.incr, f"rejeu_ab_servi_total:{payload.category}")
+    await asyncio.to_thread(
+        log_llm_exchange,
+        task_id=task.task_id,
+        provider=f"rejeu_ab:{rec.get('provider')}",
+        messages=[{"role": m.role, "content": m.content} for m in messages],
+        response=rec.get("agents"),
+        tokens_in=0,
+        tokens_out=0,
+        category=payload.category,
+        sim_ts=task.priority_score if task.priority_score != _FALLBACK_PRIORITY_SCORE else None,
+        telemetry=deps.settings.telemetry,
+        origine=payload.origine,
+    )
+    return True
 
 
 def _to_response(task: Task) -> TaskStatusResponse:
@@ -50,6 +115,7 @@ def _to_response(task: Task) -> TaskStatusResponse:
         provider_used=task.provider_used,
         latency_ms=task.latency_ms,
         timing_p5=task.timing_p5,
+        rejeu=task.rejeu,
     )
 
 
@@ -92,6 +158,13 @@ async def create_task(payload: LLMRequest, request: Request) -> dict:
     task = Task(request=payload, priority_score=priority_score)
 
     AGENTS_RECEIVED.labels(category=payload.category).inc(len(payload.agents))
+    if await _servir_par_rejeu(deps, handle, items, payload, task):
+        return {
+            "task_id": task.task_id,
+            "status": task.status,
+            "provider_used": task.provider_used,
+            "message": f"Tâche servie par rejeu (espace {task.rejeu}), sans appel au fournisseur.",
+        }
     await deps.store.save(task)
 
     # Clé de batch basée sur le contexte et les paramètres globaux : on ne merge

@@ -142,8 +142,8 @@ def test_un_mode_inconnu_est_refuse_et_non_devine():
 def test_les_en_tetes_de_bloc_sont_ceux_de_noyau_py():
     """Un en-tête renommé ferait sortir une voie à zéro sans qu'aucune erreur n'apparaisse."""
     noyau = (RACINE / "services" / "llm-agents" / "llm" / "noyau.py").read_text("utf-8")
-    for en_tete in quatre.EN_TETES.values():
-        assert f'"{en_tete}"' in noyau, f"« {en_tete} » n'est plus posé par noyau.py"
+    for actuel, _archive in quatre.EN_TETES.values():
+        assert f'"{actuel}"' in noyau, f"« {actuel} » n'est plus posé par noyau.py"
 
 
 def test_les_quatre_voies_sont_celles_du_manuscrit():
@@ -337,9 +337,25 @@ ARTICLE = (
 )
 # L'entrée que la lecture dépose en mémoire (`llm/evenements/injection.py`), de type
 # `conversation` : `llm_agent.py` ne met en forme que les réflexions et les concepts rappelés.
-SOUVENIR_LU = f"[ PRESSE ] This morning I read in the paper: « {ARTICLE} »"
+SOUVENIR_LU = f"[ PRESSE ] I read in the paper: « {ARTICLE} »"
 # Une réflexion qui CITE l'article : lien exact, et elle peut, elle, atteindre le prompt.
 REFLEXION_CITANT = f"This morning the paper said: {ARTICLE} I kept driving."
+
+
+def test_les_en_tetes_anglais_s_imputent_comme_les_francais(tmp_path):
+    """2026-09-25 — le bloc parle anglais ; les archives d'avant gardent leurs titres français."""
+    _run_complet(tmp_path)
+    prompt = (
+        "--- agent_id=899549 ---\n"
+        "My habits\n- often the car\n"
+        f"What changed recently\n- {TEXTE}\n"
+    )
+    (tmp_path / "llm_exchanges.jsonl").write_text(json.dumps({
+        "category": "itinary_multi_agent", **DATEE, "messages": prompt,
+    }) + "\n", encoding="utf-8")
+    resultat = quatre.depouiller(tmp_path)
+    assert resultat["compte"][("vecu", "expose", "changements")]["exact"] == 1
+    assert not resultat["compte"].get(("vecu", "expose", "habitudes"))
 
 
 def _jour(ts: int) -> str:

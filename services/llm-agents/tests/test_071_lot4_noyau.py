@@ -66,8 +66,8 @@ def test_A1_la_part_du_mode_dominant_est_dite_sur_le_total():
     j = _journal(*([("work", "matin", "cycling", 0)] * 9), *([("work", "matin", "car", 0)] * 2))
     lignes = bloc_habitudes(j)
     assert len(lignes) == 1
-    assert "9 fois sur 11" in lignes[0]
-    assert "à vélo" in lignes[0]
+    assert "9 times out of 11" in lignes[0]
+    assert "by bike" in lignes[0]
 
 
 def test_A2_une_occurrence_n_est_pas_une_habitude():
@@ -92,7 +92,7 @@ def test_A4_les_retards_sont_comptes_et_dits_sans_etre_inventes():
         *([("work", "matin", "cycling", 0)] * 3),
         ("work", "matin", "cycling", 900),
     )
-    assert "1 retard(s) de plus de 10 min" in bloc_habitudes(avec)[0]
+    assert "1 delay(s) of more than 10 min" in bloc_habitudes(avec)[0]
 
 
 def test_A4bis_un_retard_court_ne_compte_pas():
@@ -103,13 +103,13 @@ def test_A4bis_un_retard_court_ne_compte_pas():
 def test_A5_sans_trajet_le_bloc_est_absent_et_non_vide_avec_un_titre():
     """Un titre sans contenu dit au modèle qu'il devrait y avoir quelque chose."""
     assert memoire_noyau({}, [], wall_clock(T0)) == []
-    assert "Mes habitudes" not in "".join(memoire_noyau({}, [], wall_clock(T0)))
+    assert "My habits" not in "".join(memoire_noyau({}, [], wall_clock(T0)))
 
 
 def test_A6_un_trajet_sans_mode_resolu_ne_fausse_pas_le_denominateur():
     """Il n'est pas compté du tout, plutôt que compté comme un mode inconnu."""
     j = _journal(*([("work", "matin", "cycling", 0)] * 4), ("work", "matin", None, 0))
-    assert "4 fois sur 4" in bloc_habitudes(j)[0]
+    assert "4 times out of 4" in bloc_habitudes(j)[0]
 
 
 def test_A7_le_bloc_des_habitudes_est_calcule_et_non_ecrit_par_le_modele():
@@ -184,7 +184,7 @@ def test_C2_un_concept_mis_a_l_ecart_est_present():
         depasse=(wall_clock(T0) - timedelta(days=1)).isoformat(),
     )
     lignes = bloc_changements([ecarte], wall_clock(T0))
-    assert lignes and "Je ne crois plus" in lignes[0]
+    assert lignes and "I no longer believe" in lignes[0]
     assert "la ligne A est fiable" in lignes[0]
 
 
@@ -237,15 +237,15 @@ def test_D2_les_trois_blocs_apparaissent_dans_l_ordre():
         wall_clock(T0),
     )
     texte = "\n".join(bloc)
-    assert texte.index("Mes habitudes") < texte.index("Ce que je sais")
-    assert texte.index("Ce que je sais") < texte.index("Ce qui a changé récemment")
+    assert texte.index("My habits") < texte.index("What I know")
+    assert texte.index("What I know") < texte.index("What changed recently")
 
 
 def test_D3_un_bloc_vide_ne_laisse_pas_son_titre():
     bloc = "\n".join(memoire_noyau({}, [_concept("je sais", obs=3)], wall_clock(T0)))
-    assert "Ce que je sais" in bloc
-    assert "Mes habitudes" not in bloc
-    assert "Ce qui a changé" not in bloc
+    assert "What I know" in bloc
+    assert "My habits" not in bloc
+    assert "What changed" not in bloc
 
 
 def test_D4_le_parametre_des_episodiques_est_distinct_du_top_k():
@@ -294,3 +294,16 @@ def test_le_journal_est_serialisable_en_json():
     j = _journal(*([("work", "matin", "cycling", 0)] * 4))
     relu = json.loads(json.dumps(j))
     assert bloc_habitudes(relu) == bloc_habitudes(j)
+
+
+def test_E1_le_bloc_parle_la_langue_du_prompt():
+    """2026-09-25 — les titres et les libellés étaient restés en français dans un prompt anglais."""
+    from llm import noyau
+
+    j = {}
+    for _ in range(3):
+        noter_trajet(j, "work", "matin", "public_transport")
+    texte = "\n".join(memoire_noyau(j, [], wall_clock(T0)))
+    assert "My habits" in texte and "work in the morning: by public transport, 3 times out of 3" in texte
+    for francais in noyau.TITRES_FRANCAIS.values():
+        assert francais not in texte

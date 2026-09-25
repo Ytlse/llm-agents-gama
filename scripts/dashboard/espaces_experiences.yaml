@@ -76,11 +76,9 @@ espaces:
         phase: Phase 4 — graines Jev (c1)
 
       # ── Phase 5 — rejeux inter-graines (c1) ────────────────────────────────────────
-      # Les dix exécutions graines 123 et 789 pour compléter la colonne inter-seed range
-      # du Tableau 1 du papier court (mistral-large, gemini-3.1 et jev promin02).
+      # Les exécutions de rejeu (graine 123 pour Mistral et Gemini 3.1 ; graines 123 et 789 pour Jev)
+      # pour compléter la colonne inter-seed range du Tableau 1 du papier court.
       - experience: exp_mistral-l-25_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go123_gt123_gc123_t0_nosim
-        phase: Phase 5 — rejeux inter-graines (c1)
-      - experience: exp_mistral-l-25_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go789_gt789_gc789_t0_nosim
         phase: Phase 5 — rejeux inter-graines (c1)
       - experience: exp_jev-1130_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go123_gt123_gc123_nosim
         phase: Phase 5 — rejeux inter-graines (c1)
@@ -88,15 +86,9 @@ espaces:
         phase: Phase 5 — rejeux inter-graines (c1)
       - experience: exp_gemini-31-fl_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go123_gt123_gc123_t0_nosim
         phase: Phase 5 — rejeux inter-graines (c1)
-      - experience: exp_gemini-31-fl_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go789_gt789_gc789_t0_nosim
-        phase: Phase 5 — rejeux inter-graines (c1)
       - experience: exp_gemini-31-fl_proexp05_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go123_gt123_gc123_t0_nosim
         phase: Phase 5 — rejeux inter-graines (c1)
-      - experience: exp_gemini-31-fl_proexp05_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go789_gt789_gc789_t0_nosim
-        phase: Phase 5 — rejeux inter-graines (c1)
       - experience: exp_mistral-l-25_proexp05_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go123_gt123_gc123_t0_nosim
-        phase: Phase 5 — rejeux inter-graines (c1)
-      - experience: exp_mistral-l-25_proexp05_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go789_gt789_gc789_t0_nosim
         phase: Phase 5 — rejeux inter-graines (c1)
 
       # ── Optionnel — les trois runs Gemini différés ─────────────────────────────────

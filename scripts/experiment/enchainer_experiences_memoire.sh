@@ -7,29 +7,37 @@
 # Sans argument, la file est lue dans data/experiences_memoire/ : toute expérience déclarée
 # depuis l'onglet « 🧠 Expériences Mémoire » dont l'état n'est pas « terminee », dans l'ordre de
 # création. Une seule campagne à la fois (règle du 2026-09-16) : refus de démarrer si un
-# orchestrateur tourne déjà. Chaque expérience passe par `make experience-memoire-lancer`, qui
-# joue le bras traité puis le témoin et reprend un bras suspendu là où il s'était arrêté.
+# orchestrateur tourne déjà. Chaque expérience passe par l'orchestrateur (la commande de
+# `make experience-memoire-lancer`), qui joue le bras traité puis le témoin et reprend un bras
+# suspendu là où il s'était arrêté.
+#
+# L'orchestrateur est appelé DIRECTEMENT, pas par `make` : `make` rend 2 pour toute recette en
+# échec, et le code 7 d'un bras suspendu n'arrivait jamais jusqu'ici. Jusqu'au 2026-09-25, une
+# suspension pour 503 était donc classée « en échec » et jamais réessayée.
 #
 # Sur un code 7 (bras suspendu par le garde-fou du ticket 105), la cause se lit dans
 # experiments/current/en_attente_quota.json :
 #   - quota_journalier : passage à l'expérience suivante (elle peut appeler d'autres clés) ;
-#   - replis_consecutifs ou decision_en_retard (saturation amont, HTTP 503 : le modèle ne
-#     décide plus, ou pas avant l'heure d'un départ) : nouvel essai dans ATTENTE_S secondes ;
+#   - replis_consecutifs, surcharge_fournisseur ou decision_en_retard (saturation amont,
+#     HTTP 503 : le modèle ne décide plus, ou pas avant l'heure d'un départ) : nouvel essai
+#     dans ATTENTE_S secondes ;
 #     après ESSAIS_MAX suspensions de suite sans jour simulé gagné, passage à la suivante.
 # Tout autre code : échec de cette expérience, passage à la suivante. La chaîne s'arrête au
 # bout de la file. Une expérience suspendue se reprend en relançant la même commande.
 #
 # Journal : experiments/enchainement_nuit_<AAAAMMJJ_HHMM>.log (une ligne par étape, bilan final)
-# et .detail.txt (sortie complète de make).
+# et .detail.txt (sortie complète de l'orchestrateur).
 set -u
 
 RACINE=${RACINE:-$(cd "$(dirname "$0")/../.." && pwd)}
+PYTHON=${PYTHON:-$RACINE/services/llm-agents/.venv/bin/python}
+ORCHESTRATEUR=${ORCHESTRATEUR:-$RACINE/scripts/experiment/orchestrateur_memoire.py}
 ATTENTE_S=${ATTENTE_S:-1800}
 ESSAIS_MAX=${ESSAIS_MAX:-6}
 
 HORODATAGE=$(date +%Y%m%d_%H%M)
 JOURNAL="$RACINE/experiments/enchainement_nuit_$HORODATAGE.log"          # résumé, une ligne par étape
-DETAIL="$RACINE/experiments/enchainement_nuit_$HORODATAGE.detail.txt"    # sortie complète de make
+DETAIL="$RACINE/experiments/enchainement_nuit_$HORODATAGE.detail.txt"    # sortie complète de l'orchestrateur
 
 log() { echo "$(date '+%F %T') $*" | tee -a "$JOURNAL"; }
 
@@ -107,7 +115,7 @@ for exp in "${EXPERIENCES[@]}"; do
   while :; do
     t0=$(date +%s)
     log "▶ $exp — lancement (suspensions sans progrès : ${sans_progres}/${ESSAIS_MAX})"
-    (cd "$RACINE" && make experience-memoire-lancer EXP="$exp") >>"$DETAIL" 2>&1
+    (cd "$RACINE" && "$PYTHON" "$ORCHESTRATEUR" --experience "$exp") >>"$DETAIL" 2>&1
     code=$?
     duree=$(( ($(date +%s) - t0) / 60 ))
 

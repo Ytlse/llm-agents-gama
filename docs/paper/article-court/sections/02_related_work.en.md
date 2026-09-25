@@ -1,6 +1,8 @@
 # 2. Related work
 
-<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-24 15:34:46 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 21:07:15 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+
+<!-- Relecture des gallicismes du 2026-09-25, accord de l'auteur (« Corrige ») : tics récurrents (« against » comparatif, « one » pour « un même », « carry », « bound », « under » devant un seuil, « rejoin », « from one X to another », « execute », « brings »), faux-amis (agenda, control, hypothesis, legibility, designate, demanding, chain, globally, bends, recedes), calques de construction et typographie à la française (« 0.9 point », « [a ; b] », « 30.3 % », « 1.06 dollars »). Aucun chiffre ne change ; les prompts et le message de l'annexe D ne sont pas touchés. -->
 
 <!-- Brouillon anglais, article court AAMAS 2027, PLAN.md § 2 — budget 450 mots
      (2.1 130, 2.2 180, 2.3 140). Rédigé le 2026-09-22 par l'agent article-writer.
@@ -11,14 +13,14 @@
      portée dans le commentaire source qui suit son paragraphe, pour que la passe LaTeX
      résolve (CITATIONS.md, entrées A1 à A17 et A33).
      Reprise du 2026-09-22 sur la RELECTURE_V1 : R1 (habitude et inertie, § 2.1), R2 (CitySim
-     et MATSim rétablis, § 2.2), R3 (débat sur le raisonnement rédigé, § 2.3), R4 (GAMA nommé
-     chez Alves et al.), § 9 bis sixième ligne (clause de défense supprimée au § 2.3), G3
+     et MATSim rétablis, § 2.2 ; MATSim ressorti le 2026-09-25, voir l'audit du § 2.2),
+     R3 (débat sur le raisonnement rédigé, § 2.3), R4 (GAMA nommé chez Alves et al.), § 9 bis sixième ligne (clause de défense supprimée au § 2.3), G3
      (une phrase coordonnée sur trois rompue) et G2 (bloc de compte-rendu en fin de fichier).
      ⚠ Les quatre clés ajoutées ce jour dans sample.bib — garling2003habitual,
      verplanken1997habit, wei2022chain, sprague2024cot — portent une note « entry written from
      memory », à vérifier avant soumission ; signalé au compte-rendu. -->
 
-Three literatures meet in this paper, and none of them measures whether verbalised
+Three bodies of work meet in this paper, and none of them measures whether verbalised
 deliberation helps agents reproduce the mode shares of a real territory.
 
 ## 2.1 Discrete choice and perception filters
@@ -26,9 +28,18 @@ deliberation helps agents reproduce the mode shares of a real territory.
 Transport research has predicted mode choice for more than fifty years with discrete choice
 models, which are statistically strong and behaviourally rigid. Such a model gives each mode a
 probability computed from travel time, cost and the traveller's attributes (McFadden, 1974;
-Ben-Akiva & Lerman, 1985). Analysts fit it on travel surveys. With one constant per mode, it
-reproduces their mode shares on the estimation sample (Train, 2009). Its decision rule,
-however, is a maximisation over fixed distributions of taste.
+Ben-Akiva & Lerman, 1985). Analysts fit it on travel surveys. Once each mode has its own
+intercept, the fitted model reproduces the survey's mode shares on the sample it was
+estimated on (Train, 2009). Its behaviour, however, is frozen at estimation. The traveller
+takes the mode of highest utility, and the weights given to time and cost, or their spread
+across travellers, never change afterwards.
+
+<!-- Relecture éditoriale du 2026-09-25, accord de l'auteur (« Corrige », point B8) : « one
+     constant per mode » et « taste parameters, or their distribution » supposaient une culture
+     d'économètre des transports que le lectorat AAMAS n'a pas. Glosés : constante spécifique
+     = « its own intercept » ; paramètres de goût = « the weights given to time and cost » ;
+     leur distribution (logit mixte) = « their spread across travellers ». Même source, même
+     portée (Train, 2009, § 3.7.1). -->
 
 <!-- Audit des citations du 2026-09-23. « for fifty years » devient « for more than fifty
      years » : McFadden (1974) cite déjà Warner (1962) sur le choix modal urbain. La phrase de
@@ -57,10 +68,9 @@ however, is a maximisation over fixed distributions of taste.
      faute de place pour sa glose. -->
 
 Behavioural research documents departures that no survey records, habit among them.
-Travellers with a strong mode habit acquire less information about the alternatives and choose
-by less elaborate strategies (Verplanken, Aarts & van Knippenberg, 1997). Adam & Gaudou (2025) surveyed 650 respondents and found that car users rate the car as
-more affordable than non-users do. Because a model fitted on surveys cannot carry such
-perception filters, generative agents are proposed to fill the gap.
+Travellers with a strong mode habit acquire less information about the alternatives and use simpler decision strategies (Verplanken, Aarts & van Knippenberg, 1997). Experience also
+filters perception. Adam & Gaudou (2025) surveyed 650 respondents and found that car users
+rate the car as more affordable than non-users do. A model fitted on surveys cannot represent such perception filters, and generative agents have been proposed to fill that gap.
 
 <!-- Audit des citations du 2026-09-23.
      Verplanken et al. (1997), résumé : les participants à forte habitude « acquired less
@@ -95,16 +105,13 @@ perception filters, generative agents are proposed to fill the gap.
 
 ## 2.2 Generative agents in mobility simulation
 
-Language models entered mobility simulation as the deliberating part that earlier simulators
-did not have. Park et al. (2023) place the model inside the agent, with a memory stream of its
-experiences and a reflection step. Liu, Yang & Yin (2025) carry the design into travel demand,
-and propose a hybrid with established components as a near-term step. CitySim (Bougie &
-Watanabe, 2025) scales such agents to a city. It validates them against time-use, travel,
-place-popularity and crowd-density data. No experiment there confronts a simulated modal split
-with an observed one. Its successor CityReal (Bougie, Ye & Watanabe, 2026) does, after tuning
-textual instructions toward target population statistics with the model frozen. Its reference
-data are proprietary, and no machine learning model on structured data faces its agents on mode choice. In earlier simulators such as MATSim (Horni et al., 2016), equilibrium
-comes from iterated scoring and replanning of plans, not from deliberation in language.
+Park et al. (2023) place a language model inside the agent, with a memory stream of its
+experiences and a reflection step. Liu, Yang & Yin (2025) extend the design to travel demand modelling, and propose a hybrid with established components as a near-term step. CitySim (Bougie & Watanabe, 2025) scales such
+agents to a city. It validates them against time-use, travel, place-popularity and
+crowd-density data, but no experiment there compares a simulated modal split with an observed
+one. Its successor CityReal (Bougie, Ye & Watanabe, 2026) does, after tuning the textual
+instructions toward target population statistics while keeping the model frozen. Its
+reference data are proprietary, however, and its agents are not compared with any reference model on mode choice.
 
 <!-- Audit des citations du 2026-09-23.
      Park et al. : le mot « episodic » n'apparaît pas dans l'article (0 occurrence), qui parle
@@ -122,7 +129,18 @@ comes from iterated scoring and replanning of plans, not from deliberation in la
      proprietary city-scale dataset » (§ 4.3). Son seul XGBoost prédit des classes de
      bien-être (tableau 1), pas le mode : d'où « on mode choice ».
      MATSim : les agents choisissent bien parmi leurs plans selon un score et replanifient ;
-     « rather than from an agent's deliberation » laissait croire à des agents sans choix. -->
+     « rather than from an agent's deliberation » laissait croire à des agents sans choix.
+     Supprimé le 2026-09-25 à la demande de l'auteur, avec la phrase d'ouverture du § 2.2
+     (« Language models entered mobility simulation as the deliberating part that earlier
+     simulators did not have. ») qui l'introduisait. La phrase MATSim opposait un simulateur à
+     l'équilibre à des décideurs : ce n'est pas l'axe du papier, déjà posé au § 2.1 par les
+     modèles de choix discret. Elle ne répondait pas non plus à « pourquoi pas MATSim ? », qui
+     porte sur la plateforme, et « earlier simulators » datait un outil toujours maintenu.
+     L'ouverture redisait la fin du § 2.1 (« generative agents have been proposed to fill that
+     gap »). Le § 2.2 s'ouvre sur Park et al. ; « the model » devient « a language model », faute
+     d'antécédent. R2 de la RELECTURE_V1 est défait pour moitié : CitySim reste, MATSim sort,
+     comme le prévoyait le PLAN § 2.2. La clé horni2016matsim n'est plus citée ; l'entrée reste
+     dans sample.bib, que BibTeX n'imprime pas sans citation. −36 mots. -->
 
 
 <!-- source: en/02_Related_work.md § 2.2, premier et deuxième paragraphes : Park et al. (2023)
@@ -144,12 +162,11 @@ comes from iterated scoring and replanning of plans, not from deliberation in la
      Sortent, par le PLAN § 2.2 : Chopra et al. (2024) sur les archétypes. La preuve de concept
      de Liu et al. tombe faute de place. -->
 
-GTA (Lämmer, Colley & Ebel, 2026) is the closest published system on the evaluation side, and
-two of its choices bound what it can show. Each of its agents returns one mode per trip
+GTA (Section 1.2) is the closest published system on the evaluation side, and two of its choices limit what it can show. Each of its agents returns one mode per trip
 rather than a distribution, so no distributional metric applies. It also simulates a single
-day, and its authors name multi-day memory as future work. We add a baseline beneath the agents and
-four models fitted on the survey above them. Our metric scores a whole distribution, not one
-mode per trip. Our agents carry events across days.
+day, and its authors name multi-day memory as future work. We add a baseline beneath the
+agents and four reference models above them. Our metric scores a whole distribution, not one
+mode per trip. Our agents keep events in memory across days.
 
 <!-- source: en/02_Related_work.md § 2.2, troisième paragraphe (v0.14 du 2026-09-10) :
      personas alignés sur l'enquête nationale allemande par truncate-replicate-sample, un modèle
@@ -175,8 +192,8 @@ mode per trip. Our agents carry events across days.
 
 Alves et al. (2026) stand closest on the platform side, though their evaluation has no human
 ground truth. They couple the GAMA platform to a language-model module with a persistent
-memory, which decides on a disruption whether an agent replans. They set its behaviour beside
-a rule-based baseline, and observed behaviour never enters.
+memory, which decides, when a disruption occurs, whether an agent replans. They compare its
+behaviour with a rule-based baseline, but never with observed behaviour.
 
 <!-- source: en/02_Related_work.md § 2.2, quatrième paragraphe : couplage de GAMA à un module
      LLM externe décidant sur chaque événement de perturbation si l'agent replanifie son
@@ -222,11 +239,10 @@ that reason.
 
 The same literature also studies these populations for what they do, not as human stand-ins.
 Flint Ashery, Aiello & Baronchelli (2025) find that collective biases can emerge in
-decentralised model populations even when no agent is biased individually. Their work does not
-treat the models as proxies for human participants. The SILICA instrument (Bin Tareaf, 2026)
-grades claims about such populations on a ladder of three tiers. Its perturbation library
-includes swapping the order in which actions are listed. We take that control from it, and
-randomise the order of the options.
+decentralised model populations even when no agent is biased individually. The SILICA
+instrument (Bin Tareaf, 2026) grades claims about such populations. One of its perturbations
+swaps the order in which actions are listed, and we adapt that control by randomising the
+order of the options.
 
 <!-- Audit des citations du 2026-09-23.
      Flint Ashery et al., résumé : des biais collectifs forts « can emerge … even when agents
@@ -260,7 +276,8 @@ randomise the order of the options.
 === SECTION REPORT ===
 Section        : 02 — Related work
 File           : docs/paper/article-court/sections/02_related_work.en.md
-Words / budget : 613 / 450 (+36 %), against 517 before the review pass and 590 after it.
+Words / budget : 583 / 450 (+30 %), against 619 before the 2026-09-25 cut of the opening
+  and MATSim sentences of 2.2 (−36), 517 before the review pass and 590 after it.
   The 2026-09-23 pass on 2.3 cut 19 words ; the rest of the gap to 613 is the author's own
   hand-edited sentence at line 102 (see the checker line).
   Historic arithmetic of the review pass : The review's own
@@ -275,8 +292,9 @@ Skeleton       :
   Transport research has predicted mode choice for fifty years with discrete choice
     models, which are statistically strong and behaviourally rigid.
   Behavioural research documents departures that no survey records.
-  Language models entered mobility simulation as the deliberating part that earlier
-    simulators did not have.
+  Park et al. (2023) place a language model inside the agent, with a memory stream of its
+    experiences and a reflection step. (Opening sentence and MATSim sentence cut on
+    2026-09-25, at the author's request.)
   GTA (Lämmer, Colley & Ebel, 2026) is the closest published system on the evaluation
     side, and three of its choices bound what it can show.
   Alves et al. (2026) stand closest on the platform side, though their evaluation has no

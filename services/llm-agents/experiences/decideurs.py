@@ -355,6 +355,11 @@ class DecideurPasserelle:
                     self.moniteur.compteurs["429"] += 1
                 self.derniere_erreur_quota = erreur
                 erreur = "epuise: " + erreur
+            elif trace.get("genre_erreur") == "surcharge_fournisseur":
+                # 2026-09-25 — surcharge QUALIFIÉE par la passerelle (5xx ou 429 par minute sur
+                # toutes les instances admises) : transitoire, jamais `epuise` (R2). Le seau est
+                # celui qu'y mettait déjà le texte, mais sans dépendre de sa formulation.
+                erreur = "passerelle_occupee: " + erreur
             elif _RE_CREDIT.search(erreur) or _RE_QUOTA.search(erreur):
                 # Quota (429) ou crédit (402) CONFIRMÉ : bloquant réel → `epuise` (R2).
                 if self.moniteur is not None:
@@ -476,11 +481,11 @@ def __getattr__(name: str):
 
 __all__ = [
     "DecideurAleatoire",
-    "DecideurTypesafe",
     "DecideurAntigravity",
     "DecideurDureeMinimale",
     "DecideurMajoritaireVoiture",
     "DecideurPasserelle",
     "DecideurRejeu",
+    "DecideurTypesafe",
     "construire_decideur",
 ]

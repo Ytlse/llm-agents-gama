@@ -1,0 +1,17 @@
+{
+  "nom": "exp_mem_presse_a13_punaises_metro_gem31flite_population_6_foy_25j_foyer",
+  "etat": "en_cours",
+  "cree_le": "2026-09-25T15:05:05.495844+00:00",
+  "traite": {
+    "etat": "ok",
+    "debut": "2026-09-25T16:31:35.672126+00:00",
+    "suspendu_le": "2026-09-25T16:52:30.363874+00:00",
+    "fin": "2026-09-25T19:50:26.495203+00:00"
+  },
+  "temoin": {
+    "etat": "en_cours",
+    "debut": "2026-09-25T19:50:26.495786+00:00"
+  },
+  "debut": "2026-09-25T16:31:35.670535+00:00",
+  "branche_active": "control"
+}

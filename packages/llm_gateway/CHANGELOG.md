@@ -4,6 +4,31 @@ Format : `## [version] - AAAA-MM-JJ`, entrées les plus récentes en tête. Le t
 l'usage : ce que le changement permet ou modifie pour qui s'en sert. Les fichiers touchés
 sont dans git.
 
+## [Non publié] - 2026-09-25
+
+### Une question déjà posée mot pour mot se ressert sans appel
+
+`LLMRequest.espace_rejeu` (optionnel, posé par `LLMGatewayClient(espace_rejeu=…)` sur tous les
+appels) nomme un espace de rejeu. Le worker y consigne la réponse de chaque tâche servie sous
+l'empreinte de son prompt exact : catégorie, messages rendus pour la tâche seule, paramètres,
+contraintes de routage. L'API ressert cette réponse à toute tâche de même empreinte dans le même
+espace, avant la file : ni lot, ni créneau, ni appel. `provider_used` reste le fournisseur
+d'origine, et le nouveau champ `rejeu` (tâche, réponse d'état, `TaskResult`) nomme l'espace. Le
+journal des échanges consigne la réponse resservie sous `rejeu_ab:<fournisseur>`. Réglage
+`rejeu.dir` (`LLM_GATEWAY_REJEU__DIR`) ; sans lui, ou sans espace, rien ne change.
+
+### Une surcharge du fournisseur se dit au client avant qu'il n'abandonne
+
+La règle « occupé n'est pas en panne » ne compte plus que les instances **éligibles** au lot :
+l'épinglée, sinon les `instances_admises`, sinon toutes. Une instance exclue, libre ou non, ne
+fait plus attendre un lot qu'elle ne servira jamais. Toute attente du worker — fenêtre pleine,
+cooldown qui rouvre à temps, rejeu d'un 5xx ou d'un 429 par minute — est bornée par celle du
+client (`resilience.client_wait_seconds`, 120 s, ou le `wait_timeout` de l'instance épinglée,
+moins `client_wait_margin_seconds`, 10 s), mesurée depuis le premier essai du lot. Au-delà, la
+tâche échoue avec `error_kind="surcharge_fournisseur"` et `resume_at`, ou `quota_journalier` si
+toutes les éligibles sont au quota du jour. Nouvelle alarme `alarme:surcharge_fournisseur`.
+Un client qui attend plus de 120 s sans épingler d'instance doit relever `client_wait_seconds`.
+
 ## [Non publié] - 2026-09-24
 
 ### Une requête dit qui l'a émise

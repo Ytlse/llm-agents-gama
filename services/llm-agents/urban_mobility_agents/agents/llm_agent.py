@@ -51,7 +51,7 @@ from llm.gravite import (
 from llm.journal_memoire import journal
 from llm.longterm import MultiUserLongTermMemory
 from llm.memory import MemoryEntry, MemoryType
-from llm.noyau import memoire_noyau
+from llm.noyau import TITRE_CHANGEMENTS, memoire_noyau
 from urban_mobility_agents.utils.modeles import origine as origine_modele
 from urban_mobility_agents.utils.routage import instances_pour, toutes_les_instances
 from llm.reflection_store import ReflectionMemoStore
@@ -610,6 +610,9 @@ class LlmAgent:
             # Le nom du run signe chaque échange : le journal du worker est commun à tous les
             # clients, et c'est ce champ qui permet de n'y lire que les siens.
             origine=Path(settings.workdir).name,
+            # Les deux bras d'un A/B partagent cet espace : le témoin reçoit les réponses du
+            # traité tant que ses prompts sont les mêmes, mot pour mot (rejeu à prompt exact).
+            espace_rejeu=settings.llm.rejeu_ab or None,
         )
         self.prompt_manager = PromptManager(
             os.path.join(os.path.dirname(__file__), "prompts")
@@ -940,7 +943,7 @@ class LlmAgent:
             # Ticket 111 — la ligne GARANTIE survit à un bloc qui ne se construit pas : c'est
             # précisément ce qu'elle garantit.
             _bloc = (
-                ["Ce qui a changé récemment", *(f"- {ligne}" for ligne in lignes)]
+                [TITRE_CHANGEMENTS, *(f"- {ligne}" for ligne in lignes)]
                 if lignes
                 else []
             )

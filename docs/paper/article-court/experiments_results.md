@@ -15,6 +15,58 @@ est l'heure de **début** en UTC, l'heure notée ici est celle de **fin**, lue d
 
 ---
 
+## 2026-09-25 16:00 — Presse a09 V2, relecture : les deux bras divergent dès le premier soir, par les souvenirs de gemini-3.5
+
+**Source :** les deux mêmes bras que l'entrée de 15:14 ci-dessous, traité
+`experiments/archive/2026-09-25_13_06`, témoin `experiments/archive/2026-09-25_14_09` (fin du
+témoin 15:14, `etat.json`). Lu : `moves.csv` et `llm_exchanges.jsonl` des deux bras. Décisions
+LLM appariées sur `(personne, activité, date)` : 132, dont 91 avant la lecture et 41 à partir
+d'elle ; les 19 paires dont un trajet est un retour forcé (« Un seul itinéraire disponible ») sont écartées.
+
+**Rejouer :**
+`python3 scripts/analysis/figure_derive_bras.py experiments/archive/2026-09-25_13_06 experiments/archive/2026-09-25_14_09 docs/traces/2026-09-25_15-51_a09_v2_derive_bras/a09_v2_derive_bras.html --evenement 2026-03-26 --suivre 286923@12:40`
+
+| Mesure | Valeur |
+|---|---|
+| souvenirs STM du lundi 16 envoyés avec un prompt identique dans les deux bras | 8 sur 12 appariés |
+| dont réponse identique (gemini-3.5-flash-lite, température 0) | **0 sur 8** |
+| prompts de décision identiques dans les deux bras (gemini-3.1-flash-lite, température 0) | 5/5 le 16, 2/10 le 17, **0 à partir du 18** |
+| dont réponse identique | **7 sur 7** |
+| décisions à plus de 20 points d'écart (variation totale), 16-20 mars | 1 sur 57 (2 %) |
+| idem, 23-25 mars (trois derniers jours avant la lecture) | 4 sur 34 (12 %) |
+| idem, 26-31 mars (à partir de la lecture) | 8 sur 41 (20 %) |
+| Fisher unilatéral, à partir de la lecture contre toute la période d'avant | p = 0,017 |
+| Fisher unilatéral, à partir de la lecture contre les trois derniers jours d'avant | **p = 0,28** |
+| écart moyen par période (variation totale, points) | 7,1 · 10,6 · 13,6 |
+| mode choisi identique dans les deux bras | 88/91 avant, 35/41 après |
+| raisonnements du traité citant tempête, vent, rafales ou parcs (filtre à mots entiers) | 3 sur 41 ; témoin 0 (ses deux « park » sont « parking ») |
+| trajets en marche ou vélo du foyer à partir de la lecture | 21 au traité, 21 au témoin |
+
+**Constats de relecture.**
+- Les réglages sont les mêmes dans les deux bras (`llm_params.temperature: 0` pour les décisions
+  et les souvenirs, `llm_agent.py` via `settings.agent.llm_params`) ; le cache est désactivé
+  (`cache: enabled: false`), ce qui désactive aussi la mémoïsation exacte des réflexions du
+  ticket 012 (`llm_agent.py:630-644`).
+- Créneau 286923 (garçon, 9 ans) « home » à 12:40 : modes différents dès le mer. 18 (marche au
+  traité, voiture au témoin) ; vélo au traité et marche au témoin le mer. 25, veille de la lecture
+  (P(vélo) 45 % contre 20 %). Aucun échange du 25 ne porte l'article (0 sur 9 lots de décision).
+- Météo servie le jeudi 26 dans les deux bras : « 3°C, Clear/Sunny […] 0.2 mm over the day » ;
+  aucune variable de vent. L'article annonce une vigilance jaune et des rafales au-delà de 80 km/h.
+- L'article porte sa date d'origine (« this Thursday 16 July ») ; la simulation est au jeudi 26 mars.
+- Les jours de service suivants, la ligne servie reste au présent : le mardi 31, le lecteur lit
+  « This morning I read in the paper: « […] this Thursday evening » », et 286923 lit le lundi 30
+  « My parents decided this morning: « […] closing all the parks and gardens starting at 6 p.m.
+  today » » (`llm/evenements/injection.py:100` et `:111`). Un raisonnement du lundi 30 cite encore
+  « storm warnings » (286923, 14:21).
+- Les titres du bloc mémoire sont en français dans un prompt anglais (« Mes habitudes », « Ce que
+  je sais », « Ce qui a changé récemment », « le matin : à vélo, 9 fois sur 10 »),
+  `llm/noyau.py:442-445`.
+
+**Figure :** `docs/traces/2026-09-25_15-51_a09_v2_derive_bras/a09_v2_derive_bras.html` (et `.png`),
+script `scripts/analysis/figure_derive_bras.py`.
+
+---
+
 ## 2026-09-25 15:14 — Presse a09 V2 (vent d'autan), foyer 133048, deux bras : l'article et le relais atteignent 40 décisions sur 42, l'écart aux témoins reste dans le bruit
 
 **Source :** bras traité `experiments/archive/2026-09-25_13_06` (13:06 → 14:09, 151 trajets),
@@ -48,7 +100,7 @@ mardi 31 mars, quatrième des cinq jours de service garantis.
 | messages écrits en mémoire longue chez les informés | 3 sur 3 |
 | tableau des quatre voies, informés (38 décisions) | changements 38 · connaissances ~10 · rappel ~2 |
 | tableau des quatre voies, lecteur (4 décisions) | changements 4 · rappel 0 |
-| raisonnements du traité qui citent la tempête ou les parcs | 4 sur 41 décisions appariées |
+| raisonnements du traité qui citent la tempête ou les parcs | ~~4~~ **3** sur 41 décisions appariées (corrigé le 2026-09-25 16:00 : le quatrième, 286921 le 26 mars 13:38, disait « parking » — voir l'entrée de 16:00 ci-dessus) |
 | choix du lecteur | voiture dans toutes ses décisions, dans les deux bras |
 
 **Écart aux témoins** (distance de variation totale entre distributions déclarées, 132 décisions

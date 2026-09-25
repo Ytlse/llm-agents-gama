@@ -94,7 +94,7 @@ def test_R6_espace_papier_version_courte_couvre_les_quatre_phases():
         "Phase 2 — Jev sur c2": 3,
         "Phase 3 — Gemini sur c2": 2,
         "Phase 4 — graines Jev (c1)": 4,
-        "Phase 5 — rejeux inter-graines (c1)": 10,
+        "Phase 5 — rejeux inter-graines (c1)": 6,
         "Optionnel — Gemini différé": 3,
         "Acquis (c1)": 14,
     }
@@ -232,7 +232,7 @@ def test_le_fichier_livre_est_lisible_et_sans_entree_rejetee(caplog):
     with caplog.at_level("WARNING"):
         lus = E.espaces(LIVRE)
     assert len(lus) == 1 and lus[0]["nom"] == ESPACE_103
-    assert len(lus[0]["entrees"]) == 43
+    assert len(lus[0]["entrees"]) == 39
     assert not [r for r in caplog.records if "[espaces]" in r.getMessage()]
 
 

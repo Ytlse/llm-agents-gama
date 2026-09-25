@@ -78,17 +78,17 @@ sous le plancher physique.*
 Régler les instructions qui soulignent les critères généraux améliore chaque modèle de
 langue, de plus que ne bougerait une cohorte à elle seule (tableau 2). Le gain apparié sur le composite vaut
 2,27 points pour gemini-3.5, intervalle [+1,40 ; +3,22], puis 3,37 points pour gemini-3.1 et
-7,25 pour mistral-large. Les trois intervalles excluent zéro sur les trois lectures. Les gains
+7,25 pour mistral-large. Les trois intervalles excluent zéro sur les deux lectures. Les gains
 vont de une fois et demie à cinq fois et demie la résolution de cohorte.
 
-*Tableau 2 — Gains appariés du prompt expert sur le prompt minimal, trois lectures,
+*Tableau 2 — Gains appariés du prompt expert sur le prompt minimal, deux lectures,
 intervalles à 95 %. Tous les intervalles excluent zéro.*
 
-| Modèle de langue | Composite | Hors déplacements à choix unique | L1 parts globales |
-|---|---|---|---|
-| gemini-3.5 | 2,27 [1,40 ; 3,22] | 3,59 [2,45 ; 4,83] | 10,2 [8,0 ; 12,5] |
-| gemini-3.1 | 3,37 [2,45 ; 4,25] | 4,15 [3,09 ; 5,22] | 8,6 [6,8 ; 10,6] |
-| mistral-large | 7,25 [5,90 ; 8,67] | 8,63 [7,15 ; 10,28] | 18,0 [13,5 ; 22,4] |
+| Modèle de langue | Composite | L1 parts globales |
+|---|---|---|
+| gemini-3.5 | 2,27 [1,40 ; 3,22] | 10,2 [8,0 ; 12,5] |
+| gemini-3.1 | 3,37 [2,45 ; 4,25] | 8,6 [6,8 ; 10,6] |
+| mistral-large | 7,25 [5,90 ; 8,67] | 18,0 [13,5 ; 22,4] |
 
 <!-- source: fr/99_annexes.md, annexe H.1, trois premières lignes, signes retournés en gains
      (un gain positif est une erreur plus faible). 2 000 réplicats, graine 2026, 868 personnes
@@ -215,7 +215,7 @@ l'exactitude individuelle. Sa consigne propre atteint 64,7 %, en échantillon, e
 transférée de gemini-3.5 atteint 64,3 %, là où le plancher atteint 66,7 %. Les écarts appariés
 à ce plancher valent 2,04 points, intervalle [−3,78 ; −0,29], et 2,42 points, intervalle
 [−4,26 ; −0,62]. Aucune comparaison appariée ne sépare le bras transféré des quatre références
-tabulaires sur le composite. Les deux autres lectures agrégées le placent derrière la
+tabulaires sur le composite. L'autre lecture agrégée (L1) le place derrière la
 régression à noyau et la forêt aléatoire. Sa masse de probabilité va à la marche plutôt qu'aux
 transports collectifs, 63,1 % de rappel contre 35,0 %. La part modale agrégée masque cet
 échange. Une population peut donc restituer la part modale d'un territoire en se trompant,

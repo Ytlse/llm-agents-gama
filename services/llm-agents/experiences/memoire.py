@@ -298,6 +298,9 @@ def defauts() -> dict[str, Any]:
         "stm_reflection_min_entries": 5,
         "contrefactuel_ab": True,
         "partage_foyer": False,
+        # 2026-09-25 — rejeu à prompt exact entre les deux bras (llm_gateway/core/rejeu_ab.py).
+        # Vrai pour une expérience NEUVE ; une déclaration sans la clé tourne sans rejeu.
+        "rejeu_ab": True,
         "adaptateur": None,
     }
 

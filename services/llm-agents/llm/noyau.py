@@ -179,19 +179,32 @@ def duree_service_jours(entree) -> DureeService:
     )
 
 
+# Le bloc est rendu dans la langue du prompt : ANGLAIS depuis le 2026-09-25. Ses titres étaient
+# restés en français dans un prompt entièrement anglais. Les lecteurs de prompts
+# (`scripts/analysis/mesures/souvenir.py`, `scripts/analysis/tableau_quatre_voies.py`) acceptent
+# les deux langues : les archives d'avant cette date portent les titres français.
+TITRE_HABITUDES = "My habits"
+TITRE_CONNAISSANCES = "What I know"
+TITRE_CHANGEMENTS = "What changed recently"
+TITRES_FRANCAIS = {
+    TITRE_HABITUDES: "Mes habitudes",
+    TITRE_CONNAISSANCES: "Ce que je sais",
+    TITRE_CHANGEMENTS: "Ce qui a changé récemment",
+}
+
 _LIBELLE_MODE = {
-    "walking": "à pied",
-    "cycling": "à vélo",
-    "car": "en voiture",
-    "public_transport": "en transport en commun",
-    "train": "en train",
-    "motorbike": "en deux-roues",
+    "walking": "on foot",
+    "cycling": "by bike",
+    "car": "by car",
+    "public_transport": "by public transport",
+    "train": "by train",
+    "motorbike": "by motorbike",
 }
 _LIBELLE_CRENEAU = {
-    "matin": "le matin",
-    "midi": "en milieu de journée",
-    "soir": "le soir",
-    "nuit": "la nuit",
+    "matin": "in the morning",
+    "midi": "at midday",
+    "soir": "in the evening",
+    "nuit": "at night",
 }
 
 
@@ -246,12 +259,12 @@ def bloc_habitudes(journal: dict) -> list[str]:
         mode, n = max(modes.items(), key=lambda kv: kv[1])
         motif, creneau = clef.split("|", 1)
         libelle = (
-            f"{motif} {_LIBELLE_CRENEAU.get(creneau, creneau)} : "
-            f"{_LIBELLE_MODE.get(mode, mode)}, {n} fois sur {total}"
+            f"{motif} {_LIBELLE_CRENEAU.get(creneau, creneau)}: "
+            f"{_LIBELLE_MODE.get(mode, mode)}, {n} times out of {total}"
         )
         retards = int(entree.get("retards", 0))
         if retards:
-            libelle += f". {retards} retard(s) de plus de 10 min"
+            libelle += f". {retards} delay(s) of more than 10 min"
         lignes.append(libelle)
         if len(lignes) >= HABITUDES_MAX:
             break
@@ -412,7 +425,7 @@ def bloc_changements(
                 continue
             if quand >= depuis_croyances:
                 lignes.append(
-                    (quand, f"Je ne crois plus que : {_enonce(e)}")
+                    (quand, f"I no longer believe that: {_enonce(e)}")
                 )
 
     _annoncer_sortie(person_id, chocs_dans, chocs_hors, mode, fenetre)
@@ -439,10 +452,10 @@ def memoire_noyau(
     qu'il devrait y avoir quelque chose, et l'invite à le combler.
     """
     sections = (
-        ("Mes habitudes", bloc_habitudes(journal or {})),
-        ("Ce que je sais", bloc_connaissances(entrees or [])),
+        (TITRE_HABITUDES, bloc_habitudes(journal or {})),
+        (TITRE_CONNAISSANCES, bloc_connaissances(entrees or [])),
         (
-            "Ce qui a changé récemment",
+            TITRE_CHANGEMENTS,
             bloc_changements(entrees or [], maintenant, person_id, lignes),
         ),
     )

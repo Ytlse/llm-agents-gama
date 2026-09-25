@@ -730,6 +730,17 @@ class TestSouvenir:
         assert (ligne.prompts_avec_souvenir, ligne.souvenir_mots) == (1, 1)
         assert (ligne.via_connaissances, ligne.via_changements, ligne.via_rappel) == (1, 0, 0)
 
+    def test_S1_bis_les_titres_anglais_se_lisent_comme_les_francais(self, tmp_path):
+        """2026-09-25 — le bloc parle anglais ; les archives d'avant gardent leurs titres."""
+        run = self._run(tmp_path, [
+            _prompt("1", "2026-03-19", "08:00", [
+                "What I know",
+                "- Toulouse closed its parks and gardens because of a yellow storm warning.  (0 obs.)",
+            ]),
+        ])
+        ligne = self._du(calculer(run), "1", "2026-03-19")
+        assert (ligne.via_connaissances, ligne.via_changements, ligne.via_rappel) == (1, 0, 0)
+
     def test_S2_le_co_resident_est_suivi_aussi(self, tmp_path):
         run = self._run(tmp_path, [
             _prompt("2", "2026-03-18", "17:00", [

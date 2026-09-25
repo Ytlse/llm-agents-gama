@@ -49,6 +49,7 @@ reformulation.
 | `moment` | `reveil` | **lot 2** |
 | `exposition.regle` | `mode`, `tirage`, `agents` | lot 1 |
 | `exposition.regle` | `foyers` | **lot 2** |
+| `exposition.lecteurs` (lecteurs désignés, règle `foyers`) | — | 2026-09-25 |
 | `texte` (fichier cité + empreinte) | — | **lot 2** |
 | `calendrier` (fenêtre tirée par foyer) | — | **lot 2** |
 | `jugement` | `aucun` | lot 1 |

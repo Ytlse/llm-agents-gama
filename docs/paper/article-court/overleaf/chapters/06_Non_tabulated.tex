@@ -1,8 +1,16 @@
 % =====================================================================
-% chapters/06_Non_tabulated.tex — LaTeX rendering of ../sections/06_non_tabulated.en.md (2026-09-23 12:55:30)
+% chapters/06_Non_tabulated.tex — LaTeX rendering of ../sections/06_non_tabulated.en.md (2026-09-25 21:07:15)
+% Re-carried by hand on 25 September 2026 against the master of 2026-09-25 21:07:15. Whole
+%   chapter checked paragraph by paragraph: new section title; 6.1 and 6.2 rewritten; the
+%   household paragraph and the ``Two links'' paragraph left the chapter (the latter moved to
+%   7.1 in the master); 6.3 gains the date of the failure, the benchmark contrast and the six
+%   items; 6.4 loses the four-routes paragraph and the ``Two independent sources'' sentence,
+%   and its opinions paragraph now waits on the daily-survey run.
 % Section 6 of the SHORT paper. \input from main.tex, after 05_Results.tex.
-% This file DEFINES \label{sec:nontabulated}, referenced by the reading map of Section 1.4,
-%   and \label{sec:mechanism}, referenced from Section 7.1.
+% This file DEFINES \label{sec:nontabulated}, referenced from Sections 3 and 7, and
+%   \label{sec:mechanism}, referenced from Section 7.1.
+% It REFERENCES sec:memory (Section 3.3), sec:cohort (Section 4.1), tab:offered (Table 4) and
+%   fig:propensity (Figure 5).
 % Figure: one, \columnwidth (../PLAN.md § 9, figure 5, one column), caption BELOW and a
 %   mandatory \Description{}.
 %   FILE: images/ch7_propension_quotidienne.png — in English (title, axis labels, legend
@@ -14,65 +22,68 @@
 %   Markdown holds the replacement sentence, ready to paste —
 %   "The car is taken on 94\,\%, 32\,\% then 88\,\% of the trips where it is offered, against
 %   90, 92 and 87\,\% for the control agent."
+% PLACEHOLDERS, DELIBERATE, set in \textbf{} as the master bolds them: [TBC --- persona and
+%   models] and [TBC --- A campaign now under way] (6.3); the fifteen days, the [TBC] on
+%   contradiction, [TBC after the daily run], [n], [k] and the whole second-experiment
+%   paragraph (6.4). Plain bracketed text, NOT \todo.
+% Appendix E is named in plain text: it lives in the supplementary material.
 % No citation in this section.
-% Derived file: regenerate after every validated pass of ../sections/06_non_tabulated.en.md.
+% Derived file: re-carry by hand after every validated pass of ../sections/06_non_tabulated.en.md.
 % =====================================================================
 
-\section{The non-tabulated regime: a single-agent event traced to the decision}
+\section{Beyond the survey: one event traced to the decision}
 \label{sec:nontabulated}
 
-This section follows one event that no variable carries, in one agent, from its entry into
-memory to the decisions it changed.
+This section follows one off-survey event, an engine failure, from its entry into memory to
+the decisions of the days after.
 
-\subsection{What the 21 variables do not carry}
+\subsection{What the 21 variables do not record}
 \label{sec:variables-gap}
 
 None of the 21 variables records what a person went through yesterday, or what they read
-this morning. A decision-maker that receives those inputs alone can answer nothing else. Its
-prediction on the morning after an incident equals the one before, by identity rather than
-by measurement.
+this morning. A decision-maker restricted to these inputs therefore returns, on the morning
+after an incident, exactly the prediction of the day before. This holds by construction, so
+there is nothing to measure.
 
 \subsection{The mechanism}
 \label{sec:mechanism}
 
-An event enters the agent's memory at one of two moments. Something lived enters after the
-trip that produced it, and something read enters at waking. At entry the agent rates the
-event on a five-step severity scale, and gives it a valence, suffered or welcome. The rating
-is the agent's own, read against its profile, so one incident weighs differently on two
-agents. The severity alone sets how long the memory stays in service.
+An event enters the agent's memory at one of two moments. An event the agent experiences
+enters after the trip that produced it, and an event it reads enters when the agent wakes up.
+On entry, the agent rates the event on a five-point severity scale, and gives it a valence
+(negative or positive). The rating is the agent's own, read against its profile, so the same
+incident can weigh differently on two agents. The severity alone sets how long the memory
+stays in the recent-events block, by the rule of Section~\ref{sec:memory}.
 
-A rated event travels beyond its owner, through the household in the evening.
-
-An effect ends in one of two ways, which measurement tells apart. It ends by
-contradiction when the agent makes the trip again and nothing recurs, and by wear when the
-memory stops being served.
-
-Two links of this chain are text generation. Writing the trace of what has just
-happened is one, and maintaining the belief drawn from it is the other. The language model
-rates the severity as well, and that link is not text generation. The rating is one level in
-a closed grid, which a typed classifier can return. Whether it could also produce the two
-written links is open, and one bench arm would settle it.
+The effect of an event on later decisions can end in two ways, and our measurements
+distinguish them. It ends by contradiction when the agent makes the same trip again and the
+incident does not recur. It ends by expiry when the memory leaves the prompt.
 
 \subsection{The setup}
 \label{sec:setup}
 
-We play one agent twice, exposed and control, and read the gap between the two runs. The
-incident is an engine failure that imposes a half-hour delay on a car trip. Both runs keep
-memory enabled. The car remains offered the next morning, so that what we measure here is an
-arbitration. \textbf{[TBC --- A campaign now under way]}
+We simulate the same agent \textbf{[TBC --- persona and models]} twice, once exposed to an
+incident and once as a control, and measure the difference between the two runs. The
+incident is an engine failure that imposes a half-hour delay on a car trip. It falls on
+30 March, the fifteenth simulated day. Unlike the benchmark runs
+(Section~\ref{sec:cohort}), both runs keep memory enabled and last several weeks. The car
+remains offered the next morning, so what we measure here is a choice.
+\textbf{[TBC --- A campaign now under way]}
 
-Opinions are collected outside any decision, on six declared criteria, at four milestones.
-The criterion on the environment, which no incident targets, serves as the control question.
+Opinions are collected every simulated evening, independently of any decision. The agent
+rates each mode out of ten on six items: comfort, cost, environment, practicality, speed and
+safety. The environment item, which no incident targets, serves as the control question.
 
 \subsection{Results}
 \label{sec:traced-results}
 
-Although the car is offered as often as before the failure, it stops being taken. The
-exposed agent takes it nine times in ten before the failure, and three times in ten after.
-The control agent holds its rate throughout.
+Although the car is offered as often as before the failure, it is taken far less often. The
+exposed agent takes it nine times out of ten before the failure, and three times out of ten
+after. The control agent holds its rate throughout.
 
 \begin{table}[tbp]
-  \caption{Car taken when the car is offered, exposed and control agent.}
+  \caption{Car taken when the car is offered, exposed and control agent. The periods split
+    at the failure (30 March) and at the recovery of the car propensity (15 April).}
   \label{tab:offered}
   \begin{tabular}{@{}lrr@{}}
     \toprule
@@ -80,46 +91,41 @@ The control agent holds its rate throughout.
     \midrule
     Before the failure & 94\,\% (34/36) & 90\,\% (28/31) \\
     After the failure  & 32\,\% (12/38) & 92\,\% (45/49) \\
-    After the return   & 88\,\% (35/40) & 87\,\% (40/46) \\
+    After the recovery & 88\,\% (35/40) & 87\,\% (40/46) \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-The daily propensity to the car falls on the day of the failure and returns
-\textbf{fifteen days} later (Figure~\ref{fig:propensity}). It drops from 90\,\% on the eve to 40\,\% that day,
-then oscillates between 5 and 52\,\%. It rejoins the band of the control agent, which never
-leaves 65 to 90\,\%, on 15 April.
+The daily car propensity is the probability the model gives the car, averaged over the day's
+decisions. It falls on the day of the failure and recovers \textbf{fifteen days} later
+(Figure~\ref{fig:propensity}). It drops from 90\,\% the day before to 40\,\% that day, and
+stays below the range of the control agent until it returns to it.
 
 \begin{figure}[tbp]
   \centering
   \includegraphics[width=\columnwidth]{images/ch7_propension_quotidienne.png}
-  \caption{The effect lasts exactly as long as the memory stays in the prompt.}
+  \caption{The effect lasts as long as the memory stays in the prompt.}
   \Description{Two daily time series of the probability the agent assigns to the car, in per cent, over about six weeks of simulated days from mid-March to late April. The exposed agent and the control run together above 65 per cent until the day of the engine failure, marked by a dashed vertical line. The exposed series then collapses to between 5 and 52 per cent for fifteen days, while the control keeps oscillating between 65 and 90 per cent. A dotted vertical line marks the day the account of the failure leaves the decision context, and the exposed series rejoins the control band two days later, on 15 April, and stays in it.}
   \label{fig:propensity}
 \end{figure}
 
-The four routes by which the past reaches a decision can be told apart, and the trace names
-the one that carried this effect. The account of the failure appears in the block of what has
-changed recently, in 75 of 376 decision prompts. It stays there from the day of the
-failure to the \textbf{fifteenth} day after. That span follows from the severity.
-\textbf{[TBC --- The campaign under way reads what the three other routes carry.]}
+Our measurements separate the two ways an effect can end, and this one ended by expiry. The
+agent took the car twelve times after the failure (Table~\ref{tab:offered}), twelve
+occasions for contradiction. \textbf{[TBC --- at this time, no contradiction of the belief
+born of the failure. Add an experiment?]} The memory of the failure leaves the decision
+prompts after 13 April, and the propensity returns to the control band on 15 April.
 
-Measurement separates the two ways an effect can end, and this one ended by wear. The agent
-took the car twelve times during the period. \textbf{[TBC --- at this time, no contradiction
-of the belief born of the failure. Add an experiment?]} The account leaves the decision prompts after 13 April, and
-the propensity rejoins the control band on 15 April. Two independent sources give those
-dates, the text sent to the model and the probabilities it returned.
+Stated opinions drop after the failure and come back \textbf{[TBC after the daily run]}. On
+the car, \textbf{[n]} of the six items fall after the failure, and safety drops the most, by
+\textbf{[k]} points. Each item's daily series shows the day it regains its starting value,
+which can be set against the day the propensity returns to the control band. The environment
+item, the control question, does not move, and the control agent's ratings of the car do not
+change on any of the six items. Both agents drift on the four other modes without a common
+pattern, leaving the car as the only mode that separates them.
 
-Declared opinions drop after the failure and come back. Five of the six criteria on the car
-fall at the milestone that follows it, safety from 8 to 3 on a scale of ten. The five have
-recovered their starting value at the two later milestones. The environment criterion stays
-at 3 throughout, and the control agent moves on none of the six. Both agents
-drift on the four other modes without a common pattern, leaving the car as the only mode
-that separates them.
+\textbf{A second experiment extends the same channel to information that is only read. Now
+under way, it presents five dated Toulouse press articles and tests twenty predictions of the
+sign of their effect, written down before any call to the model (Appendix E).}
 
-\textbf{A second experiment carries the same channel to information that is only read. Now
-under way, it serves five dated Toulouse press articles against twenty signs written before
-any call to the model (Appendix E).}
-
-The path traced here rests on one agent and one event. We claim the path rather than its
-amplitude.
+The channel traced here rests on one agent and one event. We therefore claim that this
+channel exists, not how strong its effect is.

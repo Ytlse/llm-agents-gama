@@ -1991,7 +1991,7 @@ class SimulationLoopV1(BaseScenario):
         Garantit qu'aucun repli par défaut (index 0) n'entre dans les résultats : plutôt que de
         choisir à la place du modèle, le run s'arrête.
 
-        Trois motifs, et ils ne se reprennent PAS de la même façon :
+        Quatre motifs, et ils ne se reprennent PAS tous de la même façon :
 
         - `quota_journalier` — le fournisseur annonce l'heure de réouverture ; `resume_at` la
           porte, et le marqueur permet une reprise datée.
@@ -1999,6 +1999,10 @@ class SimulationLoopV1(BaseScenario):
           soit la cause (le 2026-09-23 : saturation amont, 54 × HTTP 503, aucun genre_erreur).
           Aucune heure de réouverture n'existe : `resume_at` vaut None et la reprise se décide à
           la main, sur le taux de 503 observé.
+        - `surcharge_fournisseur` (2026-09-25) — la passerelle a QUALIFIÉ l'échec : HTTP 5xx ou
+          429 par minute sur toutes les instances admises, lot rendu avant l'abandon du client.
+          `resume_at` porte la réouverture estimée (fin du refroidissement), indicative : la
+          reprise se décide comme après des replis, sur le taux de 503.
         - `decision_en_retard` (2026-09-25) — une décision de départ n'est pas revenue à temps
           malgré la retenue du /sync, ou est revenue après le départ. Même reprise que pour les
           replis (saturation amont, pas d'heure annoncée) ; `details` dit quel départ, quelle
@@ -2028,6 +2032,13 @@ class SimulationLoopV1(BaseScenario):
                 f"le modèle ne décide plus. Arrêt ordonné du contrôleur plutôt que de remplir la "
                 f"mesure de choix par défaut. Aucune heure de réouverture : vérifier l'amont "
                 f"avant de reprendre."
+            )
+        elif motif == "surcharge_fournisseur":
+            logger.error(
+                f"[ALARME] [hibernation] Surcharge du fournisseur pour {person_id} : la "
+                f"passerelle a rendu la décision avant l'abandon du client (HTTP 5xx ou 429 par "
+                f"minute sur toutes les instances admises). Arrêt ordonné du contrôleur plutôt "
+                f"qu'un repli par défaut. Réouverture estimée : {resume_at}."
             )
         elif motif == "decision_en_retard":
             logger.error(
@@ -4064,11 +4075,16 @@ class SimulationLoopV1(BaseScenario):
                     #     le 2026-09-23, zéro RESOURCE_EXHAUSTED). C'est le filet qui rattrape
                     #     les motifs qu'on n'a pas encore rencontrés.
                     if _arret_sur_repli_arme():
-                        if _trace_decision.get("genre_erreur") == "quota_journalier":
+                        # 2026-09-25 — la surcharge du fournisseur (5xx, 429 par minute) arrive
+                        # désormais QUALIFIÉE : le worker rend le lot avant que le client
+                        # n'expire. Elle s'arrête au premier échec, comme le quota, au lieu
+                        # d'attendre trois replis dont chacun entrait dans la mesure.
+                        _genre = _trace_decision.get("genre_erreur")
+                        if _genre in ("quota_journalier", "surcharge_fournisseur"):
                             await self._declencher_hibernation_propre(
                                 _trace_decision.get("reprise_a"),
                                 person.person_id,
-                                motif="quota_journalier",
+                                motif=_genre,
                             )
                             # SIGTERM demandé ; le couple respecte la signature au cas où la
                             # coroutine reprend la main avant que le processus ne tombe.

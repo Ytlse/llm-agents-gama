@@ -3,6 +3,7 @@
 **Projet :** LLM-Agents GAMA / Défis Clés Occitanie (MIDOC)  
 **Document maître associé :** [`MANUSCRIT_DETAILLE_2026.md`](../archive/MANUSCRIT_DETAILLE_2026_v1.6.md) (`v1.5`)  
 **Fichier BibTeX source :** [`sample.bib`](sample.bib)  
+**Forme des entrées BibTeX :** ni champ `note` (il s'imprime), ni commentaire dans les entrées — les remarques de vérification vont, par clé, dans l'en-tête du fichier ; pas d'`url` quand un `doi` existe (2026-09-25)  
 **Dernière mise à jour :** 2 septembre 2026  
 
 ---

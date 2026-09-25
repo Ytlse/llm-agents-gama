@@ -493,7 +493,7 @@ class RegistreEvenements:
         `timestamp` est l'instant du TRAJET, pas celui du calcul : une décision du jour de
         lecture se calcule la veille, et c'est précisément ce qui la privait de l'article.
 
-        - lecteur, jour dans ses jours de service → `[ PRESSE ] This morning I read…` ;
+        - lecteur, jour dans ses jours de service → `[ PRESSE ] I read in the paper…` ;
         - membre informé d'un foyer exposé, jour dans ses jours de service → sa ligne
           `[ FOYER ]`, tirée du relais (produit à la demande s'il ne l'est pas encore) ;
         - personne déclarée non avenue, ou non informée → rien.

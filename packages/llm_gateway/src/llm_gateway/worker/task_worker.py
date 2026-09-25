@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import re
 import time
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from llm_gateway.adapters.base import (
@@ -36,6 +37,7 @@ from llm_gateway.config import get_settings, learn_provider_max_output_tokens
 from llm_gateway.core.inference import resolve_inference
 from llm_gateway.core.models import _FALLBACK_PRIORITY_SCORE, InternalRequest, Task, TaskStatus
 from llm_gateway.core.quota import DEFAUT_FUSEAU_QUOTA, is_daily_quota_error, next_quota_reset
+from llm_gateway.core.rejeu_ab import cle_rejeu, enregistrement, espace_valide, magasin_rejeu
 from llm_gateway.telemetry.logger import get_logger, log_llm_call, log_llm_error, log_llm_exchange
 from llm_gateway.worker.app import create_celery_app
 from llm_gateway.worker.runtime import WorkerRuntime, get_worker_runtime
@@ -80,13 +82,28 @@ celery_app = create_celery_app(get_settings())
 def process_batch_task(self, batch_key: str, force_provider: str | None = None,
                        min_tpm_required: int | None = None,
                        min_output_required: int | None = None,
-                       instances_admises: list[str] | None = None) -> None:
+                       instances_admises: list[str] | None = None,
+                       debut_attente: float | None = None) -> None:
     """
     Point d'entrée Celery pour le traitement par lot (micro-batching).
     `bind=True` pour accéder à `self.retry()`.
+
+    `debut_attente` (horloge murale, secondes) date le premier essai du lot : un rejeu peut
+    changer de processus, et l'attente se mesure contre celle du client, pas par essai.
     """
     rt = get_worker_runtime()
     settings = rt.settings
+    debut_attente = debut_attente or time.time()
+    # Tout rejeu de CE lot repart avec ses contraintes ET sa date de premier essai. Sans
+    # `debut_attente`, chaque rejeu remettait le compteur à zéro et l'attente du worker
+    # dépassait celle du client sans que rien ne le voie.
+    rejeu = {
+        "force_provider": force_provider,
+        "min_tpm_required": min_tpm_required,
+        "min_output_required": min_output_required,
+        "instances_admises": instances_admises,
+        "debut_attente": debut_attente,
+    }
 
     # Attendre un slot provider en boucle locale plutôt que via self.retry().
     # self.retry() crée un nouveau message Celery + round-trips Redis à chaque tentative ;
@@ -138,42 +155,79 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None,
             return
         except RuntimeError:
             if time.monotonic() >= deadline:
-                if self.request.retries < res.saturation_retries:
+                # Ce qui reste d'attente au CLIENT une fois le prochain essai passé. Négatif : le
+                # client aura abandonné avant qu'on ne réessaie, et la tâche ne servirait plus
+                # personne (cf. `resilience.client_wait_seconds`).
+                restant = _attente_client_restante(settings, force_provider, debut_attente) - (
+                    res.provider_wait_seconds + res.saturation_retry_seconds
+                )
+                if self.request.retries < res.saturation_retries and restant > 0:
                     logger.warning(
                         f"Providers saturés depuis {res.provider_wait_seconds:.0f}s, "
                         f"retry dans {res.saturation_retry_seconds:.0f}s | batch_key={batch_key} "
                         f"attempt={self.request.retries + 1}/{res.saturation_retries}"
                     )
-                    raise self.retry(countdown=res.saturation_retry_seconds)
+                    raise self.retry(countdown=res.saturation_retry_seconds, args=[batch_key], kwargs=rejeu)
                 _statuses = rt.balancer.get_status()
-                busy = _providers_merely_busy(_statuses, force_provider)
-                if busy and not res.abandon_when_busy and self.request.retries < self.max_retries:
+                # Seules les instances que CE lot peut recevoir comptent : l'épinglée, sinon les
+                # admises, sinon toutes. Compter les autres faisait passer deux clés en
+                # refroidissement pour une file d'attente, tant qu'un modèle exclu restait libre
+                # (2026-09-23 : 54 × HTTP 503, le lot attendait, le client expirait à 120 s).
+                eligibles = _eligibles(_statuses, force_provider, instances_admises)
+                verdict = _verdict_saturation(
+                    _statuses,
+                    eligibles,
+                    {n: rt.limiter.cooldown_ttl(n) for n in eligibles if _statuses[n].get("cooldown")},
+                    restant,
+                    attendre_si_occupe=not res.abandon_when_busy,
+                    peut_rejouer=self.request.retries < self.max_retries,
+                )
+                if verdict.attendre:
                     # Fenêtre RPM/TPM pleine, lissage ou concurrence : ce n'est pas une panne, c'est
                     # une file d'attente. Abandonner ici perdait des décisions à chaque pointe
                     # (run du 2026-09-07 : la moitié des sollicitations sur une instance forcée à
-                    # 15 RPM). On attend la fenêtre ; seul max_retries borne l'attente.
-                    if self.request.retries == res.saturation_retries:
+                    # 15 RPM). Une instance en refroidissement qui rouvre avant l'abandon du client
+                    # s'attend de même. L'attente reste bornée par celle du client.
+                    if verdict.motif == "occupe" and self.request.retries == res.saturation_retries:
                         rt.metrics.incr("alarme:providers_occupes")
                         logger.error(
                             f"[ALARME] Providers occupés (fenêtre pleine, pas de panne) : le lot attend "
                             f"la fenêtre au lieu d'être abandonné | batch_key={batch_key} "
                             f"attempt={self.request.retries + 1}/{self.max_retries} "
-                            f"providers={[n for n, st in _statuses.items() if force_provider in (None, n)]}"
+                            f"providers={eligibles}"
                         )
-                    raise self.retry(countdown=res.saturation_retry_seconds)
+                    elif verdict.motif == "refroidissement":
+                        logger.warning(
+                            f"Instances éligibles en refroidissement, le lot attend leur réouverture "
+                            f"(≤ {verdict.reprise_dans_s:.0f}s, attente client restante "
+                            f"{restant:.0f}s) | batch_key={batch_key} providers={eligibles} "
+                            f"attempt={self.request.retries + 1}/{self.max_retries}"
+                        )
+                    raise self.retry(countdown=res.saturation_retry_seconds, args=[batch_key], kwargs=rejeu)
                 tasks = rt.queue.pop(batch_key, 100)
-                _cooldowns = [n for n, st in _statuses.items() if st.get("cooldown")]
+                _cooldowns = [n for n in eligibles if _statuses[n].get("cooldown")]
                 # Le worker n'expose pas de /metrics : l'alarme transite par Redis
                 # et ressort en alarme_total{source} via WorkerMetricsCollector.
                 rt.metrics.incr("alarme:providers_satures")
                 logger.error(
                     f"[ALARME] Tous les providers LLM saturés ou indisponibles — "
                     f"{len(tasks)} tâche(s) abandonnée(s) | batch_key={batch_key} "
+                    f"eligibles={eligibles or 'aucun'} "
                     f"providers_en_cooldown={_cooldowns or 'aucun'} "
+                    f"genre={verdict.genre or 'aucun'} "
+                    f"attente_client_restante={restant:.0f}s "
                     f"(quotas RPM/TPM épuisés ? voir /health)"
                 )
+                reprise = _reprise(settings, verdict, eligibles)
                 for t in tasks:
-                    _fail_task(rt, t, f"Providers saturés ou indisponibles après {res.provider_wait_seconds:.0f}s ({self.request.retries} retries épuisés)")
+                    _fail_task(
+                        rt, t,
+                        f"Providers saturés ou indisponibles après {res.provider_wait_seconds:.0f}s "
+                        f"({self.request.retries} retries épuisés)"
+                        + (f" — {verdict.genre} sur {eligibles}" if verdict.genre else ""),
+                        error_kind=verdict.genre,
+                        resume_at=reprise,
+                    )
                 return
             time.sleep(res.saturation_poll_seconds)
     _p5_provider_wait_ms = (time.monotonic() - _p5_provider_wait_start) * 1000
@@ -222,19 +276,40 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None,
 
         except ProviderServerError as e:
             # Erreur 5xx → exclusion temporaire, backoff exponentiel et retry
-            rt.limiter.cooldown(e.provider, seconds=60)
+            rt.limiter.cooldown(e.provider, seconds=_COOLDOWN_5XX_S)
             delay = min(settings.resilience.backoff_base_seconds * (2 ** self.request.retries), 30.0)
+            # La plus ancienne tâche du lot date l'attente du client mieux que le premier essai :
+            # elle a pu attendre en file avant lui.
+            debut = min([debut_attente] + [t.created_at.timestamp() for t in tasks if getattr(t, "created_at", None)])
+            restant = _attente_client_restante(settings, force_provider, debut) - delay
             logger.warning(
                 f"Erreur serveur provider, retry planifié | task_id={batch_id} "
                 f"provider={e.provider} http_status={e.status_code} "
-                f"retry_in={delay:.1f}s attempt={self.request.retries + 1}"
+                f"retry_in={delay:.1f}s attempt={self.request.retries + 1} "
+                f"attente_client_restante={restant:.0f}s"
             )
-            if self.request.retries < self.max_retries:
+            if self.request.retries < self.max_retries and restant > 0:
                 rt.queue.requeue(batch_key, tasks)
-                raise self.retry(exc=e, countdown=delay)
-            else:
-                for t in tasks:
-                    _fail_task(rt, t, f"Max retries dépassé suite à une erreur 5xx sur {e.provider}")
+                raise self.retry(exc=e, countdown=delay, args=[batch_key], kwargs={**rejeu, "debut_attente": debut})
+            # Le client abandonne avant le prochain essai : on le lui dit, avec un genre qu'il
+            # sait traiter (arrêt propre du run) au lieu d'un « Timeout expiré » muet qu'il
+            # range en repli — une décision que le modèle n'a pas prise.
+            reprise = datetime.now(UTC) + timedelta(seconds=_COOLDOWN_5XX_S)
+            rt.metrics.incr("alarme:surcharge_fournisseur")
+            logger.error(
+                f"[ALARME] Surcharge fournisseur (HTTP {e.status_code}) sur {e.provider} — "
+                f"{len(tasks)} tâche(s) rendue(s) au client avant son abandon | "
+                f"batch_key={batch_key} attempt={self.request.retries + 1}/{self.max_retries} "
+                f"attente_client_restante={restant:.0f}s reprise={reprise.isoformat(timespec='seconds')}"
+            )
+            for t in tasks:
+                _fail_task(
+                    rt, t,
+                    f"Surcharge fournisseur : HTTP {e.status_code} sur {e.provider}, "
+                    f"{self.request.retries + 1} essai(s), attente du client épuisée",
+                    error_kind="surcharge_fournisseur",
+                    resume_at=reprise,
+                )
 
         except ProviderClientError as e:
             if e.status_code == 429 and is_daily_quota_error(str(e)):
@@ -264,7 +339,7 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None,
                     # Instance non épinglée : le lot repart, le balancer écartera celle-ci et
                     # prendra la suivante de la cascade (autre clé, autre seau de quota).
                     rt.queue.requeue(batch_key, tasks)
-                    raise self.retry(exc=e, countdown=1)
+                    raise self.retry(exc=e, countdown=1, args=[batch_key], kwargs=rejeu)
                 # Instance épinglée (une expérience épingle son décideur) : aucune alternative
                 # admissible. On le DIT à l'appelant — `quota_journalier` + l'heure de reprise —
                 # pour qu'il attende la fenêtre au lieu de réessayer toutes les 30 s.
@@ -287,12 +362,29 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None,
                     f"cooldown={cooldown_secs}s ratelimit_reset={getattr(e, 'ratelimit_reset', None)} "
                     f"retry_in={delay:.1f}s attempt={self.request.retries + 1}"
                 )
-                if self.request.retries < self.max_retries:
+                debut = min([debut_attente] + [t.created_at.timestamp() for t in tasks if getattr(t, "created_at", None)])
+                restant = _attente_client_restante(settings, force_provider, debut) - delay
+                if self.request.retries < self.max_retries and restant > 0:
                     rt.queue.requeue(batch_key, tasks)
-                    raise self.retry(exc=e, countdown=delay)
-                else:
-                    for t in tasks:
-                        _fail_task(rt, t, f"Max retries dépassé({self.max_retries}) suite aux Rate Limits sur {e.provider}")
+                    raise self.retry(exc=e, countdown=delay, args=[batch_key], kwargs={**rejeu, "debut_attente": debut})
+                # Même borne que pour un 5xx : une limite par minute est une surcharge passagère,
+                # et le client doit l'apprendre AVANT d'abandonner, pas la subir en repli.
+                reprise = datetime.now(UTC) + timedelta(seconds=cooldown_secs)
+                rt.metrics.incr("alarme:surcharge_fournisseur")
+                logger.error(
+                    f"[ALARME] Surcharge fournisseur (HTTP 429 par minute) sur {e.provider} — "
+                    f"{len(tasks)} tâche(s) rendue(s) au client avant son abandon | "
+                    f"batch_key={batch_key} attempt={self.request.retries + 1}/{self.max_retries} "
+                    f"attente_client_restante={restant:.0f}s reprise={reprise.isoformat(timespec='seconds')}"
+                )
+                for t in tasks:
+                    _fail_task(
+                        rt, t,
+                        f"Surcharge fournisseur : Rate Limits (429) sur {e.provider}, "
+                        f"{self.request.retries + 1} essai(s), attente du client épuisée",
+                        error_kind="surcharge_fournisseur",
+                        resume_at=reprise,
+                    )
             elif e.status_code == 402:
                 # Crédits épuisés (« payment required ») : ni saturation, ni requête
                 # invalide. L'instance ne redeviendra pas servable d'elle-même dans la
@@ -319,7 +411,7 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None,
                 )
                 if self.request.retries < self.max_retries:
                     rt.queue.requeue(batch_key, tasks)
-                    raise self.retry(exc=e, countdown=1)
+                    raise self.retry(exc=e, countdown=1, args=[batch_key], kwargs=rejeu)
                 else:
                     for t in tasks:
                         _fail_task(rt, t, f"Max retries dépassé({self.max_retries}) sur {e.provider} : {str(e)}")
@@ -661,10 +753,44 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
         rt.store.save_sync(t)
         rt.store.publish_done_sync(t)
 
+    _consigner_rejeu(rt, handle, task_bundles, provider_name)
+
     logger.info(
         f"Batch terminé avec succès | task_id={batch_id} tasks_merged={len(tasks)} "
         f"provider={provider_name} latency_ms={latency_ms:.1f} agents_count={len(llm_output.agents)}"
     )
+
+
+def _consigner_rejeu(rt: WorkerRuntime, handle, task_bundles, provider_name: str) -> None:
+    """Consigne chaque tâche servie sous la clé de SON prompt, dans l'espace qu'elle nomme.
+
+    Le prompt de la clé est celui de la tâche seule, rendu à nouveau : celui du lot dépend des
+    tâches fusionnées avec elle, qui ne sont pas les mêmes d'un bras à l'autre. Une tâche dont
+    un agent n'a pas eu de réponse n'est pas consignée — resservir une réponse incomplète la
+    rendrait définitive. Jamais bloquant : un rejeu manqué coûte un appel, pas un lot.
+    """
+    magasin = magasin_rejeu(rt.settings)
+    if magasin is None:
+        return
+    for t, t_results, t_tokens_in, t_tokens_out in task_bundles:
+        espace = espace_valide(t.request.espace_rejeu)
+        if espace is None or len(t_results) != len(t.request.agents):
+            continue
+        try:
+            messages = handle.render(handle.validate_items(t.request.agents), t.request.parameters)
+            cle = cle_rejeu(t.request, messages)
+            neuve = magasin.ecrire(espace, cle, enregistrement(
+                cle=cle, espace=espace, request=t.request, provider=provider_name,
+                agents=t_results, tokens_in=t_tokens_in, tokens_out=t_tokens_out,
+                task_id=t.task_id,
+            ))
+            if neuve:
+                rt.metrics.incr(f"rejeu_ab_consigne_total:{t.request.category}")
+        except Exception as exc:
+            logger.error(
+                f"[ALARME] Rejeu : consignation impossible, le prochain bras paiera cet appel | "
+                f"task_id={t.task_id} espace={espace} category={t.request.category} erreur={exc!r}"
+            )
 
 
 def _vider_file(rt: WorkerRuntime, batch_key: str, plafond: int = 10_000) -> list[Task]:
@@ -684,19 +810,123 @@ def _vider_file(rt: WorkerRuntime, batch_key: str, plafond: int = 10_000) -> lis
     return tasks
 
 
-def _providers_merely_busy(statuses: dict[str, dict], force_provider: str | None) -> bool:
+def _eligibles(
+    statuses: dict[str, dict], force_provider: str | None, admises: list[str] | None = None
+) -> list[str]:
+    """Instances qui peuvent servir CE lot : l'épinglée, sinon les admises, sinon toutes."""
+    if force_provider is not None:
+        return [n for n in statuses if n == force_provider]
+    if admises:
+        permises = set(admises)
+        return [n for n in statuses if n in permises]
+    return list(statuses)
+
+
+def _providers_merely_busy(
+    statuses: dict[str, dict], force_provider: str | None, admises: list[str] | None = None
+) -> bool:
     """Vrai si au moins un provider éligible est seulement OCCUPÉ, pas en panne.
 
-    Éligible : le provider forcé, sinon tous. Occupé = ni désactivé, ni en cooldown, ni au
-    quota du jour — la fenêtre RPM/TPM pleine, le lissage ou la concurrence se libèrent seuls.
+    Éligible : le provider forcé, sinon les instances admises, sinon tous. Occupé = ni
+    désactivé, ni en cooldown, ni au quota du jour — la fenêtre RPM/TPM pleine, le lissage ou
+    la concurrence se libèrent seuls. Une instance exclue par la restriction ne compte pas :
+    libre ou non, elle ne servira jamais ce lot.
     """
-    for name, st in statuses.items():
-        if force_provider is not None and name != force_provider:
-            continue
+    for name in _eligibles(statuses, force_provider, admises):
+        st = statuses[name]
         if st.get("disabled") or st.get("cooldown") or st.get("quota_exhausted"):
             continue
         return True
     return False
+
+
+# Refroidissement d'une instance après un HTTP 5xx : c'est aussi l'heure de reprise annoncée
+# au client quand le lot lui est rendu.
+_COOLDOWN_5XX_S = 60
+# Fenêtre RPM : reprise annoncée quand les instances ne sont qu'occupées.
+_FENETRE_RPM_S = 60
+
+
+def _attente_client_restante(settings, force_provider: str | None, debut_attente: float) -> float:
+    """Secondes avant que le client n'abandonne ce lot, marge de sécurité déduite.
+
+    Attente du client : le `wait_timeout` de l'instance épinglée s'il est déclaré (le SDK le
+    reçoit par appel), sinon `resilience.client_wait_seconds`. La marge laisse au résultat le
+    temps de lui parvenir avant son propre abandon.
+    """
+    res = settings.resilience
+    attente = res.client_wait_seconds
+    if force_provider:
+        cfg = settings.providers.get(force_provider)
+        if cfg is not None and getattr(cfg, "wait_timeout", None):
+            attente = float(cfg.wait_timeout)
+    return attente - res.client_wait_margin_seconds - (time.time() - debut_attente)
+
+
+@dataclass(frozen=True)
+class _Verdict:
+    """Ce que fait un lot dont aucune instance éligible n'est sélectionnable."""
+
+    attendre: bool
+    motif: str = ""                   # « occupe » | « refroidissement » si attendre
+    genre: str | None = None          # error_kind rendu au client si abandon
+    reprise_dans_s: float | None = None
+
+
+def _verdict_saturation(
+    statuses: dict[str, dict],
+    eligibles: list[str],
+    ttl_cooldown: dict[str, int],
+    restant_s: float,
+    *,
+    attendre_si_occupe: bool,
+    peut_rejouer: bool,
+) -> _Verdict:
+    """Attendre, ou rendre le lot au client — et sous quel genre.
+
+    On attend tant que le client attend encore (`restant_s > 0`) ET qu'une instance éligible
+    peut se libérer d'elle-même à temps : occupée (fenêtre pleine), ou en refroidissement
+    rouvrant avant l'abandon du client. Sinon le lot est rendu :
+
+    - toutes les éligibles au quota du jour → `quota_journalier` ;
+    - au moins une surchargée (refroidissement, désactivation, fenêtre qui ne se libère pas à
+      temps) → `surcharge_fournisseur`, avec la plus proche réouverture connue ;
+    - aucune éligible connue → pas de genre (le cas historique, que rien ne qualifie).
+    """
+    if not eligibles:
+        return _Verdict(attendre=False)
+    en_panne = [n for n in eligibles if statuses[n].get("disabled") or statuses[n].get("cooldown")
+                or statuses[n].get("quota_exhausted")]
+    occupes = [n for n in eligibles if n not in en_panne]
+    rouvrables = [n for n in eligibles if statuses[n].get("cooldown")
+                  and not statuses[n].get("disabled") and not statuses[n].get("quota_exhausted")]
+    delais = [float(ttl_cooldown.get(n, 0)) for n in rouvrables]
+    if peut_rejouer and restant_s > 0:
+        if occupes and attendre_si_occupe:
+            return _Verdict(attendre=True, motif="occupe", reprise_dans_s=float(_FENETRE_RPM_S))
+        if delais and min(delais) <= restant_s:
+            return _Verdict(attendre=True, motif="refroidissement", reprise_dans_s=min(delais))
+    if all(statuses[n].get("quota_exhausted") for n in eligibles):
+        return _Verdict(attendre=False, genre="quota_journalier")
+    candidats = delais + ([float(_FENETRE_RPM_S)] if occupes else [])
+    return _Verdict(
+        attendre=False,
+        genre="surcharge_fournisseur",
+        reprise_dans_s=min(candidats) if candidats else float(_COOLDOWN_5XX_S),
+    )
+
+
+def _reprise(settings, verdict: _Verdict, eligibles: list[str]) -> datetime | None:
+    """Heure de reprise annoncée au client avec le genre du verdict."""
+    if verdict.genre == "quota_journalier":
+        fuseaux = {
+            getattr(settings.providers.get(n), "quota_reset_tz", None) or DEFAUT_FUSEAU_QUOTA
+            for n in eligibles
+        }
+        return min(next_quota_reset(tz) for tz in fuseaux)
+    if verdict.reprise_dans_s is not None and verdict.genre:
+        return datetime.now(UTC) + timedelta(seconds=verdict.reprise_dans_s)
+    return None
 
 
 def _fit_request_budget(

@@ -66,6 +66,14 @@ Micro-batching : valeurs mesurées sur les runs de juillet 2026, à recalibrer a
 | `min_output_tokens` | `int` | `512` | `LLM_GATEWAY_BATCHING__MIN_OUTPUT_TOKENS` (ex-`MIN_OUTPUT_TOKENS`) |  |
 | `max_output_tokens` | `int` | `16384` | `LLM_GATEWAY_BATCHING__MAX_OUTPUT_TOKENS` (ex-`MAX_OUTPUT_TOKENS`) |  |
 
+## `rejeu`
+
+Rejeu à prompt exact (`core/rejeu_ab.py`) : une tâche dont le prompt a déjà été servi dans l'espace qu'elle nomme reçoit la réponse consignée, sans appel.
+
+| Champ | Type | Défaut | Variable | Sens |
+|---|---|---|---|---|
+| `dir` | `Path | NoneType` | `None` | `LLM_GATEWAY_REJEU__DIR` | racine des réponses consignées, montée dans l'API et le worker ; None = rejeu désactivé |
+
 ## `resilience`
 
 Réessais, bascule de fournisseur, désactivation après erreurs consécutives.
@@ -81,6 +89,8 @@ Réessais, bascule de fournisseur, désactivation après erreurs consécutives.
 | `saturation_retries` | `int` | `2` | `LLM_GATEWAY_RESILIENCE__SATURATION_RETRIES` |  |
 | `saturation_retry_seconds` | `float` | `12.0` | `LLM_GATEWAY_RESILIENCE__SATURATION_RETRY_SECONDS` |  |
 | `abandon_when_busy` | `bool` | `False` | `LLM_GATEWAY_RESILIENCE__ABANDON_WHEN_BUSY` |  |
+| `client_wait_seconds` | `float` | `120.0` | `LLM_GATEWAY_RESILIENCE__CLIENT_WAIT_SECONDS` | attente du client ; le worker rend le lot qualifié avant qu'elle n'expire (le `wait_timeout` d'une instance épinglée prime) |
+| `client_wait_margin_seconds` | `float` | `10.0` | `LLM_GATEWAY_RESILIENCE__CLIENT_WAIT_MARGIN_SECONDS` | marge retranchée de cette attente |
 
 ## `api`
 

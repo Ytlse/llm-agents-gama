@@ -32,8 +32,9 @@ from pathlib import Path
 
 import yaml
 
-MARQUE_LECTURE = "[ PRESSE ] This morning I read in the paper:"
-MARQUE_FOYER = "[ FOYER ]"
+# « This morning » a disparu de la ligne le 2026-09-25 : les archives d'avant le portent encore.
+MARQUE_LECTURE = re.compile(r"\[ PRESSE \] (?:This morning )?I read in the paper:")
+MARQUE_FOYER = re.compile(re.escape("[ FOYER ]"))
 # Défaut du ticket 111 quand la déclaration archivée ne porte pas encore `service` (runs d'avant
 # le ticket) : c'est ce qui permet de rejouer le contrôle sur l'archive du défaut.
 JOURS_PAR_DEFAUT = 5
@@ -274,9 +275,9 @@ def controler(run_dir: Path | str) -> list[Constat]:
         vus = blocs.get(c.person_id, [])
         for j in service:
             du_jour = [b for _, d, b in vus if d == j]
-            c.jours.append(Jour(j, len(du_jour), sum(1 for b in du_jour if marque in b)))
+            c.jours.append(Jour(j, len(du_jour), sum(1 for b in du_jour if marque.search(b))))
             if j == service[0] and du_jour and c.attend_ligne:
-                c.premiere = marque in du_jour[0]
+                c.premiere = bool(marque.search(du_jour[0]))
         if c.mineur and c.role == "informé":
             c.modes_choisis = _modes_choisis(run, c.person_id, set(service))
     return constats

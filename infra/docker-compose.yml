@@ -23,6 +23,9 @@ x-gateway-env: &gateway-env
   # Le contrôleur (hypercorn, Grafana Infinity côté serveur) n'a pas besoin de CORS ; ["*"]
   # reproduit l'ancien comportement pour les outils qui interrogent l'API depuis un navigateur.
   LLM_GATEWAY_API__CORS_ORIGINS: '["*"]'
+  # Rejeu à prompt exact (2026-09-25) : l'API y lit, le worker y écrit, tous deux par le
+  # montage ./experiments. Actif seulement pour une requête qui nomme un espace (REJEU_AB).
+  LLM_GATEWAY_REJEU__DIR: /app/experiments/rejeu_ab
 
 x-shared-env: &shared-env
   REDIS_URL: redis://redis:6379/0
@@ -454,6 +457,10 @@ services:
       # non déclaré ici, et de toute façon `config.yaml` primait. Il n'a jamais rien fait.
       # Le défaut reproduit ce que `config.yaml` posait jusqu'au 2026-09-21.
       INSTANCES_ADMISES: '${INSTANCES_ADMISES:-["google_gemini31_key1","google_gemini31_key2"]}'
+      # 2026-09-25 — espace de rejeu à prompt exact, le même dans les deux bras d'un A/B
+      # (posé par l'orchestrateur mémoire quand l'expérience déclare `rejeu_ab: true`). Vide :
+      # aucun rejeu, comportement antérieur.
+      REJEU_AB: ${REJEU_AB:-}
       MEMOIRE__IMPORTANCE_CHOC: ${MEMOIRE__IMPORTANCE_CHOC:-0.7}
       # Ticket 095 — ce que devient la composante de retard AU-DELÀ du retard de référence.
       # `asymptote` : elle monte encore, en décélérant. `palier` : le comportement d'avant le

@@ -407,3 +407,30 @@ def test_sans_foyer_present_ni_manifeste_le_bras_est_refuse(dirs, tmp_path, monk
     _ecrire(evenements, "a09_t", {"regle": "foyers", "foyers": ["605813"]})
     with pytest.raises(ValueError, match="sans lecteur"):
         cohorte.choc_pour_persona("population_4_foyer_z", "a09_t")
+
+
+# ── 2026-09-25 : le MANIFEST désigne aussi les lecteurs ──────────────────────────────────────
+def test_les_lecteurs_du_manifeste_passent_dans_l_evenement_joue(dirs, tmp_path, monkeypatch):
+    evenements, _ = dirs
+    pops = tmp_path / "population"
+    monkeypatch.setattr(cohorte, "POPULATIONS_DIR", pops)
+    _population_de_foyers(pops, "population_4_foyers_l", ["7", "8"], ["7", "8"])
+    manifeste = pops / "population_4_foyers_l" / "MANIFEST.yaml"
+    manifeste.write_text(yaml.safe_dump({"groupes": {"expose": [
+        {"household_id": "7", "lecteurs": ["71"]}, {"household_id": "8", "lecteurs": ["80"]},
+    ]}}), encoding="utf-8")
+    _ecrire(evenements, "a13_t", {"regle": "foyers", "foyers": ["605813"], "lecteurs_par_foyer": 1})
+    nom = cohorte.choc_pour_persona("population_4_foyers_l", "a13_t")
+    derive = yaml.safe_load((evenements / f"{nom}.yaml").read_text(encoding="utf-8"))
+    assert derive["exposition"]["foyers"] == ["7", "8"]
+    assert derive["exposition"]["lecteurs"] == ["71", "80"]
+
+
+def test_des_lecteurs_declares_d_une_autre_population_sont_refuses(dirs, tmp_path, monkeypatch):
+    evenements, _ = dirs
+    pops = tmp_path / "population"
+    monkeypatch.setattr(cohorte, "POPULATIONS_DIR", pops)
+    _population_de_foyers(pops, "population_2_foyer_m", ["7"], ["7"])
+    _ecrire(evenements, "a13_t", {"regle": "foyers", "foyers": ["7"], "lecteurs": ["1320713"]})
+    with pytest.raises(ValueError, match="sans lecteur"):
+        cohorte.choc_pour_persona("population_2_foyer_m", "a13_t")

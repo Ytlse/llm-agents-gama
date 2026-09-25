@@ -1,0 +1,250 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1132 248" width="1132" height="248" style="font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif;">
+<defs>
+  <pattern id="weekend-hatch" width="8" height="8" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+    <line x1="0" y1="0" x2="0" y2="8" stroke="#D5D8DC" stroke-width="2.5" />
+  </pattern>
+  <filter id="card-shadow" x="-5%" y="-5%" width="110%" height="115%">
+    <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.12"/>
+  </filter>
+</defs>
+<rect width="1132" height="248" fill="#FFFFFF" rx="8"/>
+<text x="20" y="30" font-size="16" font-weight="700" fill="#2C3E50">Agent 1320712 — Home (19:37)</text>
+<text x="20" y="48" font-size="12" fill="#7F8C8D">Suivi longitudinal des options proposées (A) et choisies (S)</text>
+<text x="276.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#34495E">Lun</text>
+<text x="276.0" y="64" text-anchor="middle" font-size="10" fill="#34495E">16/03</text>
+<text x="308.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#34495E">Mar</text>
+<text x="308.0" y="64" text-anchor="middle" font-size="10" fill="#34495E">17/03</text>
+<text x="340.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#34495E">Mer</text>
+<text x="340.0" y="64" text-anchor="middle" font-size="10" fill="#34495E">18/03</text>
+<text x="372.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#34495E">Jeu</text>
+<text x="372.0" y="64" text-anchor="middle" font-size="10" fill="#34495E">19/03</text>
+<text x="404.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#34495E">Ven</text>
+<text x="404.0" y="64" text-anchor="middle" font-size="10" fill="#34495E">20/03</text>
+<rect x="420" y="70" width="32" height="128" fill="url(#weekend-hatch)" opacity="0.8"/>
+<text x="436.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#95A5A6">Sam</text>
+<text x="436.0" y="64" text-anchor="middle" font-size="10" fill="#95A5A6">21/03</text>
+<rect x="452" y="70" width="32" height="128" fill="url(#weekend-hatch)" opacity="0.8"/>
+<text x="468.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#95A5A6">Dim</text>
+<text x="468.0" y="64" text-anchor="middle" font-size="10" fill="#95A5A6">22/03</text>
+<text x="500.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#34495E">Lun</text>
+<text x="500.0" y="64" text-anchor="middle" font-size="10" fill="#34495E">23/03</text>
+<text x="532.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#E74C3C">Mar</text>
+<text x="532.0" y="64" text-anchor="middle" font-size="10" fill="#E74C3C">24/03</text>
+<text x="564.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#E74C3C">Mer</text>
+<text x="564.0" y="64" text-anchor="middle" font-size="10" fill="#E74C3C">25/03</text>
+<text x="596.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#34495E">Jeu</text>
+<text x="596.0" y="64" text-anchor="middle" font-size="10" fill="#34495E">26/03</text>
+<text x="628.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#34495E">Ven</text>
+<text x="628.0" y="64" text-anchor="middle" font-size="10" fill="#34495E">27/03</text>
+<rect x="644" y="70" width="32" height="128" fill="url(#weekend-hatch)" opacity="0.8"/>
+<text x="660.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#95A5A6">Sam</text>
+<text x="660.0" y="64" text-anchor="middle" font-size="10" fill="#95A5A6">28/03</text>
+<rect x="676" y="70" width="32" height="128" fill="url(#weekend-hatch)" opacity="0.8"/>
+<text x="692.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#95A5A6">Dim</text>
+<text x="692.0" y="64" text-anchor="middle" font-size="10" fill="#95A5A6">29/03</text>
+<text x="724.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#34495E">Lun</text>
+<text x="724.0" y="64" text-anchor="middle" font-size="10" fill="#34495E">30/03</text>
+<text x="756.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#34495E">Mar</text>
+<text x="756.0" y="64" text-anchor="middle" font-size="10" fill="#34495E">31/03</text>
+<text x="788.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#34495E">Mer</text>
+<text x="788.0" y="64" text-anchor="middle" font-size="10" fill="#34495E">01/04</text>
+<text x="820.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#34495E">Jeu</text>
+<text x="820.0" y="64" text-anchor="middle" font-size="10" fill="#34495E">02/04</text>
+<text x="852.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#34495E">Ven</text>
+<text x="852.0" y="64" text-anchor="middle" font-size="10" fill="#34495E">03/04</text>
+<rect x="868" y="70" width="32" height="128" fill="url(#weekend-hatch)" opacity="0.8"/>
+<text x="884.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#95A5A6">Sam</text>
+<text x="884.0" y="64" text-anchor="middle" font-size="10" fill="#95A5A6">04/04</text>
+<rect x="900" y="70" width="32" height="128" fill="url(#weekend-hatch)" opacity="0.8"/>
+<text x="916.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#95A5A6">Dim</text>
+<text x="916.0" y="64" text-anchor="middle" font-size="10" fill="#95A5A6">05/04</text>
+<text x="948.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#34495E">Lun</text>
+<text x="948.0" y="64" text-anchor="middle" font-size="10" fill="#34495E">06/04</text>
+<text x="980.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#34495E">Mar</text>
+<text x="980.0" y="64" text-anchor="middle" font-size="10" fill="#34495E">07/04</text>
+<text x="1012.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#34495E">Mer</text>
+<text x="1012.0" y="64" text-anchor="middle" font-size="10" fill="#34495E">08/04</text>
+<text x="1044.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#34495E">Jeu</text>
+<text x="1044.0" y="64" text-anchor="middle" font-size="10" fill="#34495E">09/04</text>
+<text x="1076.0" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#34495E">Ven</text>
+<text x="1076.0" y="64" text-anchor="middle" font-size="10" fill="#34495E">10/04</text>
+<rect x="516" y="42" width="64" height="14" rx="3" fill="#E74C3C"/>
+<text x="548.0" y="53" text-anchor="middle" font-size="9" font-weight="700" fill="#FFFFFF">⚡ CHOC</text>
+<rect x="516" y="70" width="64" height="128" fill="#FADBD8" opacity="0.25" stroke="#E74C3C" stroke-width="1.5" stroke-dasharray="3,3"/>
+<rect x="20" y="70" width="1092" height="32" fill="#FFFFFF"/>
+<rect x="20" y="76" width="16" height="20" rx="3" fill="#7C4DDB"/>
+<text x="44" y="85" font-size="11" font-weight="600" fill="#2C3E50">Vélo</text>
+<text x="44" y="96" font-size="9.5" fill="#7F8C8D">22 min · 5.18 km</text>
+<rect x="260" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="292" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="294" y="72" width="28" height="28" rx="4" fill="#7C4DDB" filter="url(#card-shadow)"/>
+<text x="308.0" y="90.5" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">S</text>
+<rect x="324" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="356" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="358" y="72" width="28" height="28" rx="4" fill="#7C4DDB" filter="url(#card-shadow)"/>
+<text x="372.0" y="90.5" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">S</text>
+<rect x="388" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="390" y="72" width="28" height="28" rx="4" fill="#7C4DDB" filter="url(#card-shadow)"/>
+<text x="404.0" y="90.5" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">S</text>
+<rect x="420" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="452" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="484" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="486" y="72" width="28" height="28" rx="4" fill="#7C4DDB" filter="url(#card-shadow)"/>
+<text x="500.0" y="90.5" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">S</text>
+<rect x="516" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="518" y="72" width="28" height="28" rx="4" fill="#7C4DDB" filter="url(#card-shadow)"/>
+<text x="532.0" y="90.5" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">S</text>
+<rect x="548" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="550" y="72" width="28" height="28" rx="4" fill="#7C4DDB" filter="url(#card-shadow)"/>
+<text x="564.0" y="90.5" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">S</text>
+<rect x="580" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="582" y="72" width="28" height="28" rx="4" fill="#7C4DDB" filter="url(#card-shadow)"/>
+<text x="596.0" y="90.5" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">S</text>
+<rect x="612" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="614" y="72" width="28" height="28" rx="4" fill="#7C4DDB" filter="url(#card-shadow)"/>
+<text x="628.0" y="90.5" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">S</text>
+<rect x="644" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="676" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="708" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="710" y="72" width="28" height="28" rx="4" fill="#7C4DDB" filter="url(#card-shadow)"/>
+<text x="724.0" y="90.5" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">S</text>
+<rect x="740" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="742" y="72" width="28" height="28" rx="4" fill="#7C4DDB" filter="url(#card-shadow)"/>
+<text x="756.0" y="90.5" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">S</text>
+<rect x="772" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="774" y="72" width="28" height="28" rx="4" fill="#7C4DDB" filter="url(#card-shadow)"/>
+<text x="788.0" y="90.5" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">S</text>
+<rect x="804" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="806" y="72" width="28" height="28" rx="4" fill="#7C4DDB" filter="url(#card-shadow)"/>
+<text x="820.0" y="90.5" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">S</text>
+<rect x="836" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="838" y="72" width="28" height="28" rx="4" fill="#7C4DDB" filter="url(#card-shadow)"/>
+<text x="852.0" y="90.5" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">S</text>
+<rect x="868" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="900" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="932" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="934" y="72" width="28" height="28" rx="4" fill="#7C4DDB" filter="url(#card-shadow)"/>
+<text x="948.0" y="90.5" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">S</text>
+<rect x="964" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="966" y="72" width="28" height="28" rx="4" fill="#7C4DDB" filter="url(#card-shadow)"/>
+<text x="980.0" y="90.5" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">S</text>
+<rect x="996" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="998" y="72" width="28" height="28" rx="4" fill="#7C4DDB" filter="url(#card-shadow)"/>
+<text x="1012.0" y="90.5" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">S</text>
+<rect x="1028" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="1030" y="72" width="28" height="28" rx="4" fill="#7C4DDB" filter="url(#card-shadow)"/>
+<text x="1044.0" y="90.5" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">S</text>
+<rect x="1060" y="70" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="20" y="102" width="1092" height="32" fill="#FAFAFA"/>
+<rect x="20" y="108" width="16" height="20" rx="3" fill="#178A3F"/>
+<text x="44" y="117" font-size="11" font-weight="600" fill="#2C3E50">Métro</text>
+<text x="44" y="128" font-size="9.5" fill="#7F8C8D">28 min · 4.66 km</text>
+<rect x="260" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="262" y="104" width="28" height="28" rx="4" fill="#178A3F" filter="url(#card-shadow)"/>
+<text x="276.0" y="122.5" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">S</text>
+<rect x="292" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="324" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="326" y="104" width="28" height="28" rx="4" fill="#178A3F" filter="url(#card-shadow)"/>
+<text x="340.0" y="122.5" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">S</text>
+<rect x="356" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="388" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="420" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="452" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="484" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="516" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="548" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="580" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="612" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="644" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="676" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="708" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="740" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="772" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="804" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="836" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="868" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="900" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="932" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="964" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="996" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="1028" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="1060" y="102" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="20" y="134" width="1092" height="32" fill="#FFFFFF"/>
+<rect x="20" y="140" width="16" height="20" rx="3" fill="#0B7A9B"/>
+<text x="44" y="149" font-size="11" font-weight="600" fill="#2C3E50">Marche seule</text>
+<text x="44" y="160" font-size="9.5" fill="#7F8C8D">57 min · 4.35 km</text>
+<rect x="260" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="262" y="136" width="28" height="28" rx="4" fill="#D1F2EB" stroke="#0B7A9B" stroke-width="1.2"/>
+<text x="276.0" y="154.0" text-anchor="middle" font-size="11" font-weight="700" fill="#0E6251">A</text>
+<rect x="292" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="324" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="326" y="136" width="28" height="28" rx="4" fill="#D1F2EB" stroke="#0B7A9B" stroke-width="1.2"/>
+<text x="340.0" y="154.0" text-anchor="middle" font-size="11" font-weight="700" fill="#0E6251">A</text>
+<rect x="356" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="388" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="420" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="452" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="484" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="516" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="548" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="580" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="612" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="644" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="676" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="708" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="740" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="772" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="804" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="836" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="868" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="900" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="932" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="964" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="996" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="1028" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="1060" y="134" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="20" y="166" width="1092" height="32" fill="#FAFAFA"/>
+<rect x="20" y="172" width="16" height="20" rx="3" fill="#0B7A9B"/>
+<text x="44" y="181" font-size="11" font-weight="600" fill="#2C3E50">Marche seule</text>
+<text x="44" y="192" font-size="9.5" fill="#7F8C8D">58 min · 4.43 km</text>
+<rect x="260" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="262" y="168" width="28" height="28" rx="4" fill="#D1F2EB" stroke="#0B7A9B" stroke-width="1.2"/>
+<text x="276.0" y="186.0" text-anchor="middle" font-size="11" font-weight="700" fill="#0E6251">A</text>
+<rect x="292" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="324" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="326" y="168" width="28" height="28" rx="4" fill="#D1F2EB" stroke="#0B7A9B" stroke-width="1.2"/>
+<text x="340.0" y="186.0" text-anchor="middle" font-size="11" font-weight="700" fill="#0E6251">A</text>
+<rect x="356" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="388" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="420" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="452" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="484" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="516" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="548" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="580" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="612" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="644" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="676" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="708" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="740" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="772" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="804" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="836" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="868" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="900" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="932" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="964" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="996" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="1028" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<rect x="1060" y="166" width="32" height="32" fill="none" stroke="#EAECEE" stroke-width="0.8"/>
+<g transform="translate(260, 218)">
+<rect x="0" y="-10" width="16" height="16" rx="3" fill="#178A3F"/>
+<text x="8" y="2" text-anchor="middle" font-size="10" font-weight="800" fill="#FFF">S</text>
+<text x="22" y="2" font-size="11" fill="#34495E">Option choisie (Selected)</text>
+<rect x="190" y="-10" width="16" height="16" rx="3" fill="#D4EFDF" stroke="#178A3F" stroke-width="1"/>
+<text x="198" y="2" text-anchor="middle" font-size="10" font-weight="700" fill="#145A32">A</text>
+<text x="212" y="2" font-size="11" fill="#34495E">Option disponible (Available)</text>
+<rect x="400" y="-10" width="20" height="16" fill="url(#weekend-hatch)" stroke="#BDC3C7" stroke-width="0.8"/>
+<text x="426" y="2" font-size="11" fill="#34495E">Week-end</text>
+</g>
+</svg>

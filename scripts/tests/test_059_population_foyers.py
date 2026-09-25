@@ -145,3 +145,38 @@ def test_le_vivier_de_la_cohorte_est_suffisant_pour_les_paliers_P0_et_P1():
     pop = json.loads(COHORTE.read_text(encoding="utf-8"))
     assert len(foyers_eligibles(pop, abonnement_tc=True)) >= 10
     assert len(foyers_eligibles(pop, abonnement_tc=False)) >= 10
+
+
+# ── 2026-09-25 : tailles mêlées et lecteurs désignés ────────────────────────────────────
+
+
+def _adulte_ou_enfant(pid: str, menage: str, age: int) -> dict:
+    p = _personne(pid, menage)
+    p["identity"]["traits_json"]["age"] = age
+    return p
+
+
+def test_plusieurs_tailles_se_melent():
+    pop = [
+        _adulte_ou_enfant("1", "A", 30), _adulte_ou_enfant("2", "A", 30),
+        _adulte_ou_enfant("3", "B", 40), _adulte_ou_enfant("4", "B", 38),
+        _adulte_ou_enfant("5", "B", 8), _adulte_ou_enfant("6", "B", 5),
+        _adulte_ou_enfant("7", "C", 40), _adulte_ou_enfant("8", "C", 40), _adulte_ou_enfant("9", "C", 9),
+    ]
+    assert list(foyers_eligibles(pop, abonnement_tc=False, taille=[2, 4], adultes=2)) == ["A", "B"]
+
+
+def test_un_lecteur_designe_est_un_adulte_d_un_foyer_expose():
+    from scripts.data.population.extraire_foyers import lecteurs_par_menage
+
+    pop = [
+        _adulte_ou_enfant("1", "A", 30), _adulte_ou_enfant("2", "A", 30),
+        _adulte_ou_enfant("3", "B", 40), _adulte_ou_enfant("4", "B", 38),
+        _adulte_ou_enfant("5", "B", 8), _adulte_ou_enfant("6", "B", 5),
+    ]
+    eligibles = foyers_eligibles(pop, abonnement_tc=False, taille=[2, 4], adultes=2)
+    assert lecteurs_par_menage(["2", "4"], ["A", "B"], eligibles) == {"A": ["2"], "B": ["4"]}
+    with pytest.raises(SystemExit, match="mineur"):
+        lecteurs_par_menage(["5"], ["A", "B"], eligibles)
+    with pytest.raises(SystemExit, match="hors des foyers exposés"):
+        lecteurs_par_menage(["3"], ["A"], eligibles)

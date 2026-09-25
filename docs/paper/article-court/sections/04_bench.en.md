@@ -1,6 +1,8 @@
-# 4. The comparison bench
+# 4. The comparison benchmark
 
-<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 11:11:43 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 21:10:50 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+
+<!-- Relecture des gallicismes du 2026-09-25, accord de l'auteur (« Corrige ») : tics récurrents (« against » comparatif, « one » pour « un même », « carry », « bound », « under » devant un seuil, « rejoin », « from one X to another », « execute », « brings »), faux-amis (agenda, control, hypothesis, legibility, designate, demanding, chain, globally, bends, recedes), calques de construction et typographie à la française (« 0.9 point », « [a ; b] », « 30.3 % », « 1.06 dollars »). Aucun chiffre ne change ; les prompts et le message de l'annexe D ne sont pas touchés. -->
 
 <!-- Brouillon anglais, article court AAMAS 2027, PLAN.md § 4 — budget 900 mots.
      Rédigé le 2026-09-22 par l'agent article-writer. Hypothèse ticket 103 scénario 1.
@@ -9,14 +11,62 @@
      aucun autre chiffre n'est un emplacement. Dépassement de budget signalé au
      compte-rendu, avec la liste des coupes possibles. -->
 
+This section describes the benchmark: the cohort on which every decision-maker is scored,
+the three rules that keep the comparison fair, the metrics, and the decision-makers
+themselves.
+
 ## 4.1 The cohort
 
-Every score in this paper comes from one sealed cohort of 1,000 synthetic personas. A persona
-is one synthetic person with a household and a day of trips. They form 499 whole households,
-inside the study area. The eqasim synthesis chain (Hörl & Balać, 2021)
-produced the pool of 11,329 people they were drawn from. It builds that pool from census and
-national travel survey data. Their reference remains the local survey (Cerema & Tisséo
-Collectivités, 2026), in which residents describe every trip of the day before.
+Every aggregate score in this paper comes from one sealed cohort of 1,000 synthetic
+personas, frozen in a file that is never modified. They form 499 complete households, inside the study area. The eqasim synthesis pipeline (Hörl & Balać, 2021) produced the pool of 11,329 people they were drawn from.
+It builds that pool from census and national travel survey data. The cohort is nonetheless
+evaluated against the local survey (Cerema & Tisséo Collectivités, 2023). We align the pool
+with that survey after generation.
+
+French household travel surveys follow one national protocol, certified by Cerema, so that
+cities and years can be compared. The Toulouse survey drew 10,783 households at random within
+88 geographic strata, each holding at least 95 of them. Interviewers reached them between
+September 2022 and February 2023, outside school holidays, 4,573 at home and 6,210 by
+telephone. At home every member aged five or over answers, whereas by telephone one or two
+members are drawn. The 15,775 respondents describe each trip of the previous weekday: origin,
+destination, purpose, times and modes used. Weights then align the sample with the census on
+household size, car ownership, age and occupation.
+
+<!-- Paragraphe ajouté le 2026-09-25 à la demande de l'auteur (version longue retenue), pour
+     un lecteur qui ne connaît pas les enquêtes ménages-déplacements françaises. La relative
+     « in which residents describe every trip of the previous day » est retirée de la phrase
+     précédente, le paragraphe la reprenant en détail.
+     source, rapport final Cerema « Enquête mobilité 2023, bassin de vie », p. 6-10 :
+       10 783 ménages enquêtés, 15 775 personnes de 5 ans et plus interrogées, terrain du
+       20 septembre 2022 au 18 février 2023 hors vacances scolaires, trois volets (ménage,
+       personne, déplacements de la veille : origine, destination, motif, modes, durée),
+       redressement de la non-réponse puis calage sur le RP2019 (taille des ménages,
+       motorisation, âge, occupation, sexe).
+       https://www.cerema.fr/sites/default/files/inline-files/rapport-final-68-pages-enquete-mobilite-2023-bassin-de-vie-.pdf
+     source, protocole national : collecte du mardi au samedi sur les déplacements de la
+       veille, tronc commun comparable aux EMD/EDVM/EDGT antérieures.
+       https://www.cerema.fr/fr/actualites/enquetes-mobilite-certifiees-cerema-methodologie
+     source, microdonnées lil-1750 recomptées le 2026-09-25 (fichiers_standards) :
+       Toulouse_2023_std_men.csv, 10 783 lignes ; STM (secteur de tirage) = 88 modalités,
+       95 à 250 ménages par secteur, médiane 114 ; METH 1 (face à face) = 4 573,
+       METH 2 (téléphone) = 6 210, les deux méthodes présentes dans chacun des 88 secteurs.
+       Toulouse_2023_std_pers.csv, PENQ = 1 : 15 775 ; face à face 8 440 interrogés sur
+       8 859 membres, téléphone 7 335 sur 12 031, soit environ 1,2 par ménage.
+     ⚠ Le rapport dit « pour moitié en face à face et pour moitié par téléphone » ; les
+       effectifs des microdonnées (42 % / 58 %) sont cités à la place.
+     ⚠ Non cité : le nombre de déplacements, 54 785 au rapport contre 54 585 lignes dans
+       Toulouse_2023_std_depl.csv.
+     ⚠ Chevauchement assumé avec le § 7.2 (jour de semaine hors vacances, 5 ans et plus),
+       qui le reprend comme limite.
+     ⚠ Budget : le § 4.1 passe d'environ 337 à environ 445 mots pour 200 prévus. -->
+
+<!-- Phrase ajoutée le 2026-09-25 à la demande de l'auteur, dans cette forme courte.
+     Post-traitements visés : permis, abonnement TC, vélo et type de logement retirés dans les
+     lois EMC² (scripts/data/population/enrich_equipment.py, enrich_personal_bike.py,
+     enrich_housing_type.py), puis sélection des 499 ménages calée sur les marges de l'enquête
+     (MANIFEST.yaml de la cohorte, selection.regle, allocation et descente : écart total
+     60,98 → 3,5 pt). Les treize marges contrôlées ci-dessous sont celles que la sélection vise.
+     Année de la citation corrigée le même jour, 2026 → 2023, sur indication de l'auteur. -->
 
 <!-- Audit des citations du 2026-09-23. « Its input is the survey » était faux : la chaîne
      eqasim tire les individus dans le recensement INSEE, les apparie à l'ENTD 2008 (chaînes de
@@ -43,9 +93,10 @@ Collectivités, 2026), in which residents describe every trip of the day before.
      doi:10.13144/lil-1750 (corrigé le 2026-09-23 : lil-0933 est l'EMD 2013). Le ménage est
      l'unité de tirage. -->
 
-Thirteen margins of the cohort are controlled against the survey. All thirteen conform. Each
-margin is the share of one trait, such as age class or car ownership. The equivalence bound
-was one point, set before measuring. The largest gap is 0.50 point (Appendix A).
+We check thirteen margins of the cohort against the survey. A margin is the share of one
+trait, such as an age class or car ownership. Before measuring, we set an equivalence bound
+of one percentage point. All thirteen margins fall within it, the largest gap being 0.50
+percentage points (Appendix A).
 
 <!-- source: fr/04_Evaluation.md § 4.1, tableau des treize marges et son commentaire
      (CONTROLE.md de la cohorte, scellé le 2026-09-14 ; 13 conformes, 0 à publier, 0 non
@@ -53,13 +104,14 @@ was one point, set before measuring. The largest gap is 0.50 point (Appendix A).
      maximal 0,50 point, sur la classe d'âge et sur l'occupation. -->
 
 The cohort travels slightly less than the survey population: 3.30 trips per persona and 3.69
-per persona who travels at all, against 3.53 and 3.95. That makes 3,299 trips per day.
+per persona who travels at all, compared with 3.53 and 3.95. In total, the cohort makes 3,299
+trips on the scored day.
 
-The weather and the transport offer are those of a weekday of the survey's collection period,
-from September 2022 to February 2023. That weekday is drawn for each persona, so the cohort
-covers the whole period. Each persona starts that day with a blank memory, and no recollection
-reaches its prompt during the day. No bench score therefore depends on the memory constants of
-Section 3.3.
+In the benchmark, the weather and the transport supply are those of a weekday of the survey's
+collection period, from September 2022 to February 2023. That weekday is drawn for each
+persona, so the cohort covers the whole period. A benchmark run simulates a single day. Each
+persona starts that day with a blank memory, and no memory reaches its prompt during the day.
+No benchmark score therefore depends on the memory constants of Section 3.3. Section 6 departs from this setup: it follows one agent over several weeks, with memory enabled.
 
 <!-- Ajout du 2026-09-24, décision de l'auteur : remplace le paragraphe d'ouverture du § 3.3,
      supprimé (renvois vers l'avant, « one day » trompeur, justification défensive). « Blank »
@@ -104,9 +156,9 @@ options that share a mode.
      3,154. L'écart de sept n'est expliqué nulle part dans les masters, et aucun des deux
      comptes n'est écrit ici. -->
 
-We release the protocol, the code, the seeds and the sealed cohort in an repository[^depot]. Our research convention
-forbids passing on the survey microdata themselves. The survey is obtained from the
-PROGEDO-ADISP archive, on individual request (Cerema & Tisséo Collectivités, 2026).
+We release the protocol, the code, the seeds and the sealed cohort in an anonymised
+repository[^depot]. Our data-use agreement forbids redistributing the survey microdata. The survey is obtained from the
+PROGEDO-ADISP archive, on individual request (Cerema & Tisséo Collectivités, 2023).
 
 <!-- ⚠ Paragraphe tranché par l'auteur le 2026-09-23, et il tranche dans les deux sens.
      (a) La cohorte se diffuse. L'annexe G disait le statut des ressources dérivées « pas
@@ -138,20 +190,20 @@ PROGEDO-ADISP archive, on individual request (Cerema & Tisséo Collectivités, 2
 
 ## 4.2 The protocol in three rules
 
-Three rules close three ways of biasing a comparison between a generative agent and a
-machine learning model on structured data.
+Three rules guard against three ways of biasing a comparison between a generative agent and a
+reference model.
 
 Rule 1 gives every decision-maker the same 21 variables, twelve for the person and
 household, three for the trip, six for geometry (Appendix B).
 
 Rule 2 scores the probability mass a decision-maker puts on each option, not the option it
-ranks first. The option ranked first is not the decision the simulation plays
+ranks first. The option ranked first is not the decision the simulation carries out
 (Section 3.2).
 
-Rule 3 restricts each prediction of a machine learning model on structured data to the
-modes offered for that trip, then rescales it to 100 %. Such a model predicts over
-every mode, whereas a language model sees
-only the options offered. The share of a mode is split evenly among its options.
+Rule 3 handles a difference in output. A reference model predicts a share for every mode,
+whereas a language model sees only the options offered. We therefore restrict each
+prediction of a reference model to the modes offered for that trip, then rescale it to 100%.
+When several options share a mode, that mode's share is split evenly among them.
 
 <!-- ⚠ Remarque de relecture n° 7, et point E de la remarque 4 : la règle 3 était posée sans
      sa raison. Répartition égale de la masse d'une catégorie entre ses propositions :
@@ -164,11 +216,17 @@ only the options offered. The share of a mode is split evenly among its options.
      renormalisation sur l'offre, probabilités écrites avant et après correction. Six options
      au plus par déplacement (experience.yaml, max_candidats: 6). -->
 
-We equalise the 21 variables, not the information each side holds. The language-based
-decision-makers receive three things no machine learning model on structured data can receive. They see the agenda of
-the remaining trips, the weather of the coming hours, and each itinerary step by step. The
-machine learning models on structured data received something the language-based decision-makers never did, the 39,203 survey trips on which they were estimated. The
-exposure asymmetry runs the other way, which makes those models high references.
+Rule 1 equalises the 21 variables, not the information each side holds. The language-based
+decision-makers (the language models and the typed classifier) also see two things that no
+reference model can use. They see the schedule of the remaining trips and each itinerary step
+by step. Conversely, the reference models were estimated on the 39,203 survey trips, which no
+language-based decision-maker ever saw. Exposure to the target data thus favours the
+reference models, which makes them a stringent benchmark.
+
+<!-- Relecture éditoriale du 2026-09-25, décision de l'auteur : retour à la formulation
+     d'origine, sans la météo des heures à venir (day_outlook). Un modèle classique pourrait
+     prendre la météo, que l'enquête ne relève pas ; elle sort donc de la liste, et « three
+     things » devient « two things ». La météo reste servie dans le prompt (annexe D.5). -->
 
 <!-- source: fr/04_Evaluation.md § 4.3, deuxième et troisième paragraphes de la règle 1 :
      persona.py, champs agenda, day_outlook et trajectories ; exposition tabulaire
@@ -178,9 +236,9 @@ exposure asymmetry runs the other way, which makes those models high references.
 
 ## 4.3 What we measure
 
-We measure at two scales, the modal split of the cohort and the agreement on each trip. The modal split is the share of trips made by car, public transport, walking and
-cycling. The survey gives the reference share globally, then inside five strata. Three are nominal,
-occupation, gender and trip purpose. Two are ordered, age class and distance class.
+We measure at two scales: the modal split of the cohort and the agreement on each trip. The
+modes are car, public transport, walking and cycling. The survey gives the reference share overall, then within five strata. Three are nominal (occupation, gender, trip purpose) and
+two are ordered (age class, distance class).
 
 <!-- source: fr/04_Evaluation.md § 4.2 : quatre modes scorés, référence EMC² 2023 recalculée
      pour chaque strate — classe d'âge, occupation, genre, motif du déplacement, classe de
@@ -198,24 +256,39 @@ occupation, gender and trip purpose. Two are ordered, age class and distance cla
      disparaît, les cinq noms la rendant inutile — trois découpent la population, deux les
      déplacements, et le lecteur le voit. Le terme reste défini ici, par énumération. -->
 
-One composite number carries the aggregate reading. It adds the global divergence to the
-weighted mean divergence of each stratum.
-$$\mathcal{C}_{\text{EMD–JSD}} = \mathrm{JSD}^{\text{global}} + \sum_{d\ \text{nominal}} w_d\,\overline{\mathrm{JSD}}^{\,d} + \sum_{d\ \text{ordinal}} w_d\,\overline{\mathrm{EMD}}^{\,d}$$
+
+
+Each stratum is scored by a divergence between the simulated and the surveyed shares. Nominal
+strata take the Jensen–Shannon divergence (Lin, 1991) in base 2. Ordered strata take the earth
+mover's distance (Rubner, Tomasi & Guibas, 2000), which respects the class order. Both lie in
+[0, 1], the distance after division by the number of class steps, and both are multiplied by
+100. A nominal stratum averages the divergence of its classes, each weighted by its number of
+personas. An ordered stratum such as distance class is read mode by mode. For each mode, we
+compare how its trips spread from the shortest class to the longest, then average the four
+modes weighted by their survey share.
+
+One composite number, in points, then adds the overall divergence to the weighted divergence
+of each stratum.
+$$\mathcal{C}_{\text{EMD–JSD}} = \mathrm{JSD}^{\text{overall}} + \sum_{d\ \text{nominal}} w_d\,\overline{\mathrm{JSD}}^{\,d} + \sum_{d\ \text{ordinal}} w_d\,\overline{\mathrm{EMD}}^{\,d}$$
 
 Each $d$ is a stratum, $w_d$ its weight, and the bar the mean divergence over that stratum.
+The weights are set by design, not fitted. The overall term has weight 1; age, occupation and
+purpose 0.5 each; gender and distance 0.3 each. A lower composite means a distribution closer
+to the survey. A cohort matching the survey in every stratum would score 0. Spreading every
+trip uniformly over its options scores about 50.
+
+<!-- Relecture éditoriale du 2026-09-25, accord de l'auteur (« Corrige », point B1) : la
+     formule arrivait avant JSD et EMD, et le lecteur ne savait pas ce que valait un point. Le
+     paragraphe des divergences passe en premier, la formule ensuite avec ses symboles et ses
+     poids. Deux ancres d'échelle ajoutées : 0 par construction, et le témoin uniforme à 50,16
+     (tableau 1). La phrase de la strate ordonnée, indéchiffrable, est dépliée sur l'exemple
+     de la classe de distance (A-EMD, metrics.py l. 894-944 : profil de chaque mode sur les
+     classes ordonnées, moyenne pondérée par la masse de référence du mode). -->
 
 <!-- Remarque du tuteur sur la version longue (PDF annoté AAMAS_2027___LLM_v1_KOI, p. 5,
      « describe all the mathematical notations in the text »), reprise le 2026-09-25 : d, w_d
      et la barre n'étaient nommés nulle part. La phrase les glose avant que le paragraphe
      suivant dise comment chaque moyenne se pondère et quelles valeurs prennent les poids. -->
-
-The divergence is Jensen–Shannon (Lin, 1991) in base 2 on nominal strata. Ordered strata take
-the earth mover's distance (Rubner, Tomasi & Guibas, 2000), which respects the class order. Both lie in [0, 1], the distance once divided
-by the number of class steps, and both are multiplied by 100. A nominal stratum averages its
-classes, each weighted by its number of personas. An ordered one averages the four modes, each
-weighted by its survey share. The weights are set by design, not fitted. The global term
-weighs 1, age, occupation and purpose 0.5 each, gender and distance 0.3 each. A lower
-composite means a distribution closer to the survey.
 
 <!-- ⚠ Remarque de relecture n° 9, 2026-09-23 : poids w_d et normalisation non dits.
      Vérifié dans prompt_calibration/calibration/metrics.py : jsd() base 2, bornée [0, 1]
@@ -242,10 +315,8 @@ composite means a distribution closer to the survey.
      catégories de la strate, les catégories de moins de cinq personas étant écartées. Ce
      dernier détail et les trois autres métriques vivent en annexe C. -->
 
-Two other readings accompany the composite, all three published together. The first
-recomputes it without the trips that offered a single option, where no preference is
-expressed. The second is the L1 error on the global shares, the sum of absolute gaps in
-percentage points.
+We report one other metric alongside the composite: the L1 error on the overall shares
+(the sum of absolute gaps, in percentage points).
 
 <!-- source: colonnes du tableau du § 6.1 des masters : composite.emd_jsd,
      composite.emd_jsd_hors_choix_unique, global.l1 ; définition de l'erreur L1,
@@ -254,15 +325,16 @@ percentage points.
      cette lecture en prose : elle n'y est qu'un en-tête de colonne. La phrase ci-dessus est
      écrite ici pour la première fois. -->
 
-A difference between two decision-makers counts only when it exceeds what a new cohort would
-move. Another cohort of 1,000 personas built the same way would shift a composite by ±1.3
-points. Resolution varies by decision-maker, from 0.9 point for the typed classifier under its
-expert prompt to 2.1 under its minimal prompt.
+Trips by the same person are not independent, so every interval comes from resampling persons
+rather than trips. Another cohort of 1,000 personas built the same way would shift a
+composite by ±1.3 points, the median over the decision-makers of the half-width of their 95%
+interval. We call this shift the cohort resolution, and count a difference between two
+decision-makers only when it exceeds it. Each decision-maker has its own half-width, from 0.9
+points for the typed classifier under its expert prompt to 2.1 under its minimal prompt. A paired difference compares two decision-makers on the persons both
+scored, with a 95% interval.
 
 <!-- ⚠ Remarque de relecture n° 2, point E, 2026-09-23 : « agent » désignait ici un décideur
-     sans dire lequel parmi quinze. « tuned » était employé ici avant toute définition ; les deux bornes sont celles du commentaire de source ci-dessous : classifieur typé sous sa consigne 0,86, sous prompt minimal 2,05. --> Trips of one person are not independent, so
-every interval comes from resampling clusters at the person level. A paired difference
-compares two decision-makers on the persons both scored, at 95 %.
+     sans dire lequel parmi quinze. « tuned » était employé ici avant toute définition ; les deux bornes sont celles du commentaire de source ci-dessous : classifieur typé sous sa consigne 0,86, sous prompt minimal 2,05. -->
 
 <!-- source: résolution recalculée le 2026-09-22 sur le jeu corrigé du ticket 088 (relecture
      v1, items G5 et Q3) : douze bras, 2,000 rééchantillonnages par grappe au niveau de la
@@ -279,10 +351,10 @@ compares two decision-makers on the persons both scored, at 95 %.
      classifieur typé sous prompt minimal. D'où la clause « from 0.9 point … to 2.1 » : ±1,3
      est une médiane, pas une borne uniforme. Différences appariées, mêmes réplicats. -->
 
-The unit-level audit asks the other question, on the days respondents actually described. It covers 9,621 trips of 2,930 respondents, each carrying its declared mode. We publish
-accuracy, cross-entropy in nats, and recall and precision per mode. Cross-entropy falls as a
-decision-maker puts more probability on the declared mode. Recall is the share of a mode's
-declared trips that it designates.
+The second scale, agreement on each trip, uses the survey respondents rather than the
+cohort. It covers 9,621 trips of 2,930 respondents, each with its reported mode. We report accuracy, cross-entropy in nats, and recall and precision per mode. A decision-maker predicts a mode when it gives that mode its highest probability. Cross-entropy falls as a
+decision-maker puts more probability on the reported mode. Recall is the share of a mode's
+reported trips that the decision-maker predicts.
 
 <!-- ⚠ Remarque de relecture n° 9, point E, 2026-09-23 : unité de l'entropie croisée non dite.
      Nats vérifiés : scripts/progedo_logit/mode_choice_eval.py:92-97, sklearn log_loss
@@ -295,23 +367,22 @@ declared trips that it designates.
      les décisions que tous les décideurs comparés notent, puis le rappel et la précision par
      mode ». -->
 
-## 4.4 Floors, references, decision-makers
+## 4.4 Baselines, references, decision-makers
 
-Three floors give the level a decision-maker reaches without behavioural knowledge. One
-draws uniformly over the options offered, another puts everything on the car, the area's
-majority mode. The third, the minimum-duration heuristic, keeps the fastest option offered.
+Three baselines give the level a decision-maker reaches without behavioural knowledge. One
+draws uniformly over the options offered, another puts everything on the car (the area's
+majority mode). The third, the minimum-duration baseline, picks the fastest option offered.
 
 <!-- source: fr/05_Protocol.md § 5.3 : hasard uniforme (1/|O_i|), a priori empirique sur le
      mode majoritaire du territoire, heuristique de durée minimale sur les graphes de
      transport. -->
 
-Four reference models, all machine learning models on structured data, give the level that
-estimation on the survey reaches. They are a
-multinomial logit, the standard discrete-choice model, and three learned models. These are
-LightGBM gradient boosting (Ke et al., 2017), a kernel logistic regression (Zhu & Hastie, 2005)
-and a random forest (Breiman, 2001). We estimate the four at strict parity, on the
-same survey partition. None of them leads on all three readings, so we read the ceiling
-one reading at a time.
+Four reference models give the level that estimation on the survey reaches. They are a
+multinomial logit, the standard discrete-choice model, and three machine-learning
+classifiers. These are LightGBM gradient boosting (Ke et al., 2017), a kernel logistic
+regression (Zhu & Hastie, 2005) and a random forest (Breiman, 2001). We estimate the four under identical
+conditions, on the same survey partition. None of them leads on both metrics, so we
+compare against the best one metric by metric.
 
 <!-- Audit des citations du 2026-09-23 : les trois modèles appris étaient nommés sans
      référence alors qu'ils portent le plafond du tableau 1. Gradient boosting = LightGBM
@@ -328,14 +399,15 @@ one reading at a time.
      meilleur score du tableau ». Gradient boosté = LightGBM (Ke et al., 2017) ; noyau RBF et
      approximation de Nyström pour la régression logistique à noyau. -->
 
-Three families of decision-makers are under test. The minimal prompt gives a language model
-the facts of the trip and the output format, with no general criteria. The expert prompt
-keeps that format and draws the model's attention to four general criteria. Two bear on
-comfort, the walking and waiting public transport really adds, and an unhurried pace for an
-older traveller. The other two bear on constraints, heavy shopping bags to carry and a
-working day with no slack. The third family is a zero-shot classifier with typed output
-(TypeSafe System One, jev-1.13.0). It reads that same text and returns one probability per
-option without writing a sentence.
+The decision-makers under test combine a model and a prompt. The minimal prompt gives the
+model the facts of the trip and the output format, with no general criteria. The expert
+prompt keeps that format and draws the model's attention to four general criteria. Two
+concern comfort: the walking and waiting that public transport actually adds, and an
+unhurried pace for older travellers. The other two concern constraints (heavy shopping to
+carry, a working day with no slack). Each prompt is given to three language models and to a
+zero-shot classifier with typed output (TypeSafe System One, jev-1.13.0). This hosted model
+answers a typed question, here a choice among the options, and is not trained to generate
+text. It reads the same text and returns one probability per option without writing a sentence.
 
 <!-- source: fr/05_Protocol.md §§ 5.1 et 5.2 pour les deux prompts (prompt_minimal_02, 82 mots ;
      prompt_expert_05, 277 mots). Les quatre principes sont nommés d'après le texte servi,
@@ -373,15 +445,41 @@ option without writing a sentence.
      Modèles de fondation :
      gemini-3.1-flash-lite, gemini-3.5-flash-lite, mistral-large-2512, jev-1.13.0. -->
 
-We obtained the expert prompt by successive mutations of one text, under a single constraint.
-Its text contains no numerical threshold or formula. Each iteration reads the gaps per
-stratum of the prompt in service, proposes one targeted rewrite, and keeps it when the
-over-represented mode recedes. Each rewrite is evaluated, like any other evaluation here,
-according to the probability mass of Rule 2. One criterion of the expert prompt thus reads:
-"For elderly or frail people, a continuous, unhurried walk at one's own pace is the natural
-mode of independence for short distances, against the strain and stress of public transport (jolting, risk of falling, steps
-to climb, standing while waiting with no bench)." We call tuned agent the expert prompt served
-to gemini-3.5, the best-scoring language-model condition in Table 1.
+The criterion on older travellers, for instance, is worded as follows.
+
+> "For elderly or frail people, a continuous, unhurried walk at one's own pace is the natural
+> mode of independence for short distances, against the strain and stress of public transport
+> (jolting, risk of falling, steps to climb, standing while waiting with no bench)."
+
+We obtained the expert prompt by successive rewrites of a single text, under one constraint:
+the text may contain no numerical threshold and no formula. At each iteration, a language
+model reads the gaps per stratum of the current prompt and proposes one targeted rewrite. The
+rewrite is kept when the over-represented mode shrinks. Like every score in the paper, each
+rewrite is scored on the probability mass of Rule 2.
+
+<!-- Relecture éditoriale du 2026-09-25, accord de l'auteur (« Corrige », point B3) : la
+     citation, qui coupait la procédure de réglage et s'ouvrait sur un « thus » sans lien
+     logique, passe juste après les quatre critères qu'elle illustre, en bloc de citation
+     (texte du prompt inchangé). La « single constraint » est nommée dans la phrase qui
+     l'annonce, comme dans le texte de l'auteur du 2026-09-24 (option B). -->
+
+<!-- Relecture éditoriale du 2026-09-25. Ajouts : l'auteur des réécritures (un modèle de
+     langue, old-fr/05_Protocol.md l. 102 et skill optimiser-prompt-experience), le typage du
+     classifieur (ticket 096 l. 40-58, experiences/decideur_typesafe.py l. 1-29 : question typée
+     « Choice », distribution sur les options, aucun texte), la raison de la moyenne sur les
+     modes en strate ordonnée (prompt_calibration/calibration/metrics.py l. 858-944), et la
+     phrase « The simulation itself runs a single day » (horloge et offre du jeu du lundi
+     2026-03-16, seul le bulletin météo est tiré ; l'arbitrage de l'auteur du 2026-09-23 sur
+     « weather and transport supply » est conservé).
+     ⚠ [TBC] À TRANCHER PAR L'AUTEUR : la cohorte sur laquelle les écarts de prompt_expert_05 ont
+     été lus. old-fr/06_Empirical_Evaluation.md l. 25 dit une population de calibration tirée à
+     part ; old-fr/05_Protocol.md l. 114-116 dit la cohorte scellée elle-même, en échantillon.
+     prompt_expert_05 date du 2026-09-13 (prompts.yaml l. 548) et a été mesuré sur la cohorte v5,
+     qui porte les mêmes 1 000 personnes que v6 (MANIFEST.yaml l. 167) ; c2 n'existe que depuis
+     le 2026-09-22. Il n'a donc pas été réglé sur c2. -->
+
+We call gemini-3.5 under the expert prompt the *tuned agent*. It is the best-scoring
+language-model condition (Table 1).
 
 <!-- Ajout du 2026-09-24, format demandé par l'auteur : la phrase des contraintes reste
      telle quelle, suivie d'un exemple. Citation mot pour mot de la puce « Autonomy of older
@@ -421,12 +519,23 @@ to gemini-3.5, the best-scoring language-model condition in Table 1.
      22 septembre, le PLAN § 4.4 et le § 5.2 déjà rédigé ; il est faux si c'est le master du
      21 septembre qui fait foi. -->
 
-Since each model has its own biases, the tuning of an expert prompt differs from one model
-to the next. The classifier has its own expert prompt, tuned on a calibration cohort that
-shares no persona with the sealed cohort. That prompt rewrites the criterion on walking and
-waiting, so that a long direct walk also counts as a cost. Every crossing of models and
-prompts is therefore measured on the sealed cohort alone. Appendix D gives the three prompts
-in full, with one trip decided under each.
+Each model has its own biases, so a prompt tuned on one model need not suit another. We tuned
+a second expert prompt for the typed classifier, on a calibration cohort that shares no
+persona with the sealed cohort. It rewrites the criterion on walking and waiting, so that a
+long direct walk also counts as a cost. Gemini-3.1 and mistral-large receive the tuned
+agent's prompt unchanged, which measures how far a prompt tuned on one model carries to
+another. The classifier also runs under that prompt, a check that Table 1 does not list.
+Every model–prompt combination is measured on the sealed cohort alone.
+
+<!-- Relecture éditoriale du 2026-09-25, accord de l'auteur (« Corrige », point B3) : « The
+     classifier therefore has its own expert prompt » laissait le lecteur demander pourquoi
+     gemini-3.1 et mistral-large n'avaient pas le leur. La phrase dit maintenant ce qu'ils
+     reçoivent et ce que cela mesure (le § 5.1 lit l'écart gemini-3.1 / gemini-3.5 sous le
+     même texte). Elle annonce aussi le classifieur sous prompt_expert_05, mesuré aux trois
+     graines au § 5.1 (« under both expert prompts ») et absent du tableau 1 : sans cette
+     phrase, le § 5.1 faisait apparaître un seizième décideur. ⚠ Reste ouvert, voir le point à trancher
+     ci-dessus : la cohorte sur laquelle prompt_expert_05 a été réglé. --> Appendix D gives the three prompts
+in full, with the decisions each produced for one trip.
 
 <!-- Phrase d'ouverture ajoutée le 2026-09-24 sur texte de l'auteur, qui l'appuie sur ses
      propres expériences : pour un même prompt, chaque modèle rend des parts agrégées
@@ -462,41 +571,6 @@ in full, with one trip decided under each.
      « en échantillon », que la relecture v1 (§ 9 bis) faisait porter au seul libellé de ligne
      du tableau 1, disparaît avec le re-réglage. -->
 
-*Table 1 — The fifteen decision-makers on the three readings, with the inter-seed range where
-it was measured.*
-
-| Decision-maker | Composite | Excluding single option | L1 on global shares | Inter-seed range |
-|---|---:|---:|---:|---|
-| Uniform random | 50.16 | 57.90 | 86.80 | deterministic |
-| All-car | 30.73 | 28.41 | 58.00 | deterministic |
-| Minimum duration | 26.97 | 23.93 | 53.62 | deterministic |
-| Minimal prompt, mistral-large | 14.75 | 20.72 | 44.71 | not replayed |
-| Minimal prompt, typed classifier | 13.75 | 19.84 | 42.76 | not replayed |
-| Minimal prompt, gemini-3.1 | 12.38 | 16.65 | 39.88 | not replayed |
-| Minimal prompt, gemini-3.5 | 7.02 | 10.39 | 24.08 | **[pending]** |
-| Expert prompt, gemini-3.1 | 8.98 | 12.39 | 31.25 | not replayed |
-| Expert prompt, mistral-large | 7.63 | 12.27 | 26.64 | not replayed |
-| Expert prompt, gemini-3.5 | 4.86 | 6.86 | 13.85 | 0.56 |
-| Multinomial logit | 4.02 | 6.63 | 8.99 | deterministic |
-| Random forest | 4.09 | 5.81 | 5.28 | deterministic |
-| Expert prompt, typed classifier | **[re-tuning pending]** | **[re-tuning pending]** | **[re-tuning pending]** | **[re-tuning pending]** |
-| Kernel logistic regression | 3.61 | 5.61 | 6.69 | deterministic |
-| Gradient boosting | 3.60 | 5.84 | 9.49 | deterministic |
-
-<!-- source: fr/06_Empirical_Evaluation.md § 6.1, tableau des quinze décideurs (scores.json,
-     composite.emd_jsd, composite.emd_jsd_hors_choix_unique, global.l1 ; jeu corrigé du
-     ticket 088). Étendue inter-graines 0,56 : § 6.5, graines 42 / 123 / 789, composites
-     4,857 / 4,646 / 4,299. [replay pending] = les deux décideurs dont le ticket 103, lot B, doit rejouer
-     les graines 123 et 789. « not replayed » = aucune graine supplémentaire jouée, l'effet de
-     la graine sur ces lignes n'étant pas mesuré.
-     [re-tuning pending] = ligne « Expert prompt, typed classifier », décision de l'auteur du
-     2026-09-24 : le prompt du classifieur se règle sur la cohorte de calibration (c2) et se
-     note une fois sur la cohorte scellée (c1). Le libellé « (in sample) » tombe avec ce
-     protocole. Valeurs retirées, à ne PAS restituer : prompt_expert_32 réglé sur c1 le
-     2026-09-21, donc en échantillon — composite 3,65, hors choix unique 6,58, L1 10,48,
-     étendue inter-graines 0,05 (graines 42 / 123 / 789 : 3,6470 / 3,7014 / 3,6926). L'étendue
-     est à rejouer aussi, sur le prompt re-réglé. -->
-
 <!--
 === SECTION REPORT ===
 Section        : 04 — The comparison bench
@@ -520,7 +594,7 @@ Skeleton       :
   One composite number carries the aggregate reading.
   The divergence is Jensen-Shannon on nominal strata, and the earth mover's distance on
   ordered ones.
-  Two other readings accompany the composite.
+  One other reading accompanies the composite.
   A difference between two decision-makers counts only when it exceeds what a new cohort
   would move.
   The unit-level audit asks the other question, on the days respondents actually described.
@@ -567,7 +641,7 @@ Figures cited  :
     set." is deleted, the value being unchanged on the corrected set (review item G5/Q3).
   9,621 trips of 2,930 respondents, unit-level audit. Source comment in the body,
     fr/05_Protocol.md 5.4. No reservation.
-  Table 1, fifteen decision-makers on three readings ; inter-seed range 0.56 on one row.
+  Table 1, fifteen decision-makers on two readings ; inter-seed range 0.56 on one row.
     Source comment under the table, fr/06_Empirical_Evaluation.md 6.1, scores.json on the
     set corrected by ticket 088.
 Placeholders   : ONE [pending] cell left in Table 1, the minimal-prompt gemini-3.5 row, and

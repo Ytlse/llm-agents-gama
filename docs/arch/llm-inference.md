@@ -371,6 +371,36 @@ et le format de sortie, rien qui puisse pencher vers un mode. Toutes les autres 
 phrase étant licite dans une famille et fautive dans l'autre, la famille se déclare au lieu
 de se deviner du nom. Voir `specs/hygiene-prompts-et-plateforme-experiences.md`.
 
+## Rejeu à prompt exact (2026-09-25)
+
+Une requête peut nommer un **espace de rejeu** (`LLMRequest.espace_rejeu`, posé par
+`LLMGatewayClient(espace_rejeu=…)` sur tous ses appels ; côté simulation, `REJEU_AB`). Dans cet
+espace :
+
+- **après un appel réussi**, le worker consigne la réponse de chaque tâche sous l'empreinte de SON
+  prompt exact. L'empreinte couvre la catégorie, les messages rendus pour la tâche seule, les
+  paramètres, le fournisseur épinglé, les instances admises et le contexte. Elle ne couvre ni
+  l'origine ni l'identifiant de tâche. Le prompt du lot fusionné n'entre pas dans la clé : la
+  fusion dépend de l'ordre d'arrivée, qui n'est pas le même d'un run à l'autre ;
+- **à la soumission**, l'API cherche cette empreinte. Trouvée : la tâche est terminée avant
+  d'entrer en file (ni lot, ni créneau, ni appel), avec la réponse consignée,
+  `provider_used` = le fournisseur d'origine (le client refuse les substitutions) et
+  `rejeu` = l'espace. Le journal des échanges la consigne quand même, fournisseur
+  `rejeu_ab:<fournisseur>` et zéro jeton.
+
+La première réponse consignée fait foi. Une réponse où un agent manque n'est pas consignée. Un
+enregistrement illisible vaut absent. Stockage : un fichier JSON par empreinte,
+`<rejeu.dir>/<espace>/<empreinte>.json` (`LLM_GATEWAY_REJEU__DIR`, `/app/experiments/rejeu_ab`
+dans le compose). Il est écrit par renommage atomique, lu par l'API et écrit par le worker, sans
+verrou. Compteurs : `rejeu_ab_consigne_total`, `rejeu_ab_servi_total`, `rejeu_ab_absent_total`,
+par catégorie.
+
+À quoi ça sert : à température 0, gemini-3.5-flash-lite rend des réflexions différentes à des
+prompts identiques. Les deux bras d'un A/B mémoire divergeaient dès le premier soir, et l'écart
+mesuré après l'événement mêlait son effet au bruit du modèle (a09 V2, 8 souvenirs sur 8
+différents le premier soir). Avec le rejeu, le témoin reprend les réponses du traité tant que ses
+prompts n'ont pas bougé. Sans espace, rien ne change.
+
 ## Pipeline de batching
 
 ### File d'attente (Redis Sorted Set)
@@ -1116,20 +1146,45 @@ s'en souvient, et le mode emprunté entre dans la statistique habitude/rupture q
 sur la mémoire mesurent. Écarter ces lignes après coup ne retire pas leurs effets en aval.
 
 **Dans une expérience, le run s'arrête** plutôt que de servir une décision qui n'en est pas une.
-Trois motifs, armés par le même verrou `EXPERIMENT_STOP_ON_FALLBACK` (alias historique :
+Quatre motifs, armés par le même verrou `EXPERIMENT_STOP_ON_FALLBACK` (alias historique :
 `EXPERIMENT_HIBERNATE_ON_QUOTA`), que `run_sequential_cohort.py` pose sur **toute** campagne :
 
 | Motif | Déclencheur | Reprise |
 |---|---|---|
 | `quota_journalier` (077) | `error_kind` du fournisseur | datée — `resume_at` porte l'heure de réouverture |
 | `replis_consecutifs` (105) | `settings.agent.replis_consecutifs_max` replis d'affilée (3) | à la main, après vérification de l'amont |
+| `surcharge_fournisseur` (2026-09-25) | `error_kind` posé par le worker : HTTP 5xx ou 429 par minute sur toutes les instances admises, lot rendu avant l'abandon du client — arrêt au **premier** échec, aucun repli enregistré | comme les replis ; `resume_at` = fin du refroidissement, indicative |
 | `decision_en_retard` (2026-09-25) | une décision de départ encore attendue quand relâcher GAMA lui ferait franchir ce départ, ou rendue après le départ (cf. « Retenue sur départ imminent ») | comme les replis : saturation amont, pas d'heure annoncée |
 
-Le critère du 105 compte les **replis**, pas les motifs : une saturation amont ne renvoie aucun
-`error_kind` (le 2026-09-23 : 54 × `HTTP 503 — high demand`, zéro `RESOURCE_EXHAUSTED`), et un
-motif qui n'existe pas encore sera couvert sans qu'on ait à le prévoir. Le seuil n'est pas 1 :
-un 503 isolé est absorbé par les tentatives et ne produit aucun repli — ce qu'on attrape est un
-régime, pas un incident.
+Le critère du 105 compte les **replis**, pas les motifs : un motif qui n'existe pas encore sera
+couvert sans qu'on ait à le prévoir. Le seuil n'est pas 1 : un 503 isolé est absorbé par les
+tentatives et ne produit aucun repli — ce qu'on attrape est un régime, pas un incident.
+
+**La surcharge amont est qualifiée depuis le 2026-09-25.** Le 2026-09-23 (54 × `HTTP 503 — high
+demand`, zéro `RESOURCE_EXHAUSTED`), elle ne renvoyait aucun `error_kind`, et trois replis
+entraient dans la mesure avant que le seuil n'arrête le run. Deux défauts du worker s'y
+cumulaient :
+
+- **Les instances exclues comptaient.** Les deux clés `gemini31` admises étaient en
+  refroidissement après leurs 503 ; un modèle hors de la restriction restait libre, et la règle
+  « occupé n'est pas en panne » concluait à une file d'attente. Seules comptent désormais
+  l'instance épinglée, sinon les `instances_admises`, sinon toutes.
+- **Le worker attendait plus longtemps que le client.** Le lot pouvait patienter jusqu'à
+  `max_retries` (50 essais, plus de quinze minutes) ; le client abandonnait à 120 s sur un
+  « Timeout expiré » sans genre, que le contrôleur rangeait en repli. Toute attente du worker
+  (fenêtre pleine, refroidissement, rejeu d'un 5xx ou d'un 429 par minute) est maintenant bornée
+  par celle du client (`resilience.client_wait_seconds`, 120 s, ou le `wait_timeout` de
+  l'instance épinglée), marge de 10 s déduite. Au-delà, le lot est rendu
+  `surcharge_fournisseur` avec l'heure de réouverture estimée, et le contrôleur s'arrête au
+  premier échec, sans repli.
+
+Une instance en refroidissement qui rouvre **avant** l'abandon du client s'attend : un 503
+passager sur les deux clés ne coûte que quelques dizaines de secondes, pas un arrêt.
+
+Témoin dans le journal : `[ALARME] Surcharge fournisseur` (worker, compteur
+`alarme:surcharge_fournisseur`), puis `[ALARME] [hibernation] Surcharge du fournisseur`
+(contrôleur) et `"motif": "surcharge_fournisseur"` dans `en_attente_quota.json`. La chaîne de
+nuit la traite comme des replis : nouvel essai après `ATTENTE_S`.
 
 Hors expérience, rien ne change : le verrou n'est pas armé et le run se rabat comme avant.
 

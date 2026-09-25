@@ -1,6 +1,8 @@
 # 3. The agent under evaluation
 
-<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 11:17:13 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 21:22:31 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+
+<!-- Relecture des gallicismes du 2026-09-25, accord de l'auteur (« Corrige ») : tics récurrents (« against » comparatif, « one » pour « un même », « carry », « bound », « under » devant un seuil, « rejoin », « from one X to another », « execute », « brings »), faux-amis (agenda, control, hypothesis, legibility, designate, demanding, chain, globally, bends, recedes), calques de construction et typographie à la française (« 0.9 point », « [a ; b] », « 30.3 % », « 1.06 dollars »). Aucun chiffre ne change ; les prompts et le message de l'annexe D ne sont pas touchés. -->
 
 <!-- Brouillon anglais, article court AAMAS 2027, PLAN.md § 3 — budget 450 mots.
      Rédigé le 2026-09-22 par l'agent article-writer. Les §§ 4, 5 et 6 sont écrits ;
@@ -12,11 +14,18 @@
      ⚠ Le master fr/03_Architecture.md porte une réserve de datation sur son § 3.4,
      signalée au compte-rendu. -->
 
-An agent is one simulated person, in three parts. Its body lives in the simulation: a
-position, a daily schedule, the household's vehicles and the trips it physically executes.
-Its state, its memory and where its vehicles stand, lives in the controller. Its
-decision-maker turns one trip description into a probability over the options offered. The comparison of Section 4 swaps
-only the decision-maker, and we name an agent after it.
+An agent is one simulated person, split across three components that run in a loop. This
+section describes that loop, what the decision-maker receives and returns, the agent's
+memory, and the vehicle chain.
+
+<!-- Relecture éditoriale du 2026-09-25, accord de l'auteur (« OK vas y », point C1) :
+     l'ouverture posait trois parties de l'agent (corps, état, décideur), puis le § 3.1 trois
+     composants du système (monde, contrôleur, module de décision), sans dire que chaque
+     composant porte une partie. Les deux triades n'en font plus qu'une, au § 3.1 ; l'ouverture
+     se réduit à l'annonce de la section (R8). La règle de nommage (« we name each agent after
+     its decision-maker ») passe au § 3.1 avec la définition du décideur. Dans le § 3.1, la
+     boucle est décrite avant le routage, et les définitions de trajet et d'itinéraire
+     passent en tête de la boucle, qui les emploie. -->
 
 <!-- ⚠ Remarque de relecture n° 2, 2026-09-23 : « agent » désignait tour à tour l'entité GAMA
      qui se déplace, l'ensemble personne + mémoire (§§ 3.3, 3.4) et le décideur comparé
@@ -34,18 +43,40 @@ only the decision-maker, and we name an agent after it.
 
 ## 3.1 The loop
 
-Three components make up the simulation. The world runs on GAMA, a multi-agent simulation platform
-(Taillandier et al., 2019). It holds the real geography of the study area, the networks,
-the clock and the physical execution of every trip. OpenTripPlanner, an open-source multimodal
-router (OpenTripPlanner contributors, 2025), produces the public transport itineraries on the
-real timetables. A fastest-path search with
-OSMnx (Boeing, 2025) on the OpenStreetMap graph produces the direct itineraries by
-foot, bicycle and car. Each edge is weighted by its free-flow travel time, at a speed set per
-mode and road class. Signal delays and, for the car, hourly congestion are added to the path
-found. A trip is one move of a persona, from an origin to a destination, for one activity at
-one hour. An itinerary is one physical way to make it, with its mode, its lines and its path.
-The two engines turn each trip into several itineraries, six at most. The options are those
-the vehicle chain allows (Section 3.4).
+Three components make up the system (Figure 1), and each holds one part of the agent. A
+simulated world holds its body: a position, a daily schedule, the household's vehicles and
+the trips it physically makes. The world runs on GAMA, a multi-agent simulation platform
+(Taillandier et al., 2019), with the real geography of the study area, its networks and the
+clock. A controller runs the agent lifecycle and holds its state, that is its memory and the
+position of its vehicles. A decision module hosts the decision-maker, which turns one trip
+description into a probability over the options offered. The comparison of Section 4 swaps
+only the decision-maker, so we name each agent after it.
+
+The three components run in a loop. A trip is a journey a persona makes from an origin to a
+destination, for one activity at a given time. An itinerary is one physical way to make it,
+with its mode, its lines and its path. When an agent is due to leave, the controller requests
+itineraries from two routing engines and writes the trip description. The decision-maker
+spreads its preference over those itineraries, and the controller draws the option the agent
+will take. The simulation carries out the trip and reports what happened (transfers, waits,
+arrival time). This feedback enters the memory that informs the next decision.
+
+<!-- source: fr/03_Architecture.md § 3.1, troisième paragraphe (boucle fermée).
+     « The routing engines » renvoie aux deux moteurs nommés au paragraphe précédent (T1) ;
+     le manque signalé à la version 1 est comblé.
+     Sortent, par le PLAN § 3.1 : le quadruplet formel, l'ordonnancement par échéance
+     croissante, le planning fixe et le week-end sans activité. La rétention de l'horloge, que
+     le plan faisait sortir, revient en corps de texte par T1.
+     Relecture éditoriale du 2026-09-25 : ce paragraphe, qui venait après les cinq appels du
+     modèle de langue, passe avant le routage ; il porte désormais les définitions de trajet
+     et d'itinéraire, et nomme les deux moteurs que le paragraphe suivant décrit. -->
+
+The two routing engines cover different networks. OpenTripPlanner, an open-source
+multimodal router (OpenTripPlanner contributors, 2025), produces the public transport itineraries using actual timetables. A fastest-path search with OSMnx (Boeing, 2025) on the
+OpenStreetMap graph produces the direct itineraries on foot, by bicycle and by car. Each edge is
+weighted by its free-flow travel time, at a speed set per mode and road class. Signal delays
+and, for the car, hourly congestion are added to the path found. The two engines turn each
+trip into several itineraries, six at most. The options are the itineraries that the vehicle
+chain allows (Section 3.4).
 
 <!-- Remarque du tuteur, PDF annoté v1 KOI, p. 4 : « carries » surligné, répété. Le § 3.1 le
      portait trois fois en trois phrases, le § 3.2 deux fois de suite. Le 2026-09-25 : « make
@@ -58,13 +89,10 @@ the vehicle chain allows (Section 3.4).
      sortie par mode véhiculé passé à OTP (experiences/decision.py:124-160, include_*).
      « Option » = itinéraire offert, un seul mot par concept pour la suite. -->
 
-A controller runs the agent lifecycle, holds each agent's state and builds the
-options available at the departure hour. A decision module hosts the decision-maker. The language model
-is called at five points of the loop. It makes the decision, rates an event as it enters
-memory, consolidates memory in the evening and runs a multi-day self-reflection. If required,
-it also answers an opinion survey held outside any decision. Section 5 tests the decision alone, from a blank memory. Section 6 follows
-one event from its rating to the decisions of the days after, and reads the opinions the agent
-declares.
+The language model is called at five points in the loop. It makes the decision, rates an
+event as it enters memory, consolidates memory in the evening and runs a multi-day
+self-reflection. When enabled, it also answers an opinion questionnaire, independently of any decision. Section 5 tests the decision alone, from a blank memory. Section 6 follows one event
+from its rating to the decisions of the days after, and records the opinions the agent states.
 
 <!-- source: fr/03_Architecture.md § 3.1, premier paragraphe : simulation GAMA (géographie
      réelle de l'aire toulousaine, réseaux, horloge, exécution physique), contrôleur du cycle
@@ -119,23 +147,8 @@ declares.
      mot, à deux exceptions imposées par R1 : « the transport networks » devient « the
      networks » (26 mots) et la phrase du contrôleur est coupée en deux (27 mots). -->
 
-The loop closes on the simulation's returns. When a body is due to leave, the controller
-requests the itineraries from the routing engines and writes the trip description. The
-decision-maker spreads its preference over those itineraries, and the controller draws the
-option the body will take. The simulation executes the trip and returns what happened, the
-transfers, the waits, the arrival time. Those returns feed the memory that weighs on the
-next decision.
-
-<!-- source: fr/03_Architecture.md § 3.1, troisième paragraphe (boucle fermée).
-     « The routing engines » renvoie aux deux moteurs nommés au paragraphe précédent (T1) ;
-     le manque signalé à la version 1 est comblé.
-     Sortent, par le PLAN § 3.1 : le quadruplet formel, l'ordonnancement par échéance
-     croissante, le planning fixe et le week-end sans activité. La rétention de l'horloge, que
-     le plan faisait sortir, revient en corps de texte par T1. -->
-
-The loop comes from Vu et al. (2025). They coupled GAMA to a separate Python server of
-generative agents, over HTTP for the clock and agent positions, and WebSocket for actions and
-returns.
+The loop comes from Vu et al. (2025). They coupled GAMA to a separate Python server hosting the generative agents, over HTTP for the clock and agent positions, and WebSocket for actions and
+feedback.
 OpenTripPlanner routed their public transport, and a reflection at the end of each day wrote
 short-term memory into a long-term store. Five agents rode the Toulouse transit network for
 one month. The study scored how quickly the chosen itineraries stabilised and how late agents arrived, and
@@ -152,14 +165,19 @@ left validation against survey data to future work.
      et le code appelle l'API 2.x (ox.routing.shortest_path). Clés : opentripplanner2025,
      boeing2025osmnx, ajoutées à sample.bib le même jour. -->
 
-This paper changes five things in that loop. The original agents chose among transit
-itineraries only. Walking, cycling and driving now enter through the OpenStreetMap search
-above, bound by the vehicle chain of Section 3.4. The decision returns a probability mass over
-the options instead of one itinerary (Section 3.2). The long-term memory gives each belief a
-confidence that observations move, and lets a household member's day reach the others
-(Section 3.3). Retrieval ranks the traces on five terms instead of three, adding severity and
-the match with the current trip (Section 3.3). Lastly, the decision module accepts decision-makers that are not language
-models, which the bench of Section 4 needs.
+This paper changes five things in that loop.
+
+1. The original agents chose among transit itineraries only. Walking, cycling and driving
+   now enter through the OpenStreetMap search above, limited by the vehicle chain of
+   Section 3.4.
+2. The decision returns a probability for each option instead of one itinerary
+   (Section 3.2).
+3. The long-term memory gives each belief a confidence that new observations raise or lower,
+   and lets a household member's day reach the others (Section 3.3).
+4. Memory retrieval ranks the recorded episodes on five terms instead of three, adding how
+   severe an event was and how well it matches the current trip (Section 3.3).
+5. The decision module accepts decision-makers that are not language models, which the
+   benchmark of Section 4 needs.
 
 <!-- ⚠ Remarque de relecture n° 3, 2026-09-23 : la filiation n'était dite qu'au § 1.3
      (« follows the GAMA–OpenTripPlanner–LLM architecture of Vu et al. »), sans dire ce qui
@@ -187,7 +205,7 @@ models, which the bench of Section 4 needs.
      paragraphe parle de Vu et al. à la troisième personne, comme d'un travail publié qu'on
      étend, ce que les consignes AAMAS admettent ; à confirmer par l'auteur. -->
 
-*Figure 1 — The three components of the loop. Section 5 tests the decision module, Section 6
+*Figure 1. The three components of the loop. Section 5 tests the decision module, Section 6
 the memory that feeds it.*
 
 <!-- source: PLAN § 9, figure 1, pleine largeur, images/architecture_GAMA_Agents.jpg ;
@@ -216,23 +234,27 @@ the relevant memories, and the numbered list of options.
      probability over the options offered ») : aucun mot nouveau n'entre dans le papier. Le
      couple reçu/rendu de la phrase est conservé, le titre du § 3.2 le promettant. -->
 
-The model spreads a probability mass over that list, one entry per option. Probability mass
-is the share of preference placed on an option. The entries of one decision sum to one. The
-decision played is a random draw from those probabilities, and not the option ranked first.
+The model assigns a probability to each option in that list, and the probabilities of one
+decision sum to one. We call this distribution the probability mass. The decision the simulation carries out is a random draw from those probabilities, not the option ranked first. The options are listed
+in random order, so that a model cannot favour an option merely for appearing first.
 
 <!-- Remarque du tuteur, PDF annoté v1 KOI, p. 5 : « vector » entouré. Le vecteur p_t est sorti
      avec le formalisme, mais « that vector » et « returns a vector » restaient sans antécédent.
      Remplacés le 2026-09-25 par « those probabilities » et « one probability per option ». -->
 
-That draw is a modelling hypothesis, and discrete choice models already make it. A logit also
-returns one probability per option. Drawing from it amounts to maximising a utility whose
-unobserved part follows an independent extreme-value law (McFadden, 1974). The draw thus carries what the trip description
-does not say about the person. Playing the first-ranked option would send every persona of
-one profile into the same mode. The spread the survey records within that profile would
-vanish. The options are listed in a random order, so that rank does not become preference. A
-decision-maker that returns one probability per option can then be scored against a distribution, as Section 4
-does.
+That draw is a modelling assumption, and discrete choice models already make it. A logit also
+returns one probability per option. Its randomness stands for the part of each person's
+preference that the data do not observe (McFadden, 1974). Our draw plays the same role for
+what the trip description does not say about the person. Carrying out the top-ranked option instead would put every persona sharing a profile on the same mode, and the
+spread the survey records within that profile would vanish. A decision-maker that returns one
+probability per option can then be scored against a distribution, as Section 4 does.
 
+<!-- Relecture éditoriale du 2026-09-25, accord de l'auteur (« Corrige », point B8) : « a
+     utility whose unobserved part follows an independent extreme-value distribution » est
+     rendu par ce qu'il signifie pour le lecteur AAMAS, le hasard du logit tenant lieu de la
+     part non observée des préférences. La condition technique (terme i.i.d. de valeur
+     extrême, McFadden 1974, lemmes 1 et 2) reste dans l'audit ci-dessous ; la citation est
+     conservée. -->
 <!-- ⚠ Remarque de relecture n° 4, 2026-09-23 : le tirage apparaissait comme un détail
      d'implémentation, justifié seulement au § 4, règle 2, et sans lien avec les modèles de
      choix discret. Le relecteur lisait un PDF périmé (« never an arg max », § 3.3) ; le
@@ -281,20 +303,34 @@ does.
      est remontée ici. -->
 
 Two stores hold what an agent has been through. A short-term buffer receives the decisions
-and the physical experience the simulation returns. A consolidation pass writes from that
-buffer into the long-term store each evening. An episodic trace says what happened and
-when, with a weight that decays on a 2.8-day time constant. A belief says what the agent holds
-true, does not decay, and lives on a confidence that observations move. Trace and belief map
-onto the episodic and semantic memories that Sumers et al. (2024) distinguish in language agents.
-The first keeps the experience of earlier decisions, the second what the agent knows of the world
-and of itself. Memory research has long held episodic memory more exposed to forgetting than
-semantic memory (Renoult & Rugg, 2020). We therefore let only traces decay.
-The exponential form also appears in MemoryBank (Zhong et al., 2024), but the 2.8-day constant
-is a design choice, not a fitted value. It leaves the trace of an uneventful trip less than a tenth
-of its weight after a week. The evening pass adapts the reflection of Park et al. (2023), which
-fires when recent events pass an importance threshold. In the evening each
-household member tells the others their day, and that account enters the hearers'
+and the physical experience the simulation reports. A consolidation pass writes from that
+buffer into the long-term store each evening. It adapts the reflection of Park et al. (2023),
+whose agents reflect once recent events pass an importance threshold. In the evening, each
+household member also tells the others about their day, and that account enters the hearers'
 reflection.
+
+The long-term store holds two kinds of entries, which map onto the episodic and semantic
+memories that Sumers et al. (2024) distinguish in language agents. An episodic trace records
+what happened and when. A belief states what the agent holds true of the world or of itself,
+and its confidence rises or falls with new observations. Memory research has long held
+episodic memory more prone to forgetting than semantic memory (Renoult & Rugg, 2020), so we
+let only traces decay. Their weight falls exponentially, a form that MemoryBank (Zhong et al.,
+2024) also uses. The time constant starts at 2.8 days, a design choice rather than a fitted
+value, and grows with the severity of the event, up to thirty days. After a week, the trace
+of an uneventful trip keeps less than a tenth of its weight.
+
+<!-- Allègement du 2026-09-25, à la demande de l'auteur (« un peu lourd ») : 10 phrases et
+     151 mots deviennent 7 phrases et 123. Les définitions étaient données deux fois (trace et
+     croyance, puis celles de CoALA, « The first keeps…, the second… ») et l'oubli dit en trois
+     endroits. L'ordre suit un fil : les deux sortes d'entrées et CoALA, pourquoi seules les
+     traces s'effacent, comment. La définition sémantique de CoALA (« an agent's knowledge
+     about the world and itself ») passe dans celle de la croyance, « of the world or of
+     itself ». « It does not decay » tombe, porté par « we let only traces decay ». Tournures
+     gardées des audits ci-dessous : « map onto », « has long held », « we let » (choix de
+     conception, non résultat de Renoult & Rugg), « also uses » (et non « follows ») pour
+     MemoryBank, « design choice, not a fitted value ». exp(−7/2,8) = 0,082 < 0,1 recalculé.
+     « Uneventful » renvoie à l'allongement de τ par la gravité, écrit au § 6 (constante
+     allongée jusqu'à trente jours). -->
 
 <!-- Remarques du tuteur sur la version longue (PDF annoté AAMAS_2027___LLM_v1_KOI, p. 6),
      reprises le 2026-09-25 sur accord de l'auteur.
@@ -394,18 +430,19 @@ reflection.
      Sortent, par le PLAN § 3.3 : la figure des deux horloges, le score de rappel à cinq
      termes, le réajustement d'horaire à 75 %, l'allongement de la constante par la gravité. -->
 
-The prompt carries the past in four blocks. They hold the agent's habits, its beliefs, its
-recent events, and three episodic traces. A score ranks the traces, with weights set by design
-and not fitted.
+The prompt presents the past in four blocks. They hold the agent's habits (what it does most
+often), its beliefs, its recent events, and three episodic traces. A score ranks the traces,
+with weights set by design and not fitted.
 
 $$s = 0.3\,e^{-d(q, x)} + 0.2\,e^{-\Delta t/\tau} + 0.2\,g + 0.2\,a + 0.1\,m$$
 
 Here $d(q, x) = 1 - \cos(q, x)$ is the cosine distance between the all-MiniLM-L6-v2 sentence
-embeddings of the trip description and of the trace. The trace was last retrieved $\Delta t$ days ago, and $\tau$ is its time constant. The term $g$
-is its severity, and $a \in [0, 1]$ its match with the current mode, place, time slot and
-purpose. The term $m$ is one when the weather matches, zero otherwise. Not every candidate
-comes from similarity. Traces that bear an offered mode, and the most severe ones, enter the
-ranking whatever their text.
+embeddings of the trip description and of the trace. The trace was last retrieved $\Delta t$
+days ago, and $\tau$ is its time constant. The term $g$ is the severity of the event, which
+the model rates on five levels from 0.1 to 1 when the event enters memory. The term $a \in [0, 1]$ is the trace's match
+with the current mode, place, time slot and purpose. The term $m$ is one when the weather matches,
+zero otherwise. Not every candidate comes from similarity. Traces that concern a mode offered
+on this trip, and the most severe ones, enter the ranking regardless of their text.
 
 <!-- ⚠ Remarque de relecture n° 6, 2026-09-23 : « three memories retrieved via similarity »
      était une boîte noire. Score servi : llm/longterm.py:884-961 (rank_nodes), cinq
@@ -436,7 +473,37 @@ ranking whatever their text.
      things » du § 3.1 compte désormais le score (Vu et al., éq. 4 : cosinus + BLEU-2 +
      récence ; ici le BLEU-2 cède la place à la météo, gravité et affinité d'axes s'ajoutent). -->
 
-The 'recent events' block contains occurrences that remain active within a time window determined by their initial severity.
+The recent-events block tells the agent what has changed lately. Only serious events enter it:
+an engine failure rated 0.7 does, a minor delay does not. The event then fades like any trace,
+counted from the day it happened, and leaves the block once its weight drops below about a
+third. The more severe the event, the longer it stays. An event rated 0.7 stays about fifteen
+days, the most severe about three weeks. The block also reminds the agent of beliefs it has
+recently given up.
+
+<!-- Relecture éditoriale du 2026-09-25, accord de l'auteur (« OK ajoute », point B4) : le
+     bloc dont dépend tout le § 6 tenait en deux phrases, et le lecteur ne savait pas quelle
+     décroissance il suivait. Vérifié dans le code, services/llm-agents :
+     entrée au bloc si gravité >= memoire__importance_choc = 0,7 (settings.py:675,
+     llm/noyau.py:396-405) ; âge compté depuis l'événement (timestamp), non depuis le dernier
+     rappel (docstring de bloc_changements) ; servi tant que exp(-âge / τ) >= 0,35
+     (memoire__seuil_service_changement, settings.py:783), soit âge <= τ × ln(1/0,35) = 1,05 τ,
+     borné à [2, 30] jours (llm/noyau.py, _bornes_duree) ; τ = min(2,8 × (1 + 6 g), 30)
+     (llm/gravite.py:330-345, settings.py:613, 631, 641). Gravité 0,7 : τ = 14,56 j, durée
+     servie 15,29 j, la valeur citée au résumé. Cinq échelons 0,10 / 0,30 / 0,50 / 0,75 / 1,00
+     (llm/gravite.py:34-40), ajustés de ±0,05. Croyances mises à l'écart : branche depasse_le
+     de bloc_changements, « I no longer believe that ». Non écrits, faute de place : le
+     plancher de deux jours et l'allongement de τ au rappel (force_apres_rappel).
+     Réécrit le même jour, l'auteur ne comprenant pas la première version (« Je comprends
+     rien ») : la règle se dit sur l'exemple de la panne de moteur (gravité 0,7) plutôt qu'en
+     seuils abstraits. 0,35 → « about a third » ; gravité 1 → τ = 19,6 j, durée servie
+     20,6 j → « about three weeks » (sans rappel ; le plafond de trente jours du paragraphe des
+     traces ne s'atteint que par les rappels). -->
+
+<!-- Relecture éditoriale du 2026-09-25 : la phrase « The 'recent events' block contains
+     occurrences that remain active within a time window determined by their initial severity »
+     est reformulée d'après llm/noyau.py duree_service_jours : poids(t) = exp(-t / force),
+     servi tant que t <= force x ln(1 / seuil), force initiale tirée de la gravité (ticket 071,
+     ticket 095 lot A), bornée par un plancher et un plafond non écrits ici. -->
 
 <!-- ⚠ Remarque de relecture n° 5, point E, 2026-09-23 : retrait de « The specific influence
      of each block on the final decision can be quantified. » Promesse non tenue par l'article :
@@ -457,10 +524,9 @@ The 'recent events' block contains occurrences that remain active within a time 
 ## 3.4 The vehicle chain
 
 Deciding each trip on its own produces physically impossible days. An agent who cycled to
-work has no car at the office in the evening. The controller therefore tracks where each
-personal vehicle stands. A vehicle is offered only from where it is parked, after which it
-follows its user. On a return trip, a vehicle left at the start restricts that trip to its
-mode.
+work has no car at the office in the evening. The controller therefore tracks the location of each personal vehicle. A vehicle is offered only from where it is parked, after which it
+follows its user. On a return trip, if a vehicle waits at the trip's origin, the options are
+restricted to that vehicle's mode.
 
 <!-- source: fr/03_Architecture.md § 3.5 et docs/arch/vehicle-chain.md, § Les trois règles :
      un mode véhiculé n'est proposé que si le véhicule est garé au point de départ ; le
@@ -470,8 +536,8 @@ mode.
      décision. Sort : l'éligibilité (permis, majorité, passager d'un ménage motorisé), § 3.2
      du master. -->
 
-These rules bind every decision-maker we compare, machine learning models on structured data included, since
-without them we would compare decisions taken in different worlds.
+These rules bind every decision-maker we compare, reference models included, since without
+them we would compare decisions taken in different worlds.
 
 <!-- source: fr/03_Architecture.md § 3.5, dernier paragraphe : « Le plancher et le plafond du
      chapitre 4 sont soumis aux mêmes contraintes » ; PLAN § 3.4, « elle s'applique à tous les
@@ -485,6 +551,8 @@ File           : docs/paper/article-court/sections/03_agent.en.md
 Words / budget : 583 / 450 (+29.6 %) — hors marge ±15 %, par la relecture v1 §§ 5 et 10
                  (T1 +110, T2 +20), dont l'arithmétique paie l'ajout par des coupes aux
                  §§ 5, 6 et 7 et non ici. Le budget § 3 du PLAN est à porter de 450 à 580.
+                 2026-09-25 18:42 : paragraphe des deux sortes d'entrées allégé (§ 3.3),
+                 −28 mots ; verifier_forme.py compte 1394 → 1366 sur toute la section.
 Skeleton       : Each agent turns one trip description into a preference over the options offered.
                  Three components make up the simulation.
                  The loop closes on the simulation's returns.

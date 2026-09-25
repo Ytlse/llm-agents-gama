@@ -29,10 +29,20 @@ déplacer :
 **La bibliographie n'est pas `template/sample.bib` du gabarit.** Ce fichier-là est la démo
 ACM, onze clés factices, et aucune des vingt clés citées ici n'y figure : chaque `\citep`
 imprimerait `[?]`. Le `sample.bib` de ce dossier est extrait de
-`../../sources/sample.bib` : il n'en garde que les 29 clés citées par le LaTeX et par les
+`../../sources/sample.bib` : il n'en garde que les clés citées par le LaTeX et par les
 masters anglais (audit des citations du 2026-09-24). **On ne le corrige pas ici** : toute
 correction se fait dans `../../sources/sample.bib`, puis on refait l'extraction, et les deux
 copies `overleaf/` et `overleaf-fr/` restent identiques.
+
+**Écart au 2026-09-25**, après la reprise des neuf chapitres anglais : la copie `overleaf/`
+compte 33 entrées, dont 30 citées. `renoult2020historical` (§ 3.3) y a été extrait, pas encore
+dans `overleaf-fr/`. `horni2016matsim`, `wei2022chain` et `sprague2024cot` ne sont plus cités
+par aucun chapitre anglais ; ils restent tant que le projet français n'a pas été repris.
+
+**Forme des entrées** (depuis le 2026-09-25, dans les trois copies) : aucune entrée ne porte
+de champ `note`, qui s'imprimerait dans la bibliographie, ni de commentaire. Les remarques de
+vérification et de provenance sont regroupées par clé dans le bloc de commentaires en tête du
+fichier. Une entrée qui a un `doi` n'a pas d'`url`.
 
 ## Comment compiler
 
@@ -80,10 +90,12 @@ et les 8 pages décident des coupes du § 10 du plan.
    texte. Si un flottant dérive, le premier réglage à toucher est `[tbp]` / `[tp]`, pas la
    mise en page (le gabarit interdit de la modifier, et les 8 pages ne se gagnent que par
    le texte).
-3. **Les crochets** : `[c2, …]` aux § 5.1 et 5.3, `[replay pending]` dans le tableau 1. Ils
-   sont **volontaires** et attendent le ticket 103. Ils sont posés en texte brut, pas avec
-   `\todo` qui imprime en gras : lisibles, pas criards. Rien d'autre ne doit être entre
-   crochets.
+3. **Les crochets** (état au 2026-09-25) : cinq `[pending]` dans la dernière colonne du
+   tableau 1 (§ 5.1), qui attendent le ticket 103, et les `[TBC …]`, `[n]`, `[k]` du § 6, qui
+   attendent la campagne en cours et le run quotidien. Ils sont **volontaires** et reprennent
+   le master, gras compris : le master met en gras un `[pending]` du tableau 1 et les `[TBC]`
+   du § 6. Le § 5.3 ne porte plus de `[c2, …]`, les scores de la seconde cohorte y sont
+   écrits. Rien d'autre ne doit être entre crochets.
 4. **Si le PDF dépasse 8 pages**, la première coupe prévue est le tableau 4 (§ 6.4), dont la
    phrase de remplacement est déjà rédigée dans `chapters/06_Non_tabulated.tex`, en
    commentaire d'en-tête.

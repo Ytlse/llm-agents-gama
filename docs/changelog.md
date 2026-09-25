@@ -1,3 +1,324 @@
+## [2026-09-25] Article court : l'enquête de l'abstract anglais devient une référence
+
+Dans le résumé du LaTeX anglais, l'enquête ménages-déplacements de 2023 n'est plus citée par une
+note de bas de page : elle renvoie à l'entrée `tisseo2023emc2` de la bibliographie. Cette entrée
+reprend mot pour mot la formule de citation du diffuseur (producteurs Cerema et Tisséo
+Collectivités, diffuseur PROGEDO-ADISP, en français). Le style ACM impose l'ordre des éléments
+et imprime le DOI sous forme de lien. Les trois copies du `.bib` restent identiques. Les
+citations du § 1 et du § 4 renvoient donc à la même formule.
+
+**Avant :** note de bas de page dans l'abstract ; entrée bibliographique en anglais (« Data file,
+PROGEDO-ADISP (distributor) »).
+**Après :** `\citep{tisseo2023emc2}` dans l'abstract ; entrée « Cerema, Tisséo Collectivités
+(producteurs). 2023. Enquête Ménages Déplacements (EMC²), Toulouse / Aire métropolitaine
+toulousaine -- 2023. PROGEDO-ADISP (diffuseur). https://doi.org/10.13144/lil-1750 ».
+
+---
+
+## [2026-09-25] Article court : le LaTeX anglais rattrape ses masters
+
+Les neuf chapitres du projet Overleaf anglais (`overleaf/`) ont été repris à la main sur leurs
+masters `.en.md` du 25 septembre au soir, relecture des gallicismes et relecture éditoriale
+comprises. Chaque `.tex` porte à nouveau la date de son master : le PDF compilé est donc celui
+du texte relu. Le projet français n'a pas été touché.
+
+Ce que le lecteur du PDF voit changer : le résumé en un seul paragraphe ; le tableau 1 passé
+du § 4.4 au § 5.1, groupé par famille de décideurs, avec cinq cellules `[pending]` ; les scores
+mesurés de la seconde cohorte au § 5.3, à la place des `[c2, …]` ; le § 6 recentré sur la seule
+panne moteur, avec ses `[TBC]` en attente de campagne ; le § 7 réécrit (coût de la délibération,
+quatre limites, conclusion en cinq paragraphes) ; la note de brouillon et les retouches de
+l'annexe D dans le matériel supplémentaire. La référence Renoult & Rugg (2020), citée au § 3.3,
+est ajoutée à la bibliographie anglaise.
+
+**Avant :** les neuf `.tex` dataient du 23-25 septembre et imprimaient un texte antérieur aux
+deux relectures du jour (`[c2]` au § 5.3, ancien § 7).
+**Après :** dates égales md/tex sur les neuf chapitres ; renvois, citations et images résolus
+(contrôle structurel, pas de compilation sur cette machine).
+
+---
+
+## [2026-09-25] Article court : l'enquête de référence se présente au lecteur étranger
+
+Le § 4.1 décrit maintenant l'enquête ménages-déplacements toulousaine de 2023 à un lecteur qui
+ne connaît pas le protocole français. Il donne le protocole national certifié par le Cerema,
+le tirage aléatoire de 10 783 ménages dans 88 strates géographiques, et la période de terrain
+(septembre 2022 à février 2023, hors vacances scolaires). Il indique aussi le recueil à domicile
+(4 573 ménages, tous les membres de 5 ans et plus) ou par téléphone (6 210 ménages, un ou deux
+membres tirés), les déplacements de la veille décrits par 15 775 répondants, et le redressement
+sur le recensement. Les effectifs par mode de recueil et le nombre de strates sont recomptés
+dans les microdonnées lil-1750.
+
+**Avant :** « evaluated against the local survey (…), in which residents describe every trip
+of the previous day. »
+**Après :** la relative disparaît au profit d'un paragraphe de six phrases sur le protocole.
+
+La version française et le `.tex` n'ont pas encore reçu l'ajout.
+
+---
+
+## [2026-09-25] Article court : la métrique, le bloc mémoire et le prompt expert s'expliquent avant d'être employés
+
+Une deuxième relecture éditoriale de la version anglaise, faite avec l'accord de l'auteur,
+comble les trous où un lecteur extérieur perdait le fil. Au § 4.3, la métrique composite est
+désormais amenée dans l'ordre : d'abord les divergences, ensuite la formule. Deux repères
+d'échelle sont ajoutés (0 pour une cohorte parfaite, environ 50 pour le tirage uniforme), et
+le texte précise que ±1,3 point est une médiane. Au § 3.3, la règle du bloc « recent events »,
+qui porte toute la section 6, est écrite : seuil d'entrée à 0,7 et une quinzaine de jours de
+présence à cette gravité. Au § 4.4, la contrainte de réglage du prompt expert est nommée, et le
+texte dit quel prompt reçoit chaque modèle. L'ouverture du § 3 ne superpose plus deux triades.
+Le paragraphe prospectif du § 6.2 passe au § 7.1. Le § 7.2 ne renvoie plus à une promesse
+retirée du § 1.1. Le passage sur GTA (§ 1.2), les gloses d'économétrie (§§ 2.1, 3.2) et
+plusieurs connecteurs sans lien logique sont réécrits. Une note d'annexe signale que les
+annexes A, B, E et F restent à écrire. Aucun chiffre ne change.
+
+**Avant :** « The severity alone sets how long the memory stays in the prompt, by lengthening
+its 2.8-day time constant up to thirty days. »
+**Après :** « The severity alone sets how long the memory stays in the recent-events block, by
+the rule of Section 3.3. »
+
+La conclusion (§ 7.3) est refaite en cinq paragraphes. Elle s'ouvre sur ce que le papier
+apporte face à l'état de l'art : une confrontation à une vraie enquête de terrain, entre des
+témoins simples et quatre modèles de référence. Elle reprend ensuite les trois contributions,
+dont l'écart entre parts et décisions, qu'elle omettait. La version française et les `.tex`
+n'ont pas encore reçu la reprise.
+
+---
+
+## [2026-09-25] Article court : l'anglais ne se lit plus comme du français traduit
+
+La prose anglaise de l'article court est débarrassée des tournures calquées sur le français,
+relevées par une relecture extérieure et corrigées avec l'accord de l'auteur. Quatre familles
+sont traitées. La première regroupe les tics qui revenaient d'une section à l'autre : « against »
+pour comparer deux chiffres, « one » pour « un même », « carry » pour « porter une
+information », « bound » pour « borner », « under » devant un seuil, « rejoin » pour
+« rejoindre ». La deuxième, ce sont les faux-amis (agenda, control, hypothesis, legibility,
+designate, globally). La troisième, les constructions françaises (« We call decision-maker
+anything… », « nine times in ten », « whatever their text »). La dernière, la typographie
+française (« 0.9 point », « [1.40 ; 3.22] », « 30.3 % », « 1.06 dollars »). Aucun chiffre et
+aucun énoncé ne changent. Les prompts et le message cités en annexe D restent tels que les
+modèles les ont reçus.
+
+**Avant :** « The exposed agent takes it nine times in ten […] until it rejoins it. »
+**Après :** « The exposed agent takes it nine times out of ten […] until it returns to it. »
+
+La version française et les deux `.tex` n'ont pas encore reçu la reprise.
+
+---
+
+## [2026-09-25] La chaîne de nuit réessaie vraiment un bras suspendu par un 503
+
+Un bras suspendu (épisode de HTTP 503, replis consécutifs, décision en retard) est de nouveau
+relancé par `make experience-memoire-nuit` au bout de `ATTENTE_S`, comme la documentation le
+disait. La chaîne passait par `make`, qui rend 2 pour toute recette en échec. Le code 7 du bras
+suspendu n'arrivait donc jamais jusqu'à elle. Elle appelle maintenant l'orchestrateur
+directement.
+
+**Avant :** le 25/09 à 18h52, a13 suspendu au jour 4 sur des 503 « high demand » est classé
+« en échec (code 2) », et la chaîne s'arrête.
+**Après :** « ⏸ suspendue — motif=surcharge_fournisseur », nouvel essai 30 min plus tard, qui
+reprend au dernier point de reprise.
+
+---
+
+## [2026-09-25] Article court : la mémoire longue se décrit en sept phrases
+
+Le paragraphe du § 3.3 qui présente les traces épisodiques et les croyances se lit d'un seul
+fil. On y trouve d'abord les deux sortes d'entrées rapportées à CoALA, puis la raison pour
+laquelle seules les traces s'effacent, enfin la manière dont elles s'effacent. Les définitions
+ne sont plus données deux fois, et l'oubli n'est plus mentionné qu'à un seul endroit. Les
+quatre références restent, avec les formulations fixées par les audits, et le chiffre final
+est recalculé (exp(−7/2,8) = 0,082). Aucun contenu ne change.
+
+**Avant :** 10 phrases, 151 mots, les définitions de CoALA répétées après les nôtres.
+**Après :** 7 phrases, 123 mots.
+
+La version française et les deux `.tex` n'ont pas encore reçu la reprise.
+
+---
+
+## [2026-09-25] Article court : le § 2.2 ouvre sur Park et al., MATSim sort
+
+Le § 2.2 de la version anglaise ne commence plus par une phrase qui opposait MATSim à des
+agents délibérants. Cette comparaison entre un simulateur à l'équilibre et des décideurs
+n'était pas l'axe du papier, déjà posé au § 2.1 par les modèles de choix discret. Elle ne
+répondait pas à « pourquoi pas MATSim ? » et présentait comme ancien un outil toujours
+maintenu. La phrase qui l'introduisait redisait la fin du § 2.1 et sort avec elle. Le point R2
+de la relecture V1 est défait pour moitié : CitySim reste. La section perd 36 mots (583).
+
+**Avant :** « Language models entered mobility simulation as the deliberating part that earlier
+simulators did not have. In MATSim (Horni et al., 2016), for instance, … Park et al. (2023)
+place the model inside the agent… »
+**Après :** « Park et al. (2023) place a language model inside the agent… »
+
+La version française et les deux `.tex` n'ont pas encore reçu la coupe.
+
+---
+
+## [2026-09-25] Le lecteur d'un article peut être désigné, et l'expérience a13 a ses deux foyers
+
+Un article sur le métro se lit désormais par quelqu'un qui prend le métro. L'événement joué
+peut nommer ses lecteurs (`exposition.lecteurs`), à la place du tirage parmi les adultes du
+foyer. Le manifeste d'une population de foyers les porte, et la cohorte les reporte dans
+l'événement dérivé. Un lecteur désigné mineur, immobile ou absent n'est pas remplacé par un
+tiré : le foyer reste sans lecteur, et une `[ALARME]` le dit.
+
+L'extraction de foyers mêle des tailles différentes et désigne les lecteurs. L'expérience
+`exp_mem_presse_a13_punaises_metro_gem31flite_population_6_foy_25j_foyer` est déclarée sur
+`population_6_foyers_a13`. Elle réunit deux foyers : le couple 643030, lu par 1320713, et la
+famille de quatre 534995, lue par 1127260. Les deux lecteurs prennent le métro. Ils lisent au
+jour 12 (vendredi 27 mars), l'article est servi jusqu'au jour 18, puis la mémoire joue seule
+jusqu'au jour 25.
+
+**Avant :** dans a09 V2, le lecteur était tiré parmi les deux adultes, et l'article visait des
+modes que le lecteur tiré ne prenait pas toujours.
+**Après :** le lecteur est choisi pour son usage du mode visé, et le manifeste dit pourquoi.
+
+---
+
+## [2026-09-25] Le prompt de décision parle anglais d'un bout à l'autre, et un article lu n'est plus « de ce matin »
+
+La mémoire noyau servie au modèle avait gardé ses titres et ses formules en français dans un
+prompt entièrement anglais. Elle est rendue en anglais : « My habits », « What I know », « What
+changed recently », créneaux et modes compris. La ligne d'un article lu ne dit plus « this
+morning ». Elle est servie cinq jours et reste en mémoire longue, et « ce matin » y devenait faux
+dès le lendemain. Le message relayé dans le foyer suit : « Claire told me: « … » », et « My
+parents decided: « … » » pour un enfant. Les outils de mesure lisent les deux formulations, si
+bien que les archives d'avant restent dépouillables.
+
+Ce changement modifie le texte des prompts. Un run d'après cette date ne se compare pas mot pour
+mot à un run d'avant.
+
+**Avant :** `- Mes habitudes` / `- - work le matin : à vélo, 9 fois sur 11` ; `[ PRESSE ] This morning I read in the paper: « … »` servi jusqu'au cinquième jour
+**Après :** `- My habits` / `- - work in the morning: by bike, 9 times out of 11` ; `[ PRESSE ] I read in the paper: « … »`
+
+---
+
+## [2026-09-25] Les deux bras d'un A/B mémoire restent le même monde jusqu'à l'événement
+
+Une expérience mémoire peut déclarer `rejeu_ab: true` (case cochée par défaut dans le formulaire
+pour une expérience neuve). Le témoin reçoit alors, sans appel au modèle, la réponse que le traité
+a obtenue à toute question posée mot pour mot. Décisions, souvenirs du soir, bilans et récits de
+foyer sont concernés. Avant l'événement, les deux bras sont identiques. Après, seuls les agents
+touchés s'écartent, et le témoin ne paie plus que leurs appels. Une déclaration existante sans la
+clé tourne comme avant.
+
+Après le témoin, l'orchestrateur écrit dans `etat.json` la part des appels servis par rejeu. Tout
+appel payé avant l'événement lève une `[ALARME]` : les bras ont alors divergé pour une autre raison
+que lui. Le magasin d'une tentative précédente est mis de côté, jamais effacé, quand le traité
+repart de zéro. Le script de dérive entre bras compte un appel rejoué comme identique.
+
+**Avant :** à température 0, gemini-3.5 réécrivait autrement les souvenirs du premier soir (8 sur 8 différents en a09 V2), et plus aucun prompt de décision n'était commun aux deux bras dès le troisième jour ; le témoin payait tous ses appels
+**Après :** prompts et réponses identiques dans les deux bras jusqu'à l'événement, le témoin ne paie que ce qui a réellement changé
+
+---
+
+## [2026-09-25] Article court : relecture éditoriale de la version anglaise
+
+La version anglaise de l'article court a été reprise pour la forme, à partir d'une relecture
+extérieure validée par l'auteur. Aucun chiffre ne change. Un même objet porte
+désormais un seul nom d'un bout à l'autre. Les modèles estimés sur l'enquête sont présentés
+dans l'introduction comme « machine learning models on structured data », puis appelés
+« reference models ». Les mots à double sens sont levés, le terme « expert prompt » étant
+gardé. Les calques du français sont corrigés, et le deux-points revient là où une virgule le
+remplaçait. Les termes employés avant leur définition sont définis à leur première
+occurrence : persona, probability mass, cohort resolution, off-survey event. Le Tableau 1
+passe du § 4.4 au § 5.1, où il est commenté. Le Tableau 3 gagne la ligne du plancher
+tout-voiture, auquel le texte comparait déjà le classifieur. Les légendes séparent leur
+numéro par un point, et non plus par un cadratin.
+
+Le message final est recentré sur ce que le papier évalue, les agents génératifs. Les modèles
+de référence et le classifieur typé y sont des points de comparaison, pas des candidats à la
+décision. L'architecture en trois étages du § 7.1 sort : elle confiait le jour ordinaire à un
+modèle de référence et l'itinéraire hors du jour ordinaire au classifieur, et l'agent
+génératif ne décidait plus rien. Reste une piste, dite comme une conséquence du coût à
+l'échelle d'une ville : n'appeler l'agent génératif que lorsqu'un événement survient. La liste
+des quatre points de comparaison de l'introduction dit maintenant ce qu'est chacun, et
+« verbalised deliberation » couvre le raisonnement comme la justification écrite. Le § 4.1
+dit que le jour unique et la mémoire vierge valent pour le banc, et le § 6.3 qu'il s'en écarte :
+plusieurs semaines, mémoire active. Le § 6 anticipe un questionnaire d'opinion passé chaque
+soir au lieu de quatre jalons : ses résultats d'opinion attendent le run qui le jouera.
+
+Les points que la relecture n'a pas tranchés sont marqués en commentaire dans les sources ou
+en `[TBC]` dans le texte : la cohorte sur laquelle le prompt expert a été réglé, les bornes des
+périodes du Tableau 4, et ce que choisit le plancher tout-voiture quand la voiture n'est pas
+offerte. Les `.tex` et les `.fr.md` ne suivent pas encore : les dates d'en-tête des `.en.md`
+disent qu'ils sont en retard.
+
+**Avant :** les quatre modèles estimés sur l'enquête s'appelaient tour à tour « machine learning models », « references » ou « internal models » ; le résumé opposait les agents génératifs à une « rule-based approach » qui était en fait le plancher tout-voiture
+**Après :** un nom par objet, défini avant son premier emploi ; les deux vérificateurs de forme (`verifier_forme.py`, `make paper-style`) passent sur les neuf sections
+**Avant :** le résumé et le § 7.3 gardaient la délibération pour les événements, mais le § 7.1 la retirait à l'agent génératif, le classifieur choisissant l'itinéraire et le modèle de langue n'écrivant qu'en mémoire
+**Après :** un seul message, du résumé à la conclusion : l'agent génératif s'approche des modèles de référence sans les dépasser sur le jour ordinaire, et ce qu'il est seul à faire, c'est laisser un événement non enregistré par l'enquête modifier ses décisions
+
+---
+
+## [2026-09-25] Un épisode de HTTP 503 arrête le run d'expérience au premier échec, sans repli
+
+Quand Google renvoie des 503 « high demand » sur les deux clés d'une expérience, la passerelle
+ne laisse plus le client expirer en silence. Elle attend tant qu'une clé peut rouvrir à temps ;
+sinon elle rend la décision **avant** l'abandon du client, avec le genre `surcharge_fournisseur`
+et l'heure de réouverture estimée. Le contrôleur s'arrête alors proprement dès ce premier échec,
+comme sur un quota du jour. Aucune décision par défaut n'entre dans la mesure.
+
+Deux causes sont corrigées. Seules les instances admises par l'expérience comptent pour dire
+« occupé, j'attends » : un modèle exclu mais libre ne fait plus patienter le lot. Toute attente
+du worker est bornée par celle du client (120 s par défaut, réglable par
+`resilience.client_wait_seconds`, ou le `wait_timeout` de l'instance épinglée). La même borne
+vaut pour les 429 par minute. Le banc range la surcharge en « passerelle occupée », comme avant,
+mais sans lire le texte du motif.
+
+**Avant :** deux clés en refroidissement et un modèle exclu libre → le lot attendait jusqu'à quinze minutes, le client abandonnait à 120 s sur « Timeout expiré », et trois décisions `LLM Error (Default index)` entraient dans la mesure avant l'arrêt pour `replis_consecutifs`
+**Après :** la clé qui rouvre dans la minute est attendue ; sinon, lot rendu vers 110 s, `[ALARME] Surcharge fournisseur`, arrêt `surcharge_fournisseur` au premier échec, zéro repli ; la chaîne de nuit réessaie après `ATTENTE_S`
+
+---
+
+## [2026-09-25] La bibliographie n'imprime plus de remarques de travail
+
+Les 23 champs `note` du `sample.bib` source s'imprimaient sous les références : « Author list to
+be verified… », « PDF to be added to etat_de_lart… ». Ils sont retirés des entrées, comme les
+commentaires posés au-dessus de chacune. Le tout se retrouve, clé par clé, dans un bloc de
+commentaires en tête du fichier, qui ne s'imprime pas. Les six entrées qui avaient à la fois un
+`doi` et une `url` perdent l'`url` : la référence imprimée ne donne plus qu'un lien. Les deux
+copies Overleaf de l'article court suivent la même forme et restent identiques.
+
+**Avant :** OpenTripPlanner s'imprimait avec « Open-source multimodal trip planner », et une remarque de vérification se lisait au-dessus de l'entrée qu'elle concernait
+**Après :** la référence s'arrête à ses champs bibliographiques ; les remarques sont en tête de fichier, par clé
+
+---
+
+## [2026-09-25] Voir à partir de quand les deux bras d'un A/B mémoire cessent d'être le même monde
+
+Une expérience mémoire compare un bras exposé à un bras témoin qui ne diffère, en principe, que
+par l'événement. Un nouvel outil de lecture dit, jour par jour, si c'est vrai : part des prompts
+de décision identiques dans les deux bras, part des réponses identiques à prompt identique, pour
+les décisions comme pour les souvenirs du soir, et écart décision par décision. Il compare
+l'après-événement aux trois derniers jours d'avant, là où la dérive est déjà la plus forte.
+
+Sur la presse a09 V2, il montre que les deux bras ne partagent plus aucun prompt de décision à
+partir du troisième jour. Les souvenirs rédigés par gemini-3.5-flash-lite à température 0
+reviennent différents à prompt identique (8 fois sur 8), alors que les décisions de
+gemini-3.1-flash-lite restent identiques (7 fois sur 7).
+
+**Avant :** l'écart après l'événement se jugeait contre toute la période d'avant — 8 décisions sur 41 au-delà de 20 points contre 5 sur 91, p = 0,017
+**Après :** contre les trois jours qui précèdent l'événement, 4 sur 34 — p = 0,28, l'écart ne se distingue plus de la dérive
+
+---
+
+## [2026-09-25] Article court : la conclusion pèse ce que coûte l'agent génératif, et à quelle échelle il reste utilisable
+
+La conclusion (§ 7.3) ne dit plus seulement que la délibération verbalisée n'apporte rien au
+jour ordinaire. Elle situe la fidélité de l'agent : il est dans la résolution de la cohorte
+face aux modèles d'apprentissage automatique, et des modèles plus récents pourraient combler
+l'écart ou le dépasser. Elle dit aussi où cette fidélité se paie : une simulation de quelques
+dizaines de voyageurs peut s'offrir un appel par décision, une ville multiplie la facture
+financière et énergétique en proportion de sa population, et un modèle plus petit servi en
+local pourrait la rendre supportable. Le coût d'un décideur pèse désormais autant que sa
+précision dans le choix d'une architecture.
+
+**Avant :** la conclusion s'arrêtait à « neither result justifies billions of tokens per simulated day »
+**Après :** elle nomme l'usage en petite simulation, le coût énergétique et la piste du modèle local ; environ 225 mots pour 150 prévus au PLAN
+
+---
+
 ## [2026-09-25] Article court : une phrase peut compter trente mots, et un titre de paragraphe ne compte pas
 
 La consigne de forme R1 admet désormais une phrase de 30 mots, pour tout l'article court.

@@ -97,7 +97,9 @@ def ligne_de_lecture(texte: str) -> str:
     la MÊME chaîne. C'est ce qui permet au bloc de ne pas la servir deux fois quand l'agent a
     jugé l'article grave, et au contrôle après run de la retrouver mot pour mot.
     """
-    return f"{PREFIXE_LU} This morning I read in the paper: « {texte} »"
+    # Sans « this morning » depuis le 2026-09-25 : la ligne est servie cinq jours et reste en
+    # mémoire longue, et le « ce matin » y devenait faux dès le lendemain.
+    return f"{PREFIXE_LU} I read in the paper: « {texte} »"
 
 
 def ligne_de_foyer(message: str, prenom_lecteur: str, mineur: bool) -> str:
@@ -108,5 +110,5 @@ def ligne_de_foyer(message: str, prenom_lecteur: str, mineur: bool) -> str:
     changer. Le nom de l'autre parent n'est pas dit : la population ne porte pas la filiation.
     """
     if mineur:
-        return f"{PREFIXE_FOYER} My parents decided this morning: « {message} »"
-    return f"{PREFIXE_FOYER} {prenom_lecteur or 'Someone at home'} told me this morning: « {message} »"
+        return f"{PREFIXE_FOYER} My parents decided: « {message} »"
+    return f"{PREFIXE_FOYER} {prenom_lecteur or 'Someone at home'} told me: « {message} »"

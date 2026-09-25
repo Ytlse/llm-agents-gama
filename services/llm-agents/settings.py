@@ -204,6 +204,13 @@ class LlmConfig(BaseSettings, WorkdirPathResolutionMixin):
     # n'est plus attribuable au choc. Son adoption impose de refaire le plancher de bruit (E1).
     instances_admises: list[str] | dict[str, list[str]] = []
 
+    # 2026-09-25 — espace de rejeu à prompt exact (llm_gateway/core/rejeu_ab.py), posé par
+    # l'orchestrateur mémoire (`rejeu_ab: true`) et IDENTIQUE dans les deux bras d'un A/B. Une
+    # question déjà posée mot pour mot dans cet espace reçoit la réponse consignée, sans appel :
+    # le témoin rejoue le traité tant que rien ne les sépare. Vide : aucun rejeu.
+    # Nom NU (`REJEU_AB`), comme `INSTANCES_ADMISES` : c'est ce que compose transmet.
+    rejeu_ab: str = ""
+
     # Cooldown court du provider fautif lors d'un basculement (parse error / 4xx) :
     # force la rotation à choisir un autre modèle au réessai (cf. worker/task_worker).
     provider_switch_cooldown_seconds: int = 30

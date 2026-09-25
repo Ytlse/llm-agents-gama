@@ -61,6 +61,11 @@ masters anglais (audit des citations du 2026-09-24). **On ne le corrige pas ici*
 correction se fait dans `../../sources/sample.bib`, puis on refait l'extraction, et les deux
 copies `overleaf/` et `overleaf-fr/` restent identiques.
 
+**Forme des entrées** (depuis le 2026-09-25, dans les trois copies) : aucune entrée ne porte
+de champ `note`, qui s'imprimerait dans la bibliographie, ni de commentaire. Les remarques de
+vérification et de provenance sont regroupées par clé dans le bloc de commentaires en tête du
+fichier. Une entrée qui a un `doi` n'a pas d'`url`.
+
 ## Comment compiler
 
 **Quatre passes : pdfLaTeX → BibTeX → pdfLaTeX → pdfLaTeX.** Une seule passe imprime les

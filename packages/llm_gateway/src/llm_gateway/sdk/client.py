@@ -84,6 +84,8 @@ class TaskResult(BaseModel):
     error_kind: str | None = None
     resume_at: datetime | None = None
     provider_used: str | None = None
+    # Espace de rejeu qui a servi la réponse sans appel au fournisseur (None : servie par lui).
+    rejeu: str | None = None
     timing: TaskTiming | None = None
     task_id: str | None = None
 
@@ -123,6 +125,7 @@ class LLMGatewayClient:
         circuit_probe_interval: float = 60.0,
         instances_admises: list[str] | None = None,
         origine: str | None = None,
+        espace_rejeu: str | None = None,
     ):
         self._base_url = base_url.rstrip("/")
         self._wait_timeout = wait_timeout
@@ -161,6 +164,8 @@ class LLMGatewayClient:
         self._instances_admises = list(instances_admises or [])
         # Posée sur le client pour la même raison : tout appel, présent ou futur, se signe.
         self._origine = origine
+        # Espace de rejeu à prompt exact, posé sur tous les appels comme l'origine.
+        self._espace_rejeu = espace_rejeu
         if self._instances_admises:
             logger.info(
                 f"[gateway] restriction d'instances active sur TOUS les appels de ce client : "
@@ -216,6 +221,8 @@ class LLMGatewayClient:
             payload = {**payload, "instances_admises": list(self._instances_admises)}
         if self._origine and not payload.get("origine"):
             payload = {**payload, "origine": self._origine}
+        if self._espace_rejeu and not payload.get("espace_rejeu"):
+            payload = {**payload, "espace_rejeu": self._espace_rejeu}
 
         # Disjoncteur ouvert : la soumission est SUSPENDUE jusqu'au rétablissement du
         # gateway (aucune décision dégradée — on attend le renouvellement des quotas).
@@ -406,6 +413,7 @@ class LLMGatewayClient:
             error_kind=data.get("error_kind"),
             resume_at=data.get("resume_at"),
             provider_used=data.get("provider_used"),
+            rejeu=data.get("rejeu"),
             timing=TaskTiming(timing_p5=data.get("timing_p5")),
         )
 

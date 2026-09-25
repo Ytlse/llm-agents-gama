@@ -41,18 +41,18 @@ La réexécution d'une condition avec trois initialisations différentes modifie
 \subsection{Ce que le réglage influence et ce qu'il n'influence pas}
 \label{sec:tuning}
 
-Le réglage des critères généraux améliore chaque modèle de langage, davantage qu'une cohorte ne progresserait seule (Tableau~\ref{tab:gains}). Le gain apparié sur l'axe composite est de 2,27 points pour \texttt{gemini-3.5}, intervalle de $+$1,40 à $+$3,22, puis de 3,37 points pour \texttt{gemini-3.1} et de 7,25 pour \texttt{mistral-large}. Les neuf intervalles excluent zéro. Les gains varient de une fois et demie à cinq fois et demie la résolution de la cohorte.
+Le réglage des critères généraux améliore chaque modèle de langage, davantage qu'une cohorte ne progresserait seule (Tableau~\ref{tab:gains}). Le gain apparié sur l'axe composite est de 2,27 points pour \texttt{gemini-3.5}, intervalle de $+$1,40 à $+$3,22, puis de 3,37 points pour \texttt{gemini-3.1} et de 7,25 pour \texttt{mistral-large}. Les six intervalles excluent zéro. Les gains varient de une fois et demie à cinq fois et demie la résolution de la cohorte.
 
 \begin{table*}[tp]
-  \caption{Gains appariés de l'invite experte par rapport à l'invite minimale, trois lectures, avec leur intervalle de confiance à 95\,\% entre crochets. Un gain positif correspond à une erreur plus faible.}
+  \caption{Gains appariés de l'invite experte par rapport à l'invite minimale, deux lectures, avec leur intervalle de confiance à 95\,\% entre crochets. Un gain positif correspond à une erreur plus faible.}
   \label{tab:gains}
-  \begin{tabular}{lccc}
+  \begin{tabular}{lcc}
     \toprule
-    Modèle de langage & Composite & Hors trajets à option unique & L1 sur les parts globales \\
+    Modèle de langage & Composite & L1 sur les parts globales \\
     \midrule
-    \texttt{gemini-3.5}    & 2,27 [1,40 ; 3,22] & 3,59 [2,45 ; 4,83]  & 10,2 [8,0 ; 12,5]  \\
-    \texttt{gemini-3.1}    & 3,37 [2,45 ; 4,25] & 4,15 [3,09 ; 5,22]  &  8,6 [6,8 ; 10,6]  \\
-    \texttt{mistral-large} & 7,25 [5,90 ; 8,67] & 8,63 [7,15 ; 10,28] & 18,0 [13,5 ; 22,4] \\
+    \texttt{gemini-3.5}    & 2,27 [1,40 ; 3,22] & 10,2 [8,0 ; 12,5]  \\
+    \texttt{gemini-3.1}    & 3,37 [2,45 ; 4,25] &  8,6 [6,8 ; 10,6]  \\
+    \texttt{mistral-large} & 7,25 [5,90 ; 8,67] & 18,0 [13,5 ; 22,4] \\
     \bottomrule
   \end{tabular}
 \end{table*}
@@ -107,7 +107,7 @@ Les jours déclarés de l'enquête, l'agent désigne le mode déclaré légèrem
   \end{tabularx}
 \end{table}
 
-Le classificateur typé présente une précision individuelle inférieure au seuil minimal pour l'ensemble des véhicules. Il atteint 64,7\,\% là où le plancher atteint 66,7\,\%, soit un écart de 2,04 points (intervalle : $-$3,78 à $-$0,29). Les deux phrases suivantes se basent sur l'invite experte de \texttt{gemini-3.5}, et non sur celle du classificateur lui-même \textbf{[À déterminer]}. Aucune comparaison appariée ne le distingue des quatre références tabulaires sur le composite. Les deux autres lectures agrégées le placent derrière la régression à noyau et la forêt aléatoire. Sa probabilité est plus élevée pour la marche que pour les transports en commun. Le rappel pour la marche est de 56,3\,\%, contre \textbf{[À déterminer, environ 44\,\% sur la Figure~\ref{fig:audit-modes}, valeur exacte dans l'annexe I]} pour les transports en commun. La répartition agrégée masque cette inversion. Une population peut donc reproduire la répartition modale d'un territoire tout en commettant plus d'erreurs sur les trajets individuels qu'une règle qui ne tient pas compte de ces erreurs.
+Le classificateur typé présente une précision individuelle inférieure au seuil minimal pour l'ensemble des véhicules. Il atteint 64,7\,\% là où le plancher atteint 66,7\,\%, soit un écart de 2,04 points (intervalle : $-$3,78 à $-$0,29). Les deux phrases suivantes se basent sur l'invite experte de \texttt{gemini-3.5}, et non sur celle du classificateur lui-même \textbf{[À déterminer]}. Aucune comparaison appariée ne le distingue des quatre références tabulaires sur le composite. L'autre lecture agrégée le place derrière la régression à noyau et la forêt aléatoire. Sa probabilité est plus élevée pour la marche que pour les transports en commun. Le rappel pour la marche est de 56,3\,\%, contre \textbf{[À déterminer, environ 44\,\% sur la Figure~\ref{fig:audit-modes}, valeur exacte dans l'annexe I]} pour les transports en commun. La répartition agrégée masque cette inversion. Une population peut donc reproduire la répartition modale d'un territoire tout en commettant plus d'erreurs sur les trajets individuels qu'une règle qui ne tient pas compte de ces erreurs.
 
 \begin{figure}[tbp]
   \centering

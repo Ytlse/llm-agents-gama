@@ -1,6 +1,8 @@
 # Appendices
 
-<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 11:11:43 — le .tex correspondant, overleaf/chapters/08_Appendices.tex (compilé par overleaf/supplementary.tex, pas par main.tex), porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 21:07:15 — le .tex correspondant, overleaf/chapters/08_Appendices.tex (compilé par overleaf/supplementary.tex, pas par main.tex), porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+
+<!-- Relecture des gallicismes du 2026-09-25, accord de l'auteur (« Corrige ») : tics récurrents (« against » comparatif, « one » pour « un même », « carry », « bound », « under » devant un seuil, « rejoin », « from one X to another », « execute », « brings »), faux-amis (agenda, control, hypothesis, legibility, designate, demanding, chain, globally, bends, recedes), calques de construction et typographie à la française (« 0.9 point », « [a ; b] », « 30.3 % », « 1.06 dollars »). Aucun chiffre ne change ; les prompts et le message de l'annexe D ne sont pas touchés. -->
 
 <!-- Brouillon anglais, article court AAMAS 2027, PLAN.md § 9, annexe D seule. Écrit le
      2026-09-24 à la demande de l'auteur (« on parle de prompt expert ou minimal, ils devraient
@@ -35,7 +37,19 @@
         parler.
      La valeur maximale annoncée au § 4.1 (0.50 point) doit être celle du tableau. -->
 
-## Appendix D. The three prompts, and one trip decided under each
+*Note on this draft. The main text cites Appendices A, B, D, E and F. Only Appendix D is
+written so far. The four others are in preparation and will join this supplementary material
+before submission. They give the thirteen cohort margins (A), the 21 input variables (B), the
+press experiment (E) and the modal shares by stratum (F).*
+
+<!-- Note ajoutée le 2026-09-25 à la demande de l'auteur (relecture éditoriale, « Rajoute une
+     note dans l'appendices ») : les §§ 4.1, 4.2, 5.2 et 6.4 renvoient aux annexes A, B, F et E,
+     absentes du fichier. Contenus relevés dans les phrases qui les citent : A, marges de la
+     cohorte (§ 4.1) ; B, les 21 variables (§ 4.2) ; E, l'expérience de presse (§ 6.4) ;
+     F, parts modales par strate, les 15-19 ans (§ 5.2). Note de brouillon, à retirer quand
+     les quatre annexes seront écrites. -->
+
+## Appendix D. The three prompts, and one trip under each
 
 This appendix gives the three prompts of Section 4.4 as the decision-makers received them.
 It then follows one trip through three decision-makers, gemini-3.5 under each of the two
@@ -81,7 +95,7 @@ option and writes no text.
 Table D.1 lists the four files that hold this material in the anonymised repository. The
 prompt file stores each prompt under the key given with it below.
 
-*Table D.1 — Where each element of this appendix is kept.*
+*Table D.1. Where each element of this appendix is kept.*
 
 | Element | File |
 |---|---|
@@ -92,8 +106,7 @@ prompt file stores each prompt under the key given with it below.
 
 ### D.2 The minimal prompt
 
-The minimal prompt gives the task and the output format, and nothing else. It runs to 82
-words, schema excluded, and the prompt file holds it under the key `prompt_minimal_02`.
+The minimal prompt gives the task and the output format, and nothing else. It runs to 82 words, excluding the schema, and the prompt file holds it under the key `prompt_minimal_02`.
 
 ```text
 Select the optimal travel mode taking the persona into account.
@@ -167,7 +180,7 @@ part of the journey. The other lines are those of D.3. It runs to 318 words, und
 
 ### D.5 One trip under the three decision-makers
 
-We chose this trip by hand, for legibility, and it is not representative of the cohort.
+We chose this trip by hand, for clarity, and it is not representative of the cohort.
 Raymond, 45, leaves for a shop at 13:37 on the scored day of the sealed cohort. The three
 decision-makers received the same six options. The message below is the user message that
 both language models received.
@@ -230,9 +243,9 @@ Only the `- [n]` lines are options: the « · » sub-bullets detail the steps of
      la voiture, sa propre chaîne de véhicules ayant tiré autrement plus tôt dans la journée. -->
 
 Table D.2 gives the three answers, in percent. The last row is the mode drawn from each
-distribution, under the same seed in the three runs.
+distribution, under the same seed in all three runs.
 
-*Table D.2 — Probability given to each option of Raymond's trip, in percent.*
+*Table D.2. Probability given to each option of Raymond's trip, in percent.*
 
 | Option | Minimal prompt, gemini-3.5 | Expert prompt, gemini-3.5 | Typed classifier, its expert prompt |
 |---|---:|---:|---:|
@@ -260,15 +273,16 @@ Under the expert prompt, the same model wrote the following one.
 
 > With a very short distance to the shop and low income constraints, walking directly is the preferred choice.
 
-The message gives 28 °C and partly cloudy skies, with rain in the morning only. The second
-sentence names none of the four criteria.
+The first justification thus invokes bad weather that the message does not describe (28 °C,
+partly cloudy, rain in the morning only). The second justification names none of the four
+criteria.
 
 <!-- source: champ reponse_brute[0].reason des deux décisions gemini, cité à la lettre. Météo :
      champ context du payload, reproduit dans le message ci-dessus. -->
 
-Under both prompts, gemini-3.5 gives the three bus options ten percent at most, together. The
-expert prompt takes forty points from the car and ten from the bus, and gives all fifty to
-walking. The classifier gives walking 72 %, between the two.
+Under both prompts, gemini-3.5 gives the three bus options at most 10% combined. The expert
+prompt takes forty points from the car and ten from the bus, and gives all fifty to walking.
+The classifier gives walking 72%, between the two.
 
 <!-- source: Table D.2. Bus : 0 + 5 + 5 = 10 sous le minimal, 0 sous l'expert. Voiture 50 → 10,
      bus 10 → 0, marche 30 + 10 = 40 → 45 + 45 = 90, soit + 50 = 40 + 10. Classifieur, marche 52 + 20 = 72, entre 40 et 90 ;

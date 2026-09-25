@@ -1,11 +1,14 @@
 % =====================================================================
-% chapters/08_Appendices.tex — LaTeX rendering of ../sections/08_appendices.en.md (2026-09-24 14:58:01)
+% chapters/08_Appendices.tex — LaTeX rendering of ../sections/08_appendices.en.md (2026-09-25 21:07:15)
 % Appendices of the SHORT paper, for the supplementary material. \input from supplementary.tex,
 %   after \appendix. NOT \input from main.tex: the appendices live outside the eight pages, and
 %   the paper names them in plain text ("Appendix D"), with no \label to \ref across files.
-% Written by hand on 24 September 2026 (no generator, see ../sections/README.md). Only
-%   Appendix D exists. \setcounter{section}{3} makes it print as "D": remove that line when
-%   A, B and C are written above it.
+% Written by hand on 24 September 2026 (no generator, see ../sections/README.md).
+% Re-carried by hand on 25 September 2026 against the master of 2026-09-25 21:07:15.
+% Only Appendix D exists. \setcounter{section}{3} makes it print as "D": remove that line when
+%   A, B and C are written above it. The italic draft note that opens the master (Appendices
+%   A, B, E and F in preparation) is printed before the section, as in the master; it goes
+%   when those four appendices are written.
 % Tables: two, numbered D.1 and D.2 (\thetable redefined below), caption ABOVE, booktabs.
 % Verbatim blocks: fvextra Verbatim with breaklines, loaded in supplementary.tex. The four
 %   blocks are copied byte for byte from the fenced blocks of the master, which are the text
@@ -13,14 +16,20 @@
 %   template's own.
 % Links: \href{\repobase/<path>}{...}, \repobase being defined in ../repository.tex, the only
 %   place where the TBD of the address is written.
-% Not carried: the <!-- source: --> comments of the master (provenance trace, as in the paper).
+% Not carried: the <!-- ... --> comments of the master (provenance trace, drafting notes and
+%   the section report, as in the paper).
 % =====================================================================
 
 \setcounter{section}{3}
 \renewcommand{\thetable}{\thesection.\arabic{table}}
 \setcounter{table}{0}
 
-\section{The three prompts, and one trip decided under each}
+\noindent\emph{Note on this draft. The main text cites Appendices A, B, D, E and F. Only
+Appendix~D is written so far. The four others are in preparation and will join this
+supplementary material before submission. They give the thirteen cohort margins (A), the 21
+input variables (B), the press experiment (E) and the modal shares by stratum (F).}
+
+\section{The three prompts, and one trip under each}
 \label{app:prompts}
 
 This appendix gives the three prompts of Section~4.4 as the decision-makers received them.
@@ -64,7 +73,7 @@ repository. The prompt file stores each prompt under the key given with it below
 \label{app:minimal}
 
 The minimal prompt gives the task and the output format, and nothing else. It runs to 82
-words, schema excluded, and the prompt file holds it under the key
+words, excluding the schema, and the prompt file holds it under the key
 \texttt{prompt\_minimal\_02}.
 
 \begin{Verbatim}
@@ -108,7 +117,7 @@ Situational trade-off principles:
 
 The classifier's prompt differs from the expert prompt in its first criterion only. Its chain
 friction bullet adds the other side of the trade-off, a direct walk that is itself the long
-part of the journey. The other lines are those of Appendix~\ref{app:expert}. It runs to 318
+part of the journey. The other lines are those of~\ref{app:expert}. It runs to 318
 words, under the key \texttt{prompt\_expert\_32}.
 
 \begin{Verbatim}
@@ -118,7 +127,7 @@ words, under the key \texttt{prompt\_expert\_32}.
 \subsection{One trip under the three decision-makers}
 \label{app:trip}
 
-We chose this trip by hand, for legibility, and it is not representative of the cohort.
+We chose this trip by hand, for clarity, and it is not representative of the cohort.
 Raymond, 45, leaves for a shop at 13:37 on the scored day of the sealed cohort. The three
 decision-makers received the same six options. The message below is the user message that
 both language models received.
@@ -161,7 +170,7 @@ Only the `- [n]` lines are options: the « · » sub-bullets detail the steps of
 \end{Verbatim}
 
 Table~\ref{tab:app-trip} gives the three answers, in percent. The last row is the mode drawn
-from each distribution, under the same seed in the three runs.
+from each distribution, under the same seed in all three runs.
 
 \begin{table}[ht]
   \caption{Probability given to each option of Raymond's trip, in percent.}
@@ -177,7 +186,7 @@ from each distribution, under the same seed in the three runs.
     {[3]} foot, bus, foot, 43 min &  0 &  0 &  0 \\
     {[4]} foot, bus, foot, 34 min &  5 &  0 &  1 \\
     {[5]} foot, bus, foot, 35 min &  5 &  0 &  0 \\
-    \midrule
+    \addlinespace
     Mode drawn                    & car & foot & car \\
     \bottomrule
   \end{tabular}
@@ -196,9 +205,10 @@ Under the expert prompt, the same model wrote the following one.
 With a very short distance to the shop and low income constraints, walking directly is the preferred choice.
 \end{quote}
 
-The message gives 28\,\textdegree{}C and partly cloudy skies, with rain in the morning only.
-The second sentence names none of the four criteria.
+The first justification thus invokes bad weather that the message does not describe
+(28~\textdegree{}C, partly cloudy, rain in the morning only). The second justification names
+none of the four criteria.
 
-Under both prompts, \texttt{gemini-3.5} gives the three bus options ten percent at most,
-together. The expert prompt takes forty points from the car and ten from the bus, and gives
-all fifty to walking. The classifier gives walking 72\,\%, between the two.
+Under both prompts, \texttt{gemini-3.5} gives the three bus options at most 10\% combined.
+The expert prompt takes forty points from the car and ten from the bus, and gives
+all fifty to walking. The classifier gives walking 72\%, between the two.

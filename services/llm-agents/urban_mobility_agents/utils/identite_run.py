@@ -231,6 +231,11 @@ def composer(
         "meteo_par_agent": bool(getattr(reglages.agent, "weather_per_agent_dates", True)),
         "partage_foyer": bool(getattr(reglages.agent, "memoire__partage_foyer_enabled", False)),
         "taches_en_vol": int(getattr(getattr(reglages, "world", None), "worker_concurrency", 8)),
+        # 2026-09-25 — espace de rejeu à prompt exact. Consigné, et vérifié au lancement par la
+        # cohorte, mais HORS de `LIBELLES` : les deux bras d'un A/B le partagent, et un run
+        # antérieur au champ doit rester reprenable. Rejouer ne change pas ce qu'un bras mesure,
+        # seulement qui paie la réponse.
+        "rejeu_ab": str(getattr(getattr(reglages, "llm", None), "rejeu_ab", "") or ""),
         # ── Filiation (lot D) ──
         "run_parent": str(run_parent or ""),
         "champs_libres": sorted(champs_libres or ()),

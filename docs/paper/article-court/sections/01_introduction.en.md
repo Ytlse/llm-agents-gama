@@ -1,6 +1,8 @@
 # 1. Introduction
 
-<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-24 15:34:46 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 21:07:15 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+
+<!-- Relecture des gallicismes du 2026-09-25, accord de l'auteur (« Corrige ») : tics récurrents (« against » comparatif, « one » pour « un même », « carry », « bound », « under » devant un seuil, « rejoin », « from one X to another », « execute », « brings »), faux-amis (agenda, control, hypothesis, legibility, designate, demanding, chain, globally, bends, recedes), calques de construction et typographie à la française (« 0.9 point », « [a ; b] », « 30.3 % », « 1.06 dollars »). Aucun chiffre ne change ; les prompts et le message de l'annexe D ne sont pas touchés. -->
 
 <!-- Brouillon anglais, article court AAMAS 2027, PLAN.md § 1 — budget 700 mots
      (1.1 180, 1.2 200, 1.3 220, 1.4 100). Rédigé le 2026-09-22 par l'agent article-writer.
@@ -17,11 +19,10 @@
 ## 1.1 What generative agents promise
 
 Existing multi-agent simulations of multimodal urban mobility rely on machine learning
-models on structured data from household travel surveys, or on explicit rules defined by
-experts. A
-household travel survey asks the residents of one territory to describe every trip they made
-on one day. In both, the space of representable behaviours is fixed a priori: a factor
-encoded as neither variable nor rule cannot influence any decision.
+models on structured data, or on explicit rules defined by experts. The models are fitted on
+household travel surveys, in which the residents of one territory describe every trip they
+made on one day. In both approaches, the space of representable behaviours is fixed a priori:
+a factor encoded as neither variable nor rule cannot influence any decision.
 
 <!-- source: en/00_Abstract.md, corps v1.9 du 2026-09-21, deux premières phrases reprises mot
      pour mot, formulation du tuteur validée par l'auteur (PLAN § 1.1). « In both cases »
@@ -31,9 +32,9 @@ encoded as neither variable nor rule cannot influence any decision.
      of one day ». ⚠ Les §§ 2.1 et 4.1 déjà rédigés portent chacun la même glose ; les deux
      tombent si celle-ci reste. Signalé au compte-rendu. -->
 
-The fixed behaviour space binds precisely where simulation is asked to help. A city tests a
-transport policy on a simulated population before it builds anything. The answer it gets is
-bounded by the behaviour its model can represent.
+This limit matters most where simulation is most useful. When a city tests a transport
+policy on a simulated population before building anything, the answer it gets can only
+contain the behaviours its model represents.
 
 <!-- source: en/00_Abstract.md, corps v1.9, troisième phrase (« Yet mode choice is
      multidimensional, and integrating that complexity at city scale is difficult »), reprise
@@ -41,12 +42,12 @@ bounded by the behaviour its model can represent.
      paragraphe, « essential to travel planning and network design […] the design of
      personalised mobility policies » (Tisséo Collectivités & AUAT, 2023). Aucun chiffre. -->
 
-Generative agents built on language models promise to lift that bound. Fed on
-massive corpora, they carry decision heuristics that surveys do not record, and they adapt
+Generative agents built on language models promise to lift that limit. Trained on vast amounts of text, they carry decision heuristics that surveys do not record, and they adapt
 without explicit rules. A strike, a heatwave or a news item about safety in the metro could
-then reach a decision that no survey column holds. They also promise to work without the
-local calibration data that agent-based models require. Detailed multimodal trajectory
-datasets exist for a few large metropolitan areas only.
+then influence a decision, although no survey column records it. Furthermore, generative
+agents appear to possess partial knowledge of human behaviour, allowing them to simulate
+choices similar to those made by humans. However, how close these choices come to real ones
+remains largely untested.
 
 <!-- source: en/00_Abstract.md, corps v1.9, quatrième phrase (« LLM-based generative agents
      promise to overcome it: fed on massive corpora, they carry decision heuristics surveys do
@@ -54,11 +55,13 @@ datasets exist for a few large metropolitan areas only.
      « LLM-based » écrit en toutes lettres, l'article court n'employant pas le sigle avant sa
      définition. Les trois exemples, en/01_Introduction.md § 1.1, sixième paragraphe, « a strike,
      a heatwave, a news item about safety in the metro ».
-     Données de calibration : en/01_Introduction.md § 1.1, troisième paragraphe (Liu, Yang & Yin,
-     2024 ; Feng et al., 2024 ; Fourez et al., 2025). ⚠ Réserve de la source portée dans la
-     phrase par le verbe « promise » : la v0.11 du master a retiré comme fausse l'affirmation
-     que ces données sont inaccessibles ; la rareté ne porte que sur les jeux de trajectoires
-     détaillées, et les microdonnées d'enquête, elles, s'obtiennent. -->
+     Texte de l'auteur, 2026-09-25 : les deux phrases finales remplacent la promesse de
+     travailler sans données de calibration locales, retirée parce que le papier défend
+     l'inverse. Nuance voulue : un comportement qui ressemble à l'humain sans l'être, et un
+     réalisme posé en question ouverte, sans annoncer le réglage des prompts. « Largely
+     untested » s'accorde au « rarely » du § 1.2. ⚠ Le § 7.2 renvoie encore à la promesse
+     retirée (« the promise of Section 1.1, that generative agents would work without local
+     calibration data »). -->
 
 ## 1.2 Measuring the promise against a real population
 
@@ -72,11 +75,17 @@ authors produced themselves.
      et al., « adaptability is judged against the rule-based baseline, not against observed
      behaviour ») ; la phrase ci-dessus le dit une fois, en général, et ne cite personne. -->
 
-GTA (Lämmer, Colley & Ebel, 2026) confronts a simulated modal split with a national travel
-survey. The modal split is the share of trips made by each mode. GTA draws its personas from
-that survey. A language model writes each of their day plans. Lacking a baseline, it compares
-itself with the observed splits of other German states. Copying Hamburg's shares scores a
-root-mean-square error of 1.99 on Berlin, against 4.07 for its own simulation.
+GTA (Lämmer, Colley & Ebel, 2026) draws its personas from a national travel survey and lets
+a language model write each persona's day plan. It then compares the simulated modal split
+(the share of trips made by each mode) with that survey. GTA has no baseline of its own. It
+is benchmarked instead against the observed splits of other German states, which amount to a
+naive predictor, and that predictor wins. Copying Hamburg's observed shares predicts Berlin's
+with a root-mean-square error of 1.99, compared with 4.07 for GTA.
+
+<!-- Relecture éditoriale du 2026-09-25, accord de l'auteur (« Corrige », point B7) : le
+     lecteur ne savait pas que la cible était Berlin, ni que « se comparer aux autres Länder »
+     revenait à prendre les parts d'un autre Land pour prédicteur naïf. La phrase le dit
+     maintenant, puis donne le chiffre. Aucun chiffre ne change. -->
 
 <!-- Audit des citations du 2026-09-23 : « Its only modelled reference is the observed split
      of other regions » se contredisait, les parts des autres Länder étant des données
@@ -102,11 +111,27 @@ root-mean-square error of 1.99 on Berlin, against 4.07 for its own simulation.
      nommant les quatre modes, et les deux peuvent coexister.
      L'échantillon berlinois et les 35,769 agents sortent, faute de place. -->
 
-This paper supplies four things missing from these comparisons. A baseline beneath the
-agents says what a decision-maker reaches with no behavioural knowledge of the territory. Models fitted on that territory's own survey say what its data support. The same
-inputs on both sides make a gap attributable to the decision-maker rather than to what it was
-told. A reading below the aggregate says whether two decision-makers that produce the same
-shares decide alike.
+A score says little about a generative agent until it has something to be compared with.
+These evaluations lack four elements that give such a score its meaning. This paper supplies
+them.
+
+1. Simple baselines, such as always taking the fastest option, show the score a model reaches
+   without knowing how residents choose. They form a floor.
+2. Machine learning models on structured data, fitted on the territory's own survey, show the score its data make possible. We call them reference models.
+3. The generative agents and the reference models read the same variables for each trip. A
+   gap between them then comes from how each decides rather than from the trip data it
+   receives.
+4. Two agents can reproduce the same modal split while choosing differently for the same
+   traveller. Only a trip-by-trip comparison reveals it.
+
+<!-- Relecture éditoriale du 2026-09-25, accord de l'auteur (« Perfect ») : la liste disait à
+     quoi sert chaque pièce sans dire ce qu'elle est, et « beneath the agents », « both sides »,
+     « what it was told » renvoyaient à ce que le lecteur n'avait pas encore vu. L'amorce dit
+     maintenant pourquoi ces pièces manquent : ce sont les points de comparaison de l'agent
+     génératif. Le plancher est illustré par la durée minimale, non par le tout-voiture, dont
+     le rappel vélo de 2,3 % (annexe I.2) dit qu'il ne met pas tout sur la voiture. « the same
+     variables » et non « the same inputs » : les modèles de langue voient aussi trois choses
+     qu'aucun modèle de référence n'utilise (§ 4.2). -->
 
 <!-- source: en/01_Introduction.md § 1.1, dernier paragraphe : « What is missing is a protocol
      under which a measurement becomes attributable: a floor beneath the agents, calibrated
@@ -122,10 +147,14 @@ shares decide alike.
 ## 1.3 What this paper does
 
 This paper measures where verbalised deliberation earns its place in a mobility agent.
-Verbalised deliberation is the model writing its reasoning in words before it answers. In a
-population of mobility agents, it does not improve fidelity to the ordinary regime the
-survey describes. It brings in events that no variable encodes. We trace the path of one such
-event to the decision.
+Verbalised deliberation is the text a language model writes around its decision: the
+reasoning some models produce before answering, and the one-sentence justification the
+prompts require. In a population of mobility agents, this text is not what brings the
+simulated modal split close to the survey. We show it with a classifier that reads the same
+trip description, writes no text, and comes at least as close. The text may instead matter for events that no
+survey variable encodes, which we call off-survey events. Section 6 traces the channel
+through which one such event reaches the decision. It shows that the channel exists, not how
+strong its effect is.
 
 <!-- source: PLAN § 0, thèse : « Dans une population d'agents de mobilité, la délibération
      verbalisée n'améliore pas la fidélité au régime que l'enquête décrit ; ce qu'elle apporte,
@@ -134,13 +163,28 @@ event to the decision.
      « verbalised deliberation » est écrite ici, première occurrence ; le § 5.3 et le § 6.2
      déjà rédigés emploient le terme sans le définir. Les deux énoncés de la thèse sont livrés
      aux §§ 5.3 et 6.4.
-     Relecture v1, G3 : la dernière phrase, coordonnée par « , and », est coupée en deux. -->
+     Relecture v1, G3 : la dernière phrase, coordonnée par « , and », est coupée en deux.
+     Relecture éditoriale du 2026-09-25 : la glose ne couvrait que le raisonnement écrit avant
+     la réponse, alors que le § 5.3 oppose l'agent à un classifieur qui n'écrit rien, ni
+     raisonnement ni justification. Elle couvre maintenant les deux : thinking_level « high »
+     pour gemini-3.5 et mistral-large (annexe D.1), consigne « Justify the distribution in one
+     concise sentence » des deux prompts de modèle de langue (annexes D.2 et D.3).
+     Texte de l'auteur, 2026-09-25 18:31 : « does not improve fidelity » devient ce que le
+     texte ne fait pas (rapprocher la répartition modale de l'enquête) et sa preuve, le
+     classifieur à sortie typée du § 4 (« reads the same text […] without writing a
+     sentence »). « At least as close » : le classifieur atteint la bande des références
+     (§ 5.3), où aucun modèle de langue n'entre (§ 5.1). ⚠ Dépend du score du classifieur,
+     encore « [re-tuning pending] » au § 5.3. Réserve finale reprise du § 6, « We therefore
+     claim that this channel exists, not how strong its effect is ». Une seule clivée gardée
+     (R5). ⚠ Budget : § 1.3 au-delà de 220 mots, § 1 au-delà de 700. -->
 
-We measure on one study area, the 453 communes around Toulouse that its Cerema-certified 2023
-household travel survey covers.
-A controlled cohort of 1,000 synthetic personas makes the 3,299 trips of the day we
-score. Fifteen decision-makers run on those trips. We call decision-maker anything that turns
-a trip description into a probability over the options offered.
+Our measurements cover one study area: the 453 municipalities (communes) around Toulouse covered by
+the area's 2023 household travel survey, certified by Cerema, a French public agency. A
+cohort of 1,000 synthetic personas, checked against that survey, makes the 3,299 trips of
+the day we score. A persona is one simulated person with a household and a day of trips.
+Fifteen decision-makers run on those trips. We call anything that turns a trip description into a probability over the options offered a decision-maker. The agents live in a GAMA
+multi-agent simulation of the study area, with its actual networks and timetables. That
+simulation follows the GAMA–OpenTripPlanner–LLM architecture of Vu et al. (2025).
 
 <!-- ⚠ Remarque de relecture n° 10, 2026-09-23 : « 453 communes » réintroduit aux §§ 3.1, 4.1
      et 7.1. Le périmètre est défini ici, à sa première mention, et « the study area » le
@@ -152,9 +196,7 @@ a trip description into a probability over the options offered.
      urban_mobility_agents/agents/llm_agent.py:1142 ; deux personas de même profil tirent
      donc indépendamment. Troncature du consideration set (seuil 0,15) désactivée par défaut
      (settings.agent.mode_choice_truncation_threshold = 0.0, drapeau troncature_15 = False) :
-     la loi tirée est bien le vecteur rendu. --> The agents live in a GAMA
-multi-agent simulation of the study area, with its real networks and timetables. That
-simulation follows the GAMA–OpenTripPlanner–LLM architecture of Vu et al. (2025).
+     la loi tirée est bien le vecteur rendu. -->
 
 <!-- source: fr/04_Evaluation.md § 4.1 et data/population/population_1000_AAMAS_v6/MANIFEST.yaml :
      1,000 personas en 499 ménages entiers, 3,299 déplacements le jour évalué, périmètre des
@@ -180,11 +222,11 @@ simulation follows the GAMA–OpenTripPlanner–LLM architecture of Vu et al. (2
      coupée en deux pour tenir R1, sans rien perdre. « multi-agent » ajouté comme glose
      de GAMA, première occurrence du nom dans l'article (consigne 10). -->
 
-The paper rests on three contributions. The first is an equal-input comparison bench
-between generative agents and machine learning models on structured data, on a synthetic cohort controlled against that
-survey. The second is the position of fifteen decision-makers on that bench, and two
-dissociations the aggregate shares do not show. The third is the traced path of a
-non-tabulated event to the decision, inside a generative agent with memory.
+The paper makes three contributions. The first is an equal-input comparison benchmark
+between generative agents and reference models, on a synthetic cohort checked against that survey. The second is the position of fifteen decision-makers on that benchmark, and two cases
+where equal modal shares hide different individual decisions. The third is the channel
+through which an off-survey event reaches the decision, traced inside a generative agent with
+memory.
 
 <!-- source: PLAN § 0, tableau des trois contributions, une ligne chacune, portées par les
      §§ 3-4, § 5 et § 6. Elles sont nommées « the first / second / third contribution » et

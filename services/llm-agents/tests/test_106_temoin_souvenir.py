@@ -56,7 +56,7 @@ class TestLAncrage:
 
     def test_le_prefixe_du_lu_est_reconnu(self):
         """Le canal `lu` du ticket 100 passe par le même témoin."""
-        entree = f"{PREFIXE_LU} This morning I read in the paper: « {TEXTE_C3} »"
+        entree = f"{PREFIXE_LU} I read in the paper: « {TEXTE_C3} »"
         assert TEXTE_C3 in (temoin.texte_injecte([entree]) or "")
 
     def test_le_texte_est_pris_apres_le_prefixe_pas_avant(self):

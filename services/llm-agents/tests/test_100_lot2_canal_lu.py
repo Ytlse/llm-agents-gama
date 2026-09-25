@@ -368,7 +368,7 @@ def test_R12bis_lentree_servie_porte_le_prefixe_et_le_texte(tmp_path):
             _le_jour(r, jour)
             for _, applique in r.dus_au_reveil(1_700_000_000, POPULATION):
                 entree = ev.entree_de_lecture(applique)
-                assert entree.startswith("[ PRESSE ] This morning I read in the paper:")
+                assert entree.startswith("[ PRESSE ] I read in the paper:")
                 assert ARTICLE in entree
                 assert applique.retard_injecte_s == 0
                 assert applique.incident_reseau is False

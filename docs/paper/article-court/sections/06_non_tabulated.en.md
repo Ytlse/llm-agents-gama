@@ -1,6 +1,8 @@
-# 6. The non-tabulated regime: a single-agent event traced to the decision
+# 6. Beyond the survey: one event traced to the decision
 
-<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 15:26:04 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 21:07:15 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+
+<!-- Relecture des gallicismes du 2026-09-25, accord de l'auteur (« Corrige ») : tics récurrents (« against » comparatif, « one » pour « un même », « carry », « bound », « under » devant un seuil, « rejoin », « from one X to another », « execute », « brings »), faux-amis (agenda, control, hypothesis, legibility, designate, demanding, chain, globally, bends, recedes), calques de construction et typographie à la française (« 0.9 point », « [a ; b] », « 30.3 % », « 1.06 dollars »). Aucun chiffre ne change ; les prompts et le message de l'annexe D ne sont pas touchés. -->
 
 <!-- Passe de lisibilité du 2026-09-25, à la demande de l'auteur (même exercice qu'au § 5) :
      la propension quotidienne est définie en une incise (source : moves.csv, colonne
@@ -19,12 +21,15 @@
      viennent sont écrites ici comme conception, jamais comme mesure. Détail au
      compte-rendu. -->
 
-## 6.1 What the 21 variables do not carry
+This section follows one off-survey event, an engine failure, from its entry into memory to
+the decisions of the days after.
+
+## 6.1 What the 21 variables do not record
 
 None of the 21 variables records what a person went through yesterday, or what they read
-this morning. A decision-maker that receives those inputs alone can answer nothing else. Its
-prediction on the morning after an incident equals the one before, by identity rather than
-by measurement.
+this morning. A decision-maker restricted to these inputs therefore returns, on the morning
+after an incident, exactly the prediction of the day before. This holds by construction, so
+there is nothing to measure.
 
 <!-- source: fr/07_Adaptation.md, chapeau : « Aucune ne porte le vécu de la personne […]
      Un décideur qui ne reçoit que ces 21 entrées ne peut répondre à rien d'autre » ;
@@ -32,12 +37,14 @@ by measurement.
 
 ## 6.2 The mechanism
 
-An event enters the agent's memory at one of two moments. Something lived enters after the
-trip that produced it, and something read enters at waking. At entry the agent rates the
-event on a five-step severity scale, and gives it a valence, suffered or welcome. The rating
-is the agent's own, read against its profile, so one incident weighs differently on two
-agents. The severity alone sets how long the memory stays in service, by lengthening its
-2.8-day time constant up to thirty days.
+An event enters the agent's memory at one of two moments. An event the agent experiences enters after the trip that produced it, and an event it reads enters when the agent wakes up. On entry, the agent rates the event on a five-point severity scale, and gives it a valence (negative or positive). The
+rating is the agent's own, read against its profile, so the same incident can weigh differently on two agents. The severity alone sets how long the memory stays in the recent-events block, by the rule of
+Section 3.3.
+
+<!-- Relecture éditoriale du 2026-09-25, accord de l'auteur (point B4) : « its 2.8-day time
+     constant » laissait le lecteur hésiter entre la décroissance des traces et celle du bloc
+     des changements. La règle du bloc est désormais écrite au § 3.3 (seuil d'entrée 0,7,
+     poids servi au-dessus de 0,35, une quinzaine de jours à 0,7) ; la phrase y renvoie. -->
 
 <!-- ⚠ Remarque de relecture n° 5, point E, 2026-09-23 : la durée de service dépendait de la
      gravité sans que la règle soit dite, et le « quinzième jour » du § 6.4 ne se reliait à
@@ -74,49 +81,28 @@ agents. The severity alone sets how long the memory stays in service, by lengthe
      passage au passé avant le lot 4 du ticket 100 et une campagne jouée. Écrit ici au
      présent de conception, et borné par la dernière phrase. -->
 
-An effect ends in one of two ways, which measurement tells apart. It ends by contradiction
-when the agent makes the trip again and nothing recurs, and by wear when the memory stops
-being served.
+The effect of an event on later decisions can end in two ways, and our measurements
+distinguish them. It ends by contradiction when the agent makes the same trip again and the
+incident does not recur. It ends by expiry when the memory leaves the prompt.
 
 <!-- source: fr/07_Adaptation.md § 7.1, troisième paragraphe : extinction par contradiction
      ou par usure, « et elles se distinguent à la mesure ». La prédiction stratifiée du
      master (contradiction datée chez ceux qui continuent d'utiliser le mode) n'est pas
      reprise : elle n'est pas mesurée sur le cas tracé. -->
 
-The language model does two kinds of work in this chain. It writes prose when it records the
-trace of what has just happened and when it maintains the belief drawn from that trace. When
-it rates the severity, it only picks one of five levels, a label that a typed classifier could
-return as well. Whether such a classifier could also write the trace and the belief is an open
-question.
-
-<!-- source: fr/01_Introduction.md l. 81, commentaire de périmètre du ticket 101 § 2 : la
-     consolidation — écrire la trace, entretenir la croyance — est une génération de texte
-     que le classifieur à sortie typée ne produit pas ; « un classifieur à sortie typée
-     pourrait en principe les rendre aussi, et aucune expérience de cet article ne l'a
-     testé. Ne pas durcir cette phrase en une impossibilité de principe. » Ordre des deux
-     énoncés imposé par le PLAN § 6.2.
-     ⚠ Correction de l'auteur, 2026-09-23, EN DEUX TEMPS. « Rating the severity is not
-     established as one » était illisible : « one » reprenait « text generation » par-dessus
-     une frontière de phrase, et la phrase disait qu'on n'a pas ÉTABLI le contraire sans dire
-     de quoi il s'agissait. Première réécriture : la gravité est un échelon parmi cinq
-     (llm/gravite.py, NIVEAUX), donc une valeur dans une grille close.
-     ⚠ Seconde passe, même jour, objection de l'auteur : « toujours pas clair, actuellement
-     c'est fait par le LLM ». C'était vrai et la phrase le cachait. Le modèle REND bien la
-     gravité aujourd'hui, dans la réflexion du soir pour les concepts (llm/gravite.py,
-     gravite_jugee) et par un appel dédié pour les événements (llm/evenements/jugement.py,
-     juger). Ce qui s'énonce n'est donc pas qui le fait, mais ce que le maillon DEMANDE : un
-     échelon dans une grille close, que n'importe quel classifieur rend, là où écrire la trace
-     et entretenir la croyance demandent de la prose. Le corps le dit dans cet ordre — le
-     modèle le fait, et ce maillon n'est pas pour autant une génération de texte. La réserve
-     du ticket 101 tient, retournée en question ouverte plutôt qu'en constat d'absence
-     d'expérience. -->
+<!-- Relecture éditoriale du 2026-09-25, accord de l'auteur (« Corrige », point C2) : le
+     paragraphe « The language model does two kinds of work in this mechanism » était une
+     digression prospective au milieu de la description du mécanisme. Il passe au § 7.1, à
+     la suite de l'architecture à deux étages qu'il prolonge, avec ses commentaires. -->
 
 ## 6.3 The setup
 
-We play one agent twice, exposed and control, and read the gap between the two runs. The
-incident is an engine failure that imposes a half-hour delay on a car trip. Both runs keep
-memory enabled. The car remains offered the next morning, so that what we measure here is an
-arbitration. **[TBC — A campaign now under way]**
+We simulate the same agent **[TBC — persona and models]** twice, once exposed to an incident
+and once as a control, and measure the difference between the two runs. The incident is an engine
+failure that imposes a half-hour delay on a car trip. It falls on 30 March, the fifteenth
+simulated day. Unlike the benchmark runs (Section 4.1), both runs keep memory enabled and last
+several weeks. The car remains offered the next
+morning, so what we measure here is a choice. **[TBC — A campaign now under way]**
 
 <!-- source: fr/07_Adaptation.md § 7.2.2 : un agent joué deux fois, avarie moteur,
      « le véhicule reste offert le lendemain, ce qui est la condition
@@ -147,8 +133,30 @@ arbitration. **[TBC — A campaign now under way]**
      lieu de 0,700 et 15,29 — d'où le gras sur la durée et sur les deux chiffres qui en
      dépendent. Relevé n° 2 de NOTE_AU_REDACTEUR.md. -->
 
-Opinions are collected outside any decision, on six declared criteria, at four milestones.
-The criterion on the environment, which no incident targets, serves as the control question.
+Opinions are collected every simulated evening, independently of any decision. The agent rates each
+mode out of ten on six items: comfort, cost, environment, practicality, speed and safety. The
+environment item, which no incident targets, serves as the control question.
+
+<!-- 2026-09-25, décision de l'auteur : le questionnaire passe à une passation QUOTIDIENNE,
+     texte écrit par anticipation du run qui la jouera. Côté code : jalons déclarés par
+     EXPERIMENT_SURVEY_DAYS (tous les jours du run), passation à 21 h (HEURE_ENQUETE_H),
+     cinq prompts par passation, un par mode et un de priorités
+     (urban_mobility_agents/enquetes.py). Les quatre jalons du run mesuré (27 mars, 1er avril,
+     15 avril, 24 avril) sortent du corps ; le commentaire qui suit les documente. -->
+
+<!-- Relecture éditoriale du 2026-09-25 : dates, items et échelle ajoutés pour que le tableau 4
+     et la figure 5 se lisent. Jour 15 = 30 mars : chocs.jsonl, un seul jour injecté, et
+     commentaires du § 0. Items : fr/07_Adaptation.md § 7.2.3 (sécurité, praticité, confort,
+     rapidité, coût, écologie), échelle 0-10. Jalons : configuration d'enquête du run que lit
+     scripts/analysis/ch7_choc_figures.py l. 26 (exposé experiments/archive/2026-09-21_15_13,
+     témoin 2026-09-21_11_11).
+     ⚠ [TBC] À TRANCHER PAR L'AUTEUR : ce script lit un autre run que celui que cite le
+     commentaire du § 6.3 (experiments/archive/2026-09-18_19_27). Selon identite_run.json des
+     runs du script, persona 861500 (58 ans, cadre à temps plein, ménage de deux, deux
+     voitures), décisions par gemini-3.1-flash-lite sous prompt_expert_05, mémoire et enquête
+     par gemini-3.5-flash-lite, 16 mars → 27 avril. Le run du 18 septembre porte un autre
+     persona (899549), des modèles groq et quatre injections. Les dates de jalons sont à
+     confirmer sur le run qui fait foi. -->
 
 <!-- source: fr/07_Adaptation.md § 7.2.3 : affinites_declarees.csv, échelle de Likert 0-10,
      critères d'Adam & Gaudou (2025), un questionnaire par mode, jalons aux jours 12, 17,
@@ -156,17 +164,24 @@ The criterion on the environment, which no incident targets, serves as the contr
 
 ## 6.4 Results
 
-Although the car is offered as often as before the failure, it stops being taken. The
-exposed agent takes it nine times in ten before the failure, and three times in ten after.
+Although the car is offered as often as before the failure, it is taken far less often. The
+exposed agent takes it nine times out of ten before the failure, and three times out of ten after.
 The control agent holds its rate throughout.
 
-*Table 4 — Car taken when the car is offered, exposed and control agent.*
+*Table 4. Car taken when the car is offered, exposed and control agent. The periods split at
+the failure (30 March) and at the recovery of the car propensity (15 April).*
 
 | Period | Exposed agent | Control agent |
 |---|---:|---:|
-| Before the failure | 94 % (34/36) | 90 % (28/31) |
-| After the failure | 32 % (12/38) | 92 % (45/49) |
-| After the return | 88 % (35/40) | 87 % (40/46) |
+| Before the failure | 94% (34/36) | 90% (28/31) |
+| After the failure | 32% (12/38) | 92% (45/49) |
+| After the recovery | 88% (35/40) | 87% (40/46) |
+
+<!-- Relecture éditoriale du 2026-09-25 : « After the return » devient « After the recovery »,
+     et la légende date les coupures. ⚠ Aucune source ne date les périodes. Recomptage : les
+     coupures après le trajet de 05:42 du 30 mars et au 14/15 avril redonnent la colonne de
+     l'agent exposé, pas celle du témoin (28/31, 46/51, 39/44 au lieu de 45/49 et 40/46).
+     À vérifier par l'auteur. -->
 
 <!-- source: fr/07_Adaptation.md § 7.2.3, premier paragraphe : moves.csv des deux exécutions,
      colonne « Modes proposés au LLM », décisions du modèle seules. Fractions du master
@@ -179,16 +194,15 @@ The control agent holds its rate throughout.
      taken on 94 %, 32 % then 88 % of the trips where it is offered, against 90, 92 and 87 %
      for the control agent. » -->
 
-The daily propensity to the car is the probability the model gives the car, averaged over
-the day's decisions. It falls on the day of the failure and returns **fifteen days** later
-(Figure 5). It drops from 90 % on the eve to 40 % that day, and stays under the range of
-the control agent until it rejoins it.
+The daily car propensity is the probability the model gives the car, averaged over the day's
+decisions. It falls on the day of the failure and recovers **fifteen days** later (Figure 5).
+It drops from 90% the day before to 40% that day, and stays below the range of the control agent until it returns to it.
 
 <!-- source: fr/07_Adaptation.md § 7.2.3 et figure 7.1 : moves.csv, colonne
      P(Voiture Privée) %, moyenne quotidienne des décisions du jour, aucun découpage en
      phases. -->
 
-*Figure 5 — The effect lasts exactly as long as the memory stays in the prompt.*
+*Figure 5. The effect lasts as long as the memory stays in the prompt.*
 
 <!-- ⚠ Relecture de l'auteur, 2026-09-25 : paragraphe jugé inutile et retiré du corps. Il
      disait : « The four blocks by which the past reaches a decision can be told apart, and the
@@ -224,10 +238,11 @@ the control agent until it rejoins it.
      from the severity » suffit. Et la dernière phrase passe en marqueur [TBC], comme au
      § 6.3 : ce que la campagne lira n'est pas encore un résultat. -->
 
-Measurement separates the two ways an effect can end, and this one ended by wear. The agent
-took the car twelve times after the failure (Table 4). **[TBC — at this time, no contradiction of the
-belief born of the failure. Add an experiment?]** The account leaves the decision prompts
-after 13 April, and the propensity rejoins the control band on 15 April.
+Our measurements separate the two ways an effect can end, and this one ended by expiry. The
+agent took the car twelve times after the failure (Table 4), twelve occasions for
+contradiction. **[TBC — at this time, no contradiction of the belief born of the
+failure. Add an experiment?]** The memory of the failure leaves the decision prompts after
+13 April, and the propensity returns to the control band on 15 April.
 
 <!-- source: fr/07_Adaptation.md § 7.2.3, troisième et quatrième paragraphes :
      agent_memory_events.jsonl de l'exécution exposée, zéro contradiction de concept ;
@@ -250,12 +265,22 @@ after 13 April, and the propensity rejoins the control band on 15 April.
      croyance SERVIE se fait démentir — c'est la prédiction stratifiée du master (§ 7.1),
      laissée hors du corps faute de mesure. -->
 
-Declared opinions drop after the failure and come back. Five of the six criteria on the car
-fall at the milestone that follows it, safety from 8 to 3 on a scale of ten. The five have
-recovered their starting value at the two later milestones. The environment criterion, the
-control question, does not move, and the control agent moves on none of the six. Both agents drift on the
-four other modes without a common pattern, leaving the car as the only mode that separates
-them.
+Stated opinions drop after the failure and come back **[TBC after the daily run]**. On the
+car, **[n]** of the six items fall after the failure, and safety drops the most, by **[k]**
+points. Each item's daily series shows the day it regains its starting value, which can be
+set against the day the propensity returns to the control band. The environment item, the
+control question, does not move, and the control agent's ratings of the car do not change on
+any of the six items. Both
+agents drift on the four other modes without a common pattern, leaving the car as the only
+mode that separates them.
+
+<!-- 2026-09-25, questionnaire quotidien anticipé : tout ce paragraphe attend le run qui le
+     jouera, d'où le [TBC] en tête ; la phrase témoin et celle des quatre autres modes gardent
+     le constat des quatre jalons tant qu'il n'est pas remesuré. Valeurs du run à quatre jalons,
+     pour mémoire : cinq critères sur six baissent au jalon suivant l'avarie, sécurité 8 → 3,
+     et les cinq ont retrouvé leur valeur de départ aux deux jalons suivants. La passation
+     quotidienne lève la réserve du master ci-dessous : la dynamique entre deux jalons devient
+     observable. -->
 
 <!-- source: fr/07_Adaptation.md § 7.2.3, cinquième et sixième paragraphes : sécurité 8 → 3,
      praticité 9 → 6, confort 8 → 5, rapidité 9 → 8, coût 6 → 5 ; écologie à 3 aux quatre
@@ -264,9 +289,9 @@ them.
      deuxième et le troisième jalon n'est pas observée, et que cet intervalle est celui où le
      récit quitte le contexte. -->
 
-**A second experiment carries the same channel to information that is only read. Now under
-way, it serves five dated Toulouse press articles against twenty signs written before any
-call to the model (Appendix E).**
+**A second experiment extends the same channel to information that is only read. Now under
+way, it presents five dated Toulouse press articles and tests twenty predictions of the sign
+of their effect, written down before any call to the model (Appendix E).**
 
 <!-- source: fr/07_Adaptation.md § 7.3 : cinq articles de la presse toulousaine, conditions
      C1 à C3, vingt signes préenregistrés (figure 7.3). Deux phrases et aucun chiffre de
@@ -276,8 +301,8 @@ call to the model (Appendix E).**
      tombe. Le gras dit donc ici ce qu'il dit ailleurs, à l'échelle du paragraphe au lieu du
      chiffre : à confirmer par une exécution. -->
 
-The path traced here rests on one agent and one event. We claim the path rather than its
-amplitude.
+The channel traced here rests on one agent and one event. We therefore claim that this
+channel exists, not how strong its effect is.
 
 <!-- ⚠ Auteur, 2026-09-23 : la phrase de transition vers le § 7 est SUPPRIMÉE (« The next
      section reads these measurements, together with those of the ordinary day, for what they

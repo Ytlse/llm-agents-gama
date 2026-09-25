@@ -167,6 +167,20 @@ class ResilienceSettings(BaseModel):
     saturation_retries: int = 2
     saturation_retry_seconds: float = 12.0
     abandon_when_busy: bool = False
+    # Attente du CLIENT (secondes). Au-delà, il abandonne sur « Timeout expiré », sans genre
+    # d'échec, et la simulation enregistre un repli : le lot qui attendait encore dans le worker
+    # ne sert plus personne. Le worker cesse donc d'attendre `client_wait_margin_seconds` AVANT,
+    # et le dit (`error_kind = "surcharge_fournisseur"`, `resume_at`). Défaut : celui du SDK et
+    # de la simulation (120 s). Le `wait_timeout` d'une instance épinglée prime sur lui.
+    client_wait_seconds: float = 120.0
+    client_wait_margin_seconds: float = 10.0
+
+
+class RejeuSettings(BaseModel):
+    # Racine des réponses consignées pour le rejeu à prompt exact (cf. core/rejeu_ab.py).
+    # None = rejeu désactivé : une requête qui nomme un espace est servie comme les autres.
+    # L'API y lit, le worker y écrit : le répertoire doit être monté dans les deux.
+    dir: Path | None = None
 
 
 class ApiSettings(BaseModel):
@@ -202,6 +216,7 @@ class GatewaySettings(BaseSettings):
     inference: InferenceSettings = Field(default_factory=InferenceSettings)
     batching: BatchingSettings = Field(default_factory=BatchingSettings)
     resilience: ResilienceSettings = Field(default_factory=ResilienceSettings)
+    rejeu: RejeuSettings = Field(default_factory=RejeuSettings)
     routing: RoutingSettings = Field(default_factory=RoutingSettings)
     api: ApiSettings = Field(default_factory=ApiSettings)
     telemetry: TelemetrySettings = Field(default_factory=TelemetrySettings)

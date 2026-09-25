@@ -25,6 +25,10 @@ s'arrête au premier — question des paliers P2 et P3, pas de la plomberie. `--
 le lecteur se tire parmi les adultes, cf. `llm/evenements/exposition.py`). `--menage` désigne
 un foyer par son identifiant plutôt que par tirage, quand le choix a été raisonné (profils de
 mobilité adaptés à l'article joué) : il reste soumis aux mêmes critères d'éligibilité.
+`--taille` se répète pour mêler des foyers de tailles différentes (2026-09-25 : un couple et une
+famille de quatre). `--lecteur` désigne qui lit dans un foyer désigné, au lieu du tirage parmi
+les adultes : un article sur le métro doit être lu par quelqu'un qui le prend. Il est écrit au
+manifeste (`expose[].lecteurs`), d'où la cohorte le reporte dans l'événement joué.
 
 DÉTERMINISME
 ------------
@@ -44,6 +48,13 @@ USAGE
         --source data/population/population_1000_AAMAS_v6/population.json \
         --sortie data/population/population_4_foyer_133048 \
         --taille 4 --adultes 2 --menage 133048 --temoins 0
+
+    # Deux foyers désignés de tailles différentes, un lecteur désigné dans chacun :
+    services/llm-agents/.venv/bin/python -m scripts.data.population.extraire_foyers \
+        --source data/population/population_1000_AAMAS_v6/population.json \
+        --sortie data/population/population_6_foyers_a13 \
+        --taille 2 --taille 4 --adultes 2 --menage 643030 --menage 534995 \
+        --lecteur 1320713 --lecteur 1127260 --temoins 0 --motif "…"
 """
 
 from __future__ import annotations
@@ -54,7 +65,7 @@ import json
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 TAILLE_FOYER = 2
 AGE_ADULTE = 18   # le même seuil que le tirage des lecteurs (llm/evenements/exposition.py)
@@ -99,11 +110,12 @@ def foyers_eligibles(
     population: list[dict],
     *,
     abonnement_tc: bool,
-    taille: int = TAILLE_FOYER,
+    taille: int | Iterable[int] = TAILLE_FOYER,
     adultes: int | None = None,
 ) -> dict[str, list[dict]]:
-    """Les foyers de `taille` membres, tous mobiles (et `adultes` adultes exactement si
-    demandé), triés par identifiant."""
+    """Les foyers de `taille` membres (une taille ou plusieurs), tous mobiles (et `adultes`
+    adultes exactement si demandé), triés par identifiant."""
+    tailles = {taille} if isinstance(taille, int) else set(taille)
     par_menage: dict[str, list[dict]] = defaultdict(list)
     for personne in population:
         menage = (personne.get("household") or {}).get("id")
@@ -112,7 +124,7 @@ def foyers_eligibles(
 
     retenus: dict[str, list[dict]] = {}
     for menage, membres in par_menage.items():
-        if len(membres) != taille:
+        if len(membres) not in tailles:
             continue
         if not all(_mobile(m) for m in membres):
             continue
@@ -133,7 +145,7 @@ def choisir(
     temoins: int,
     graine: int,
     abonnement_tc: bool,
-    taille: int = TAILLE_FOYER,
+    taille: int | Iterable[int] = TAILLE_FOYER,
     adultes: int | None = None,
     menages: list[str] | None = None,
 ) -> tuple[list[str], list[str], dict[str, list[dict]]]:
@@ -167,6 +179,33 @@ def choisir(
     return ordonnes[:exposes], ordonnes[exposes:besoin], eligibles
 
 
+def lecteurs_par_menage(
+    lecteurs: list[str], exposes: list[str], eligibles: dict[str, list[dict]]
+) -> dict[str, list[str]]:
+    """Range les lecteurs désignés par foyer exposé ; refuse un lecteur qui ne peut pas lire.
+
+    Un lecteur doit être un ADULTE d'un foyer exposé : c'est la règle du tirage
+    (`llm/evenements/exposition.py`), et le simulateur l'écarterait sinon — au prix d'un foyer
+    sans lecteur, découvert au milieu du run.
+    """
+    ranges: dict[str, list[str]] = {}
+    refus: list[str] = []
+    for pid in lecteurs:
+        foyer = next(
+            (m for m in exposes for p in eligibles[m] if str(p["person_id"]) == str(pid)), None
+        )
+        membre = next((p for p in eligibles.get(foyer, []) if str(p["person_id"]) == str(pid)), None)
+        if membre is None:
+            refus.append(f"{pid} (hors des foyers exposés {exposes})")
+        elif not _adulte(membre):
+            refus.append(f"{pid} (mineur : {_traits(membre).get('age')} ans)")
+        else:
+            ranges.setdefault(foyer, []).append(str(pid))
+    if refus:
+        raise SystemExit(f"REFUS : lecteur(s) {refus}. Un lecteur est un adulte d'un foyer exposé.")
+    return ranges
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--source", required=True, type=Path, help="population.json scellée")
@@ -174,7 +213,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--exposes", type=int, default=6, help="foyers qui recevront l'article")
     p.add_argument("--temoins", type=int, default=4, help="foyers qui ne recevront rien")
     p.add_argument("--graine", type=int, default=59)
-    p.add_argument("--taille", type=int, default=TAILLE_FOYER, help="membres par foyer")
+    p.add_argument(
+        "--taille", type=int, action="append", default=None,
+        help=f"membres par foyer (répétable pour mêler des tailles ; {TAILLE_FOYER} si absent)",
+    )
     p.add_argument(
         "--adultes", type=int, default=None,
         help=f"nombre EXACT d'adultes (≥ {AGE_ADULTE} ans) par foyer ; libre si absent",
@@ -182,6 +224,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--menage", action="append", default=None,
         help="foyer désigné (répétable) : devient exposé à la place du tirage",
+    )
+    p.add_argument(
+        "--lecteur", action="append", default=None,
+        help="lecteur désigné (répétable) : un adulte d'un foyer --menage, au lieu du tirage",
     )
     p.add_argument(
         "--motif", default=None,
@@ -196,6 +242,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.menage and not args.motif:
         p.error("--menage exige --motif : un choix raisonné qui ne dit pas sa raison est un tirage caché")
+    if args.lecteur and not args.menage:
+        p.error("--lecteur exige --menage : on ne désigne pas qui lit dans un foyer tiré")
+    tailles = sorted(set(args.taille or [TAILLE_FOYER]))
     population = json.loads(args.source.read_text(encoding="utf-8"))
     exposes, temoins, eligibles = choisir(
         population,
@@ -203,10 +252,11 @@ def main(argv: list[str] | None = None) -> int:
         temoins=args.temoins,
         graine=args.graine,
         abonnement_tc=args.abonnement_tc,
-        taille=args.taille,
+        taille=tailles,
         adultes=args.adultes,
         menages=args.menage,
     )
+    lecteurs = lecteurs_par_menage(args.lecteur or [], exposes, eligibles)
 
     agents: list[dict] = []
     for menage in exposes + temoins:
@@ -242,16 +292,17 @@ def main(argv: list[str] | None = None) -> int:
         f"  n: {len(agents)}",
         "selection:",
         "  methode: >-",
-        f"    Foyers de taille {args.taille} dont tous les membres sont mobiles"
+        f"    Foyers de taille {' ou '.join(map(str, tailles))} dont tous les membres sont mobiles"
         + (f", dont {args.adultes} adultes (≥ {AGE_ADULTE} ans)" if args.adultes is not None else "")
         + ("; exposés DÉSIGNÉS par --menage, témoins" if args.menage else ";")
         + " triés par rang stable",
         "    sha256(graine:household_id). Aucun tirage dépendant de l'ordre d'exécution.",
         "    Reproductible par scripts/data/population/extraire_foyers.py.",
         f"  graine: {args.graine}",
-        f"  taille: {args.taille}",
+        f"  taille: {tailles[0] if len(tailles) == 1 else json.dumps(tailles)}",
         f"  adultes_exiges: {args.adultes if args.adultes is not None else 'null'}",
         f"  menages_designes: {json.dumps(args.menage or [])}",
+        f"  lecteurs_designes: {json.dumps(args.lecteur or [])}",
         f"  motif: {json.dumps(args.motif or '', ensure_ascii=False)}",
         f"  abonnement_tc_exige: {bool(args.abonnement_tc)}",
         f"  foyers_eligibles: {len(eligibles)}",
@@ -262,6 +313,8 @@ def main(argv: list[str] | None = None) -> int:
         for menage in menages:
             membres = eligibles[menage]
             lignes.append(f"    - household_id: '{menage}'")
+            if lecteurs.get(menage):
+                lignes.append(f"      lecteurs: {json.dumps(lecteurs[menage])}")
             lignes.append("      membres:")
             for m in membres:
                 t = _traits(m)

@@ -120,10 +120,8 @@ plus bas signifie une répartition plus proche de l'enquête.
      catégories de la strate, les catégories de moins de cinq personas étant écartées. Ce
      dernier détail et les trois autres métriques vivent en annexe C. -->
 
-Deux autres lectures accompagnent le composite, et les trois sont publiées ensemble. La
-première le recalcule sans les déplacements qui n'offraient qu'une option, où aucune préférence
-ne s'exprime. La seconde est l'erreur L1 sur les parts globales, la somme des écarts absolus en
-points de pourcentage.
+Une autre lecture accompagne le composite, et les deux sont publiées ensemble : l'erreur
+L1 sur les parts globales, la somme des écarts absolus en points de pourcentage.
 
 <!-- source: colonnes du tableau du § 6.1 des masters : composite.emd_jsd,
      composite.emd_jsd_hors_choix_unique, global.l1 ; définition de l'erreur L1,
@@ -181,7 +179,7 @@ le plus rapide proposé.
 Quatre références tabulaires donnent le niveau qu'atteint une estimation sur l'enquête. Ce sont
 un logit multinomial, le modèle de choix discret usuel, un gradient boosté, une régression
 logistique à noyau et une forêt aléatoire. Nous estimons les quatre à parité stricte, sur le
-même découpage de l'enquête. Aucune ne mène sur les trois lectures, si bien que le plafond se
+même découpage de l'enquête. Aucune ne mène sur les deux lectures, si bien que le plafond se
 lit lecture par lecture.
 
 <!-- source: fr/04_Evaluation.md § 4.4 : quatre méthodes ajustées sur les microdonnées de
@@ -265,26 +263,26 @@ première.
      « en échantillon » est portée par le libellé de ligne du tableau 1, et nulle part ailleurs
      (relecture v1, § 9 bis). -->
 
-*Tableau 1 — Les quinze décideurs sur les trois lectures, avec l'étendue inter-graines là où
+*Tableau 1 — Les quinze décideurs sur les deux lectures, avec l'étendue inter-graines là où
 elle a été mesurée.*
 
-| Décideur | Composite | Hors choix unique | L1 sur les parts globales | Étendue inter-graines |
-|---|---:|---:|---:|---|
-| Hasard uniforme | 50,16 | 57,90 | 86,80 | déterministe |
-| Tout-voiture | 30,73 | 28,41 | 58,00 | déterministe |
-| Durée minimale | 26,97 | 23,93 | 53,62 | déterministe |
-| Prompt minimal, mistral-large | 14,75 | 20,72 | 44,71 | non rejoué |
-| Prompt minimal, classifieur à sortie typée | 13,75 | 19,84 | 42,76 | non rejoué |
-| Prompt minimal, gemini-3.1 | 12,38 | 16,65 | 39,88 | non rejoué |
-| Prompt minimal, gemini-3.5 | 7,02 | 10,39 | 24,08 | [replay pending] |
-| Prompt expert, gemini-3.1 | 8,98 | 12,39 | 31,25 | non rejoué |
-| Prompt expert, mistral-large | 7,63 | 12,27 | 26,64 | non rejoué |
-| Prompt expert, gemini-3.5 | 4,86 | 6,86 | 13,85 | 0,56 |
-| Logit multinomial | 4,02 | 6,63 | 8,99 | déterministe |
-| Forêt aléatoire | 4,09 | 5,81 | 5,28 | déterministe |
-| Prompt expert, classifieur à sortie typée (en échantillon) | 3,65 | 6,58 | 10,48 | [replay pending] |
-| Régression logistique à noyau | 3,61 | 5,61 | 6,69 | déterministe |
-| Gradient boosté | 3,60 | 5,84 | 9,49 | déterministe |
+| Décideur | Composite | L1 sur les parts globales | Étendue inter-graines |
+|---|---:|---:|---|
+| Hasard uniforme | 50,16 | 86,80 | déterministe |
+| Tout-voiture | 30,73 | 58,00 | déterministe |
+| Durée minimale | 26,97 | 53,62 | déterministe |
+| Prompt minimal, mistral-large | 14,75 | 44,71 | non rejoué |
+| Prompt minimal, classifieur à sortie typée | 13,75 | 42,76 | non rejoué |
+| Prompt minimal, gemini-3.1 | 12,38 | 39,88 | non rejoué |
+| Prompt minimal, gemini-3.5 | 7,02 | 24,08 | [replay pending] |
+| Prompt expert, gemini-3.1 | 8,98 | 31,25 | non rejoué |
+| Prompt expert, mistral-large | 7,63 | 26,64 | non rejoué |
+| Prompt expert, gemini-3.5 | 4,86 | 13,85 | 0,56 |
+| Logit multinomial | 4,02 | 8,99 | déterministe |
+| Forêt aléatoire | 4,09 | 5,28 | déterministe |
+| Prompt expert, classifieur à sortie typée (en échantillon) | 3,65 | 10,48 | [replay pending] |
+| Régression logistique à noyau | 3,61 | 6,69 | déterministe |
+| Gradient boosté | 3,60 | 9,49 | déterministe |
 
 <!-- source: fr/06_Empirical_Evaluation.md § 6.1, tableau des quinze décideurs (scores.json,
      composite.emd_jsd, composite.emd_jsd_hors_choix_unique, global.l1 ; jeu corrigé du
@@ -318,7 +316,7 @@ Skeleton       : Nous comparons quinze décideurs sur une même cohorte, sous un
                  Nous mesurons à deux échelles, la part modale de la cohorte et l'accord sur chaque déplacement.
                  Un seul nombre composite porte la lecture agrégée.
                  La divergence est celle de Jensen-Shannon sur les strates nominales, et la distance de transport optimal sur les strates ordonnées.
-                 Deux autres lectures accompagnent le composite, et les trois sont publiées ensemble.
+                 Une autre lecture accompagne le composite, et les deux sont publiées ensemble.
                  Un écart entre deux décideurs ne compte que s'il dépasse ce qu'une nouvelle cohorte déplacerait.
                  L'audit unitaire pose l'autre question, sur les journées que les enquêtés ont réellement décrites.
                  Trois planchers donnent le niveau qu'un décideur atteint sans connaissance comportementale.

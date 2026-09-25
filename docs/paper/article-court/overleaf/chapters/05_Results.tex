@@ -1,8 +1,12 @@
 % =====================================================================
-% chapters/05_Results.tex — LaTeX rendering of ../sections/05_results.en.md (2026-09-23 23:38:00)
+% chapters/05_Results.tex — LaTeX rendering of ../sections/05_results.en.md (2026-09-25 21:05:00)
 % Section 5 of the SHORT paper. \input from main.tex, after 04_Bench.tex.
+% Re-carried by hand on 25 September 2026 against the master of 2026-09-25 21:05:00.
 % This file DEFINES \label{sec:results}, referenced by the reading map of Section 1.4, and
-%   \label{sec:individual}, referenced from Section 7.1.
+%   \label{sec:individual}, referenced from Section 7.1. It also defines sec:scale,
+%   sec:tuning and sec:deliberation (the last referenced from 5.4), and tab:scale, which
+%   04_Bench.tex references ("Table 1").
+% It references sec:quantities (Section 4.3, the cohort resolution) and sec:deliberation.
 % Figures: three, caption BELOW and a mandatory \Description{} (plain text, 2000 characters
 %   at most, not printed).
 %   fig:scale  (figure*, both columns) images/ch6_echelle.png     — ../PLAN.md § 9, figure 2, full width
@@ -13,165 +17,185 @@
 %   ch6_audit_modes.png is set across both columns in the long paper. The plan puts it in one
 %   column here; two panels of grouped bars at 240 pt may not hold. If the compiled PDF is
 %   unreadable, promote it to figure* — it costs no page, the paper being float-bound.
-% Tables: two, caption ABOVE, booktabs.
+% Tables: three, caption ABOVE, booktabs.
+%   tab:scale (table*, both columns) — Table 1, moved from 4.4 to 5.1 on 25 September 2026
+%     by the master (editorial review, author's agreement). Rows grouped, then sorted by
+%     composite, with a Group column. Fifteen rows and five columns do not fit \columnwidth.
+%     04_Bench.tex, re-carried the same day, no longer carries the table: this file is the
+%     only one to define the label.
 %   tab:gains (table*, both columns) — ../PLAN.md § 9, Table 2 is full width; the confidence
 %     intervals in the cells do not fit \columnwidth.
-%   tab:unit (\columnwidth, tabularx with the L column of main.tex) — Table 3, one column.
-%     Column heads are abbreviated over two lines, as in the long paper: the Markdown heads
-%     ("Cross-entropy", "Bike recall") overrun 240 pt.
-% PLACEHOLDERS, DELIBERATE, set in \textbf{} since 23 September 2026 at the author's
-%   request, so that what does not yet exist is found at a glance in the compiled PDF.
-%   Waiting on ticket 103: TWO bracketed "[c2, ...]" items, both in 5.3. They are plain
-%   bracketed text, NOT \todo, so that they read without shouting. Section 5.3 carries no
-%   in-sample figure on purpose (../PLAN.md § 5.3).
-%   Gone on 23 September 2026: the 5.1 item, replaced by the measured seed ranges of phase 4
-%   of ticket 103, and the two-by-three crossing item, whose whole paragraph the author had
-%   removed. The removed paragraph is kept verbatim in a comment of the Markdown master.
-% Appendices F and I are named in plain text: they live in the supplementary material.
+%   tab:unit (\columnwidth, tabularx with the L column of main.tex) — Table 3, one column,
+%     seven rows since the all-car row was added. Column heads are abbreviated over two
+%     lines, as in the long paper: the Markdown heads ("Cross-entropy", "Bike recall")
+%     overrun 240 pt.
+% PLACEHOLDERS, DELIBERATE, waiting on ticket 103: five "[pending]" cells in the last column
+%   of Table 1, plain bracketed text, NOT \todo. The one the master sets in bold (minimal
+%   prompt, gemini-3.5) is in \textbf{} here. Section 5.3 no longer carries any "[c2, ...]"
+%   item: the master now gives the measured second-cohort scores.
+% Appendix F is named in plain text: it lives in the supplementary material.
 % No citation in this section.
 % Derived file: regenerate after every validated pass of ../sections/05_results.en.md.
-% REALIGNED on 23 September 2026 against the Markdown master, four places: three occurrences
-%   of "situational principles" become "general criteria" (the lead list, 5.1, 5.2), and 5.3
-%   loses the two sentences that claimed a modal split has no verifiable answer trip by trip.
-%   That claim contradicted 4.3, whose unit-level audit scores 9,621 declared trips, and the
-%   author had it cut from 2.4 and 5.3 on 22 September. "No citation in this section" still
-%   holds: the sentence that carried the written-reasoning debate is the one removed.
 % =====================================================================
 
-\section{Results at the nominal regime}
+\section{Results on the ordinary day}
 \label{sec:results}
 
-The nominal regime is an ordinary simulated day, the one the household travel survey
-describes, with no disruption in it. Four findings come out of that day.
+The ordinary day is a simulated day with no disruption, the day the survey describes. On
+that day the benchmark yields four findings, one per subsection.
 
 \begin{enumerate}
-  \item The fifteen decision-makers separate into five groups. No generative agent reaches the
-    four tabular references.
-  \item Tuning the general criteria can align some dimensions of the distribution, and
-    leave the others where it found them.
-  \item A typed classifier that writes no text reaches the same band, for a fiftieth of the cost.
-  \item Two decision-makers that the aggregate cannot tell apart disagree on one trip in three.
+  \item The decision-makers cluster into groups, and a prompt with no general criteria
+    already beats every baseline.
+  \item The expert prompt improves every language model, aligning some dimensions of the
+    modal split and leaving others untouched.
+  \item A classifier that reads the same trip description and writes no text scores within
+    the range of the four reference models.
+  \item Agreement on the modal split does not carry over to individual trips.
 \end{enumerate}
 
-\subsection{Fifteen decision-makers on one error scale}
+\subsection{Fifteen decision-makers cluster into groups}
 \label{sec:scale}
 
-The fifteen decision-makers spread over the composite axis in five groups that do not
-overlap (Figure~\ref{fig:scale}). The composite counts error, so a lower value is a closer
-match to the survey distribution. The three floors carry the largest error, from 27.0 for the
-minimum-duration heuristic to 50.2 for a uniform draw over the choice set. The four
-decision-makers under the minimal prompt land between 7.0 and 14.8. Under the expert prompt,
-the three language models land between 4.9 and 9.0. The four tabular references hold inside
-half a point, from 3.60 to 4.09.
-
-\begin{figure*}[tp]
-  \centering
-  \includegraphics[width=\textwidth]{images/ch6_echelle.png}
-  \caption{Five groups separate on the composite axis, and the minimal prompt already carries less error than the physical floor.}
-  \Description{A horizontal bar chart. The x axis is the composite EMD-JSD error over every decision of the day, running from zero on the left to just over fifty on the right; lower means closer to the survey. Fifteen decision-makers are stacked as rows and coloured by group, and each bar carries its value. Sorted from the best: gradient boosting 3.60, kernel logistic regression 3.61, the typed classifier under its expert prompt 3.65, the multinomial logit 4.02 and the random forest 4.09; then Gemini 3.5 Flash-Lite under the expert prompt at 4.86, Gemini 3.5 Flash-Lite under the minimal prompt at 7.02, Mistral Large under the expert prompt at 7.63, Gemini 3.1 Flash-Lite under the expert prompt at 8.98, Gemini 3.1 Flash-Lite under the minimal prompt at 12.38, the typed classifier under the minimal prompt at 13.75 and Mistral Large under the minimal prompt at 14.75; at the far right the three floors, shortest duration at 26.97, all-car at 30.73 and the uniform random draw at 50.16. A vertical grey band of about 1.3 points marks cohort-to-cohort variation, the resolution below which two scores cannot be told apart.}
-  \label{fig:scale}
-\end{figure*}
-
-The minimal prompt already carries less error than the best of the three floors. The worst
-of the four minimal-prompt conditions sits at 14.8, against 27.0 for the minimum-duration heuristic,
-which picks the fastest option offered. A model that receives the facts of a trip, and no
-general criteria, therefore carries behavioural information. That information is not
-the one the physical heuristic encodes.
-
-On two versions of one model family, the backbone model weighs as much as the instruction
-it carries. Served unchanged to a second model from the same provider, the expert text
-leaves 4.15 composite points between the two, interval $+$2.99 to $+$5.43.
-
-Replaying one condition under three seeds moves its composite less than the cohort itself
-does. The tuned \texttt{gemini-3.5} condition scores 4.86, 4.65 and 4.30 on the same cohort
-and the same evaluation set. The range is 0.56 point, against a cohort resolution of
-$\pm$1.3 points. Two further conditions replayed the same way range by 0.05 and 0.24 point.
-The sign of their difference holds on all three seeds.
-
-\subsection{What tuning moves, and what it does not}
-\label{sec:tuning}
-
-Tuning the general criteria improves every language model, by more than a cohort
-would move on its own (Table~\ref{tab:gains}). The paired gain on the composite is 2.27
-points for \texttt{gemini-3.5}, interval $+$1.40 to $+$3.22, then 3.37 points for
-\texttt{gemini-3.1} and 7.25 for \texttt{mistral-large}. All nine intervals exclude zero. The
-gains run from one and a half to five and a half times the cohort
-resolution.
+The fifteen decision-makers form distinct groups on the composite (Figure~\ref{fig:scale},
+Table~\ref{tab:scale}). The uniform baseline has about fourteen times the error of the best
+reference model. Every minimal-prompt condition already has less error than the three
+baselines. The weakest minimal-prompt condition scores 14.8, compared with 27.0 for the best
+baseline (minimum duration). A model that receives the facts of a trip, and no general
+criteria, therefore holds behavioural information that the minimum-duration baseline lacks.
+The four reference models hold the lowest errors. The typed classifier under its expert
+prompt sits among them, at 3.65.
 
 \begin{table*}[tp]
-  \caption{Paired gains of the expert prompt over the minimal prompt, three readings, with their 95\,\% interval in brackets. A positive gain is a lower error.}
-  \label{tab:gains}
-  \begin{tabular}{lccc}
+  \caption{The fifteen decision-makers on the two metrics, with the inter-seed range where it was measured. Rows are grouped, then sorted by composite.}
+  \label{tab:scale}
+  \begin{tabular}{llrrl}
     \toprule
-    Language model & Composite & Excluding single-option trips & L1 on global shares \\
+    Group & Decision-maker & Composite & L1 on overall shares & Inter-seed range \\
     \midrule
-    \texttt{gemini-3.5}    & 2.27 [1.40 ; 3.22] & 3.59 [2.45 ; 4.83]  & 10.2 [8.0 ; 12.5]  \\
-    \texttt{gemini-3.1}    & 3.37 [2.45 ; 4.25] & 4.15 [3.09 ; 5.22]  &  8.6 [6.8 ; 10.6]  \\
-    \texttt{mistral-large} & 7.25 [5.90 ; 8.67] & 8.63 [7.15 ; 10.28] & 18.0 [13.5 ; 22.4] \\
+    Baseline       & Uniform random                         & 50.16 & 86.80 & deterministic \\
+    Baseline       & All-car                                & 30.73 & 58.00 & deterministic \\
+    Baseline       & Minimum duration                       & 26.97 & 53.62 & deterministic \\
+    Minimal prompt & \texttt{mistral-large}                 & 14.75 & 44.71 & [pending] \\
+    Minimal prompt & typed classifier                       & 13.75 & 42.76 & 0.41 \\
+    Minimal prompt & \texttt{gemini-3.1}                    & 12.38 & 39.88 & [pending] \\
+    Minimal prompt & \texttt{gemini-3.5}                    &  7.02 & 24.08 & \textbf{[pending]} \\
+    Expert prompt  & \texttt{gemini-3.1}                    &  8.98 & 31.25 & [pending] \\
+    Expert prompt  & \texttt{mistral-large}                 &  7.63 & 26.64 & [pending] \\
+    Expert prompt  & \texttt{gemini-3.5} (tuned agent)      &  4.86 & 13.85 & 0.56 \\
+    Expert prompt  & typed classifier                       &  3.65 & 10.48 & 0.05 \\
+    Reference      & Random forest                          &  4.09 &  5.28 & deterministic \\
+    Reference      & Multinomial logit                      &  4.02 &  8.99 & deterministic \\
+    Reference      & Kernel logistic regression             &  3.61 &  6.69 & deterministic \\
+    Reference      & Gradient boosting                      &  3.60 &  9.49 & deterministic \\
     \bottomrule
   \end{tabular}
 \end{table*}
 
-These gains come from one tuned text, and its route is not the only one. Each mutation
-moves several strata at once, in both directions. The procedure keeps only those whose
-over-represented mode recedes.
+The groups overlap in one place only: the best minimal-prompt condition, \texttt{gemini-3.5},
+scores better than two expert-prompt conditions. Only one of these gaps exceeds the
+$\pm$1.3-point cohort resolution of Section~\ref{sec:quantities}. \texttt{Gemini-3.5} under
+the minimal prompt has 2.0 points less error than \texttt{gemini-3.1} under the expert prompt,
+while its lead over \texttt{mistral-large} under the expert prompt stays within the resolution.
 
-This text creates a slope rather than a level shift (Figure~\ref{fig:distance}). Under one
-kilometre the car share of \texttt{gemini-3.5} does not move, 9.7\,\% before tuning and
-10.1\,\% after. Between one and fifty kilometres it rises by six to seven points in every
-band. The tuned agent
-then carries less error along distance than any tabular reference, 14.2 weighted points
-against 16.8 for the random forest. Distance is the only dimension where an agent manages it.
+The same prompt does not score the same on two versions of the same model family. With the
+tuned agent's expert prompt left unchanged, \texttt{gemini-3.1} trails \texttt{gemini-3.5} by
+4.2 composite points (95\,\% interval 3.0 to 5.4), three times the cohort resolution.
+
+Re-running a condition with three seeds moves its composite less than a new cohort would.
+The tuned agent varies by 0.6 points across seeds (Table~\ref{tab:scale}), below that
+resolution. Under the minimal prompt, the typed classifier varies by 0.4 points across seeds
+(0.41), and by less than a quarter of a point under both expert prompts (0.05 and 0.24). The
+sign of the difference between these two expert conditions holds on all three seeds. This
+inter-seed variation of 0.4 points is negligible next to the gain from tuning the
+classifier's prompt, which lowers the composite by 10.1 points (from 13.75 to 3.65).
+
+\begin{figure*}[tp]
+  \centering
+  \includegraphics[width=\textwidth]{images/ch6_echelle.png}
+  \caption{The decision-makers form groups on the composite axis, and even the minimal prompt has less error than the minimum-duration baseline. The best minimal-prompt condition beats one expert-prompt condition by more than the cohort resolution.}
+  \Description{A horizontal bar chart. The x axis is the composite EMD-JSD error over every decision of the day, running from zero on the left to just over fifty on the right; lower means closer to the survey. Fifteen decision-makers are stacked as rows and coloured by group, and each bar carries its value. Sorted from the best: gradient boosting 3.60, kernel logistic regression 3.61, the typed classifier under its expert prompt 3.65, the multinomial logit 4.02 and the random forest 4.09; then Gemini 3.5 Flash-Lite under the expert prompt at 4.86, Gemini 3.5 Flash-Lite under the minimal prompt at 7.02, Mistral Large under the expert prompt at 7.63, Gemini 3.1 Flash-Lite under the expert prompt at 8.98, Gemini 3.1 Flash-Lite under the minimal prompt at 12.38, the typed classifier under the minimal prompt at 13.75 and Mistral Large under the minimal prompt at 14.75; at the far right the three baselines, minimum duration at 26.97, all-car at 30.73 and the uniform random draw at 50.16. A vertical grey band of about 1.3 points marks cohort-to-cohort variation, the resolution below which two scores cannot be told apart. Gemini 3.5 Flash-Lite under the minimal prompt sits to the left of Gemini 3.1 Flash-Lite under the expert prompt by more than that band.}
+  \label{fig:scale}
+\end{figure*}
+
+\subsection{What tuning changes, and what it does not}
+\label{sec:tuning}
+
+Tuning the system prompt raises the score of each of the three models, by more than the
+margin of error (Table~\ref{tab:gains}). The paired gain runs from 2.3 to 7.3 composite
+points, and all six intervals (three models, two metrics) exclude zero.
+
+\begin{table*}[tp]
+  \caption{Paired gains of the expert prompt over the minimal prompt, two metrics, with their 95\,\% interval in brackets. A positive gain is a lower error.}
+  \label{tab:gains}
+  \begin{tabular}{lcc}
+    \toprule
+    Language model & Composite & L1 on overall shares \\
+    \midrule
+    \texttt{gemini-3.5}    & 2.27 [1.40, 3.22] & 10.2 [8.0, 12.5]  \\
+    \texttt{gemini-3.1}    & 3.37 [2.45, 4.25] &  8.6 [6.8, 10.6]  \\
+    \texttt{mistral-large} & 7.25 [5.90, 8.67] & 18.0 [13.5, 22.4] \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+Take \texttt{gemini-3.5} as an example, the model the expert prompt was tuned on. For this
+model, tuning does not shift the car share uniformly (Figure~\ref{fig:distance}). Under one
+kilometre the car share stays near 10\,\% before and after tuning, where the survey records
+18\,\%. Between one and fifty kilometres it rises by six to seven points in every band. On the
+distance stratum, the tuned agent then has less error than any reference model. Its L1 error,
+taken within each distance class and averaged by class size, is 14.2 points. The random
+forest, best of the four, scores 16.8. No other stratum gives an agent that lead.
+
+The language models make two errors, and tuning corrects only one. They overestimate public
+transport, and the expert prompt pulls it down by four to eleven points. They also
+overestimate cycling, at 6.8 to 8.1\,\% where the survey records 4.1\,\%, and the expert
+prompt moves the bike share by less than one point. No decision-maker fits one stratum: the
+15--19-year-olds. The survey records 47.4\,\% public transport for them, compared with
+26.4\,\% for the random forest and 20.8\,\% for the tuned agent (Appendix F).
 
 \begin{figure}[tbp]
   \centering
   \includegraphics[width=\columnwidth]{images/ch6_distance.png}
-  \caption{Tuning gives the agent a slope along distance, while the shortest trips stay where the minimal prompt left them.}
-  \Description{A line chart with four series. The horizontal axis carries seven trip-distance bands, from zero to one kilometre up to more than fifty kilometres, each labelled with the number of trips it holds. The vertical axis is the car share in per cent, from zero to one hundred. The survey line climbs from 18 per cent on the shortest band to about 87 per cent on the longest. The agent under the minimal prompt runs lowest throughout, from about 10 per cent to 75 per cent, then falls on the last band. The agent under the expert prompt starts at the same 10 per cent but rises faster, meeting the random forest from two kilometres on and staying five to ten points under the survey. The random forest alone starts high on the shortest band, at about 27 per cent, where the survey gives 18.}
+  \caption{On \texttt{gemini-3.5}, tuning raises the car share beyond one kilometre, while the shortest trips stay where the minimal prompt left them.}
+  \Description{A line chart with four series. The horizontal axis carries seven trip-distance bands, from zero to one kilometre up to more than fifty kilometres, each labelled with the number of trips it holds. The vertical axis is the car share in per cent, from zero to one hundred. The survey line climbs from 18 per cent on the shortest band to about 87 per cent on the longest. Gemini 3.5 Flash-Lite under the minimal prompt runs lowest throughout, from about 10 per cent to 75 per cent, then falls on the last band. The same model under the expert prompt starts at the same 10 per cent but rises faster, meeting the random forest from two kilometres on and staying five to ten points under the survey. The random forest alone starts high on the shortest band, at about 27 per cent, where the survey gives 18.}
   \label{fig:distance}
 \end{figure}
 
-Two errors coexist in the same decision-maker, and the tuning answers only one. The three
-language models put the bike share between 6.8 and 8.1\,\%, where the survey
-records 4.1\,\%. This text moves it by less than one point, and pulls public transport down
-by four to eleven points. One stratum resists
-every decision-maker, the 15--19 year olds (Appendix F).
-
-\subsection{Deliberation does not decide}
+\subsection{A classifier that writes no text reaches the reference range}
 \label{sec:deliberation}
 
-The typed classifier reaches the band of the four tabular references. Its composite on the
-second cohort is \textbf{[c2, out-of-sample composite of the typed classifier]}, against 3.60 to 4.09
-points for the four tabular references. The paired differences against those four references
-are \textbf{[c2, four paired differences with their 95\,\% intervals]}.
+The typed classifier approaches the range of the four reference models out of sample. On the
+second cohort, the four reference models span 2.5 to 3.7 composite points (LightGBM 2.53,
+random forest 3.71). The typed classifier under its expert prompt scores 4.6 (4.64). Its
+distance to the upper edge of the reference band is 0.9 points, remaining within the
+$\pm$1.3-point cohort resolution.
 
-A decision-maker that writes no text scores in the same band as those that write a
-justification. What helps is therefore the reading of the trip, not the sentences produced
-after the choice. Verbalised deliberation added nothing to aggregate fidelity here. We state
-that as a result on this bench, not as a property of language models.
+A decision-maker that writes no text scores in the same range as those that write a
+justification. We interpret this as follows: what improves fidelity lies in how the trip
+description is processed, not in the text the model writes. In our measurements, verbalised
+deliberation added nothing to aggregate fidelity.
 
-At an equal load of 23{,}026 decisions the classifier costs 1.06 dollar against 49.28, a
-factor of about fifty.
+For the same 23{,}026 decisions, the classifier costs \$1.06, whereas the tuned agent costs
+\$49.28 at the standard rate, a factor of about fifty.
 
-\subsection{The aggregate does not tell the individual}
+\subsection{Matching shares is not matching decisions}
 \label{sec:individual}
 
-The tuned agent and the gradient boosted model sit within the cohort resolution of each
+The tuned agent and the gradient boosting model sit within the cohort resolution of each
 other and still disagree on one trip in three. They put their highest probability on a
-different mode for 30.3\,\% of trips, counted where both saw at least two options. That
-compares the distributions, not the mode each one drew. Between two tabular methods the same
-figure runs from 8.4 to 11.0\,\%. Two agents also differ four times more than two tabular
-models in the whole distribution, 40.0 points of median distance against 9.8.
+different mode for 30.3\,\% of trips, counted where both saw at least two options. Between two
+reference models the same count runs from 8.4 to 11.0\,\%. On the median trip, the summed
+absolute gap between the mode probabilities of two generative agents is four times that of
+two reference models.
 
-On the declared days of the survey the agent designates the declared mode slightly less
-often than the tabular references (Table~\ref{tab:unit}). The audit covers 9{,}621 trips of
-2{,}930 respondents, each carrying the mode its respondent declared. The tuned agent reaches
-67.6\,\% accuracy against 71.5\,\% for the gradient boosted model, a paired gap of 3.87
-points, interval $-$5.47 to $-$2.28. Its gap to the multinomial logit separates from zero on
-neither accuracy nor cross-entropy.
+On the reported days of the survey, the tuned agent predicts the reported mode slightly less
+often than the reference models (Table~\ref{tab:unit}). It trails the gradient boosting model
+by 3.9 accuracy points (95\,\% interval 2.3 to 5.5). No paired interval separates it from the
+multinomial logit, on accuracy or on cross-entropy.
 
 \begin{table}[tbp]
-  \caption{Unit-level agreement on the declared days, six decision-makers. Accuracy and recall in \%, cross-entropy on the 5{,}229 decisions that every distribution-valued decision-maker scores.}
+  \caption{Trip-level agreement on the reported days, seven decision-makers. Accuracy and recall in \%, on the 9{,}621 reported trips. Cross-entropy in nats, on the 5{,}229 decisions with at least two options that every distribution-valued decision-maker scores. The two baselines that return a single option receive none, since it is infinite at the first error.}
   \label{tab:unit}
   \small
   \setlength{\tabcolsep}{4pt}
@@ -180,32 +204,32 @@ neither accuracy nor cross-entropy.
     Decision-maker & \multicolumn{1}{c}{Acc.} & \multicolumn{1}{c}{Cross-} & \multicolumn{1}{c}{Bike} & \multicolumn{1}{c}{Walk} \\
                    &                          & \multicolumn{1}{c}{ent.}   & \multicolumn{1}{c}{rec.} & \multicolumn{1}{c}{rec.} \\
     \midrule
-    Gradient boosted                                  & 71.5 & 0.299 & 20.4 & 63.4 \\
+    Gradient boosting                                 & 71.5 & 0.299 & 20.4 & 63.4 \\
     Multinomial logit                                 & 68.6 & 0.358 & 18.3 & 60.0 \\
     Minimum duration                                  & 68.1 & ---   & 25.8 & 19.2 \\
     Expert prompt, \texttt{gemini-3.5}                & 67.6 & 0.341 & 22.5 & 47.2 \\
+    All-car                                           & 66.7 & ---   &  2.3 & 16.2 \\
     Minimal prompt, \texttt{gemini-3.5}               & 64.8 & 0.384 & 24.1 & 44.2 \\
     Expert prompt, typed classifier                   & 64.7 & 0.464 & 18.1 & 56.3 \\
     \bottomrule
   \end{tabularx}
 \end{table}
 
-The typed classifier falls under the all-car floor on individual accuracy. It reaches
-64.7\,\% where the floor reaches 66.7\,\%, a paired gap of 2.04 points, interval $-$3.78
-to $-$0.29. No paired comparison separates it from the four tabular references on the composite.
-The two other aggregate readings put it behind the kernel regression and the random forest.
-Its probability mass goes to walking rather than to public transport. Walk recall reaches
-56.3\,\%, against about 44\,\% for public transport (Figure~\ref{fig:audit-modes}). The
-aggregate split hides that exchange. A population can therefore reproduce the modal split
-of a territory while getting more individual trips wrong than a rule that reads nothing.
+The typed classifier falls below the all-car baseline on individual accuracy. It trails that
+baseline by 2.0 accuracy points (95\,\% interval 0.3 to 3.8), while its composite reaches the
+range of the reference models (Section~\ref{sec:deliberation}). Its probability mass goes to
+walking rather than to public transport. Walk recall reaches 56.3\,\%, compared with about
+44\,\% for public transport (Figure~\ref{fig:audit-modes}). A population can therefore
+reproduce the modal split of a territory while getting more individual trips wrong than a
+baseline that reads nothing.
 
 \begin{figure}[tbp]
   \centering
   \includegraphics[width=\columnwidth]{images/ch6_audit_modes.png}
-  \caption{Recall and precision by mode: the typed classifier trades public transport for walking, and the aggregate split does not show the exchange.}
+  \caption{Recall and precision by mode: the typed classifier trades public transport for walking, and the modal split does not show the exchange.}
   \Description{Two panels of grouped bars, recall on the left and precision on the right. In each panel the horizontal axis carries the four modes, bike, car, public transport and walking, and the vertical axis a percentage from zero to ninety. Three bars per mode: gradient boosting, the expert prompt on Gemini 3.5 Flash-Lite, and the typed classifier under the expert prompt. On the recall panel the typed classifier stands lowest on bike and on public transport, at about 18 and 44 per cent, and above the generative agent on walking, at about 56 per cent against 47. On the precision panel the relation reverses on walking, where the typed classifier falls under both others, and the three stay close on the car.}
   \label{fig:audit-modes}
 \end{figure}
 
 These four findings hold on the ordinary day the survey describes. A survey tabulates no
-other day, and the next section leaves that regime for an event that no variable encodes.
+other day, and the next section moves beyond that day to an off-survey event.
