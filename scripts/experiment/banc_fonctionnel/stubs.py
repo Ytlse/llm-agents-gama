@@ -318,8 +318,22 @@ def echanges_stub(
     ⚠ L'agent se reconnaît à `agent_id=`, que le gabarit de décision pose en tête de chaque
     persona. C'est la seule attribution fiable : tous les lecteurs d'un même article partagent
     le même texte.
+
+    ⚠ Les mots de la reformulation viennent de `mots_saillants()`, IMPORTÉ du tableau. Le stub
+    les tirait de sa propre règle (mots de plus de quatre lettres), qui ne rendait rien sur
+    « Bed bugs on line A. » : le prompt reformulé ne portait aucun mot saillant, aucune cellule
+    `~` ne pouvait sortir, et A9.5 restait vert sur la seule légende (2026-09-25). Il en faut
+    DEUX, le seuil du tableau : un texte qui n'en fournit pas autant est refusé, plutôt que de
+    fabriquer en silence un prompt qu'aucun appariement ne peut attraper.
     """
-    saillants = [m for m in texte.split() if len(m) > 4][:3]
+    from scripts.analysis.tableau_quatre_voies import mots_saillants
+
+    saillants = mots_saillants(texte, combien=2)
+    if len(saillants) < 2:
+        raise ValueError(
+            f"echanges_stub : « {texte} » ne fournit que {len(saillants)} mot(s) saillant(s) "
+            f"({saillants}) ; le tableau en exige deux pour apparier une reformulation."
+        )
     prompts = [
         f"--- agent_id={agent} ---\nMes habitudes\n- souvent la voiture\n"
         f"Ce qui a changé récemment\n- {texte}\n",

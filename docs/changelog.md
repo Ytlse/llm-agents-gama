@@ -1,3 +1,23 @@
+## [2026-09-25] Le banc fonctionnel vérifie qu'une cellule indicative `~` sort vraiment du tableau des quatre voies
+
+Le contrôle A9.5 de la famille A devait prouver que le tableau des quatre voies distingue
+l'appariement exact de l'appariement par mots saillants. Il cherchait un `~` dans le rendu entier,
+et la légende en imprime un à chaque rendu : il passait au vert sans qu'aucune cellule indicative
+ne sorte. Aucune ne sortait d'ailleurs, car le stub des échanges tirait ses « mots saillants »
+d'une règle à lui (mots de plus de quatre lettres), qui ne rend rien sur « Bed bugs on line A. ».
+Le prompt reformulé ne portait donc aucun mot du texte.
+
+Le stub reprend désormais `mots_saillants()` du tableau lui-même et en place deux, le seuil
+d'appariement. Il refuse un texte qui n'en fournit pas autant, au lieu de produire en silence un
+prompt qu'aucun appariement ne peut attraper. A9.5 lit les cellules du dépouillement, et une
+nouvelle vérification A9.6 lit la ligne rendue, colonne par colonne. Le banc passe de 34 à 35
+vérifications.
+
+**Avant :** `lu | expose | 3 | | | 1 |` — `connaissances` vide, A9.5 vert sur la légende
+**Après :** `lu | expose | 3 | | ~1 | 1 |` — A9.5 et A9.6 ne passent que si `connaissances` vaut `~1` et `changements` vaut `1` ; l'ancien stub fait échouer A9.5
+
+---
+
 ## [2026-09-25] Le tableau des quatre voies mesure enfin le rappel, et seulement après l'événement
 
 La colonne `rappel` de `tableau_quatre_voies.py` comptait toute décision d'un agent à qui un
