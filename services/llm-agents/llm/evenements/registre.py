@@ -76,6 +76,8 @@ class RegistreEvenements:
         # persistance du souvenir ne se distinguerait plus de la répétition de sa cause.
         self._lecteurs: dict[str, tuple[str, str]] | None = None
         self._ont_lu: set[str] = set()
+        # Front montant de l'alarme « fenêtre ouverte, lecteurs jamais tirés ».
+        self._alarme_lecteurs_non_tires = False
         # ── Ticket 111 — la ligne servie au prompt, et le relais au foyer ────────────────
         self._journal_relais = (
             Path(journal).parent / "relais_foyer.jsonl" if journal is not None else None
@@ -690,12 +692,27 @@ class RegistreEvenements:
             if self.evenement.jours
             else self.evenement.premier_jour <= c.jour_run <= self.evenement.dernier_jour
         )
+        # Forme B — une fenêtre, et un jour de parution TIRÉ par foyer. Un jour de la fenêtre
+        # n'est pas un jour d'événement : seul l'est celui où un lecteur a été tiré. Le run
+        # `2026-09-24_17_50` (fenêtre 9-13, un seul foyer tiré au jour 11) levait l'alarme
+        # « 0 exposé » les jours 9, 10, 12 et 13, où il n'y avait rien à exposer.
+        tire_par_foyer = actif and not self.evenement.jours
+        attendus = self._lecteurs_tires_pour(c.jour_run) if tire_par_foyer else None
+        if not tire_par_foyer:
+            etat = "JOUR D_EVENEMENT" if actif else "nominal"
+        elif attendus is None:
+            etat = "fenêtre de parution, lecteurs PAS ENCORE TIRÉS"
+        elif attendus:
+            etat = f"JOUR DE PARUTION ({len(attendus)} lecteur(s) tiré(s) pour ce jour)"
+        else:
+            etat = "fenêtre de parution, aucun lecteur tiré pour ce jour"
         deja = f", {c.deja_touches} déjà touché(s) ce jour" if c.deja_touches else ""
         relatif = c.jour_run - self.evenement.premier_jour
+        repere = "à l'ouverture de la fenêtre" if not self.evenement.jours else "au 1er jour"
         logger.info(
             f"[evenements] jour {c.jour_run} du run "
-            f"(relatif {c.jour_run - self.evenement.premier_jour:+d}) — "
-            f"{'JOUR D_EVENEMENT' if actif else 'nominal'} : {c.exposes} exposé(s), "
+            f"(relatif {relatif:+d} {repere}) — "
+            f"{etat} : {c.exposes} exposé(s), "
             f"{c.epargnes} épargné(s){deja}, {c.retard_injecte_s // 60} min de retard injecté au "
             f"total (canal « {self.evenement.canal} », cadence « {self.evenement.cadence} »)"
         )
@@ -703,9 +720,10 @@ class RegistreEvenements:
         # c'est le seul chiffre qui dise si la réserve du § « coupure au jour de l'événement »
         # a un objet, et il ne sert à rien s'il n'est relevé qu'en cas de problème.
         if actif:
+            motif_coupure = "fenêtre de parution" if tire_par_foyer else "jour d'événement"
             logger.info(
-                f"[evenements] jour {c.jour_run} — cache de décisions COUPÉ (jour "
-                f"d'événement) : {c.decisions_cache_coupe} décision(s) passée(s) par le modèle"
+                f"[evenements] jour {c.jour_run} — cache de décisions COUPÉ ({motif_coupure}) : "
+                f"{c.decisions_cache_coupe} décision(s) passée(s) par le modèle"
             )
         elif relatif > 0:
             logger.info(
@@ -733,7 +751,9 @@ class RegistreEvenements:
                     f"décision(s) d'un jour de service construite(s) SANS leur ligne. La "
                     f"présence garantie au prompt ne tient pas ce jour-là."
                 )
-        if actif and c.exposes == 0:
+        if tire_par_foyer:
+            self._alarmer_parution(c.jour_run, attendus)
+        elif actif and c.exposes == 0:
             # Une journée d'événement qui ne touche personne est un protocole qui n'a pas eu
             # lieu. Le run du 19 septembre en a eu une — second choc restreint aux trajets en
             # voiture, sur un agent qui ne conduisait plus — dite en INFO, donc lue par
@@ -743,6 +763,44 @@ class RegistreEvenements:
                 f"clos avec 0 exposé sur {c.epargnes} arrivée(s) éligible(s) examinée(s) : "
                 f"l'événement « {self.evenement.evenement_id} » n'a PAS eu lieu ce jour-là. "
                 f"Ne pas le compter comme une journée d'événement dans l'analyse."
+            )
+
+    def _lecteurs_tires_pour(self, jour: int) -> list[str] | None:
+        """Les lecteurs dont le jour de parution tiré est `jour`. `None` s'ils ne sont pas tirés.
+
+        `None` et `[]` ne se confondent pas : le premier dit que la prise du réveil n'a jamais
+        tourné, le second qu'aucun foyer n'a tiré ce jour-là — ce qui est attendu.
+        """
+        if self._lecteurs is None:
+            return None
+        return sorted(
+            pid for pid, (household_id, _raison) in self._lecteurs.items()
+            if self.jour_de(pid, household_id) == jour
+        )
+
+    def _alarmer_parution(self, jour: int, attendus: list[str] | None) -> None:
+        """L'alarme d'une fenêtre tirée par foyer, comparée aux lecteurs tirés pour CE jour."""
+        e = self.evenement
+        if attendus is None:
+            # Front montant : une fois par run. Chaque jour de fenêtre sans lecteurs tirés est
+            # le même défaut, et le redire cinq fois noierait la première occurrence.
+            if not self._alarme_lecteurs_non_tires:
+                self._alarme_lecteurs_non_tires = True
+                logger.error(
+                    f"[ALARME] [evenements] jour {jour} du run, dans la fenêtre de parution "
+                    f"{e.premier_jour}-{e.dernier_jour} de « {e.evenement_id} », et les lecteurs "
+                    f"n'ont jamais été tirés : la prise « {e.moment} » n'a pas tourné. Personne "
+                    f"ne lira l'article tant qu'elle ne tourne pas."
+                )
+            return
+        manquants = [pid for pid in attendus if pid not in self._ont_lu]
+        if manquants:
+            foyers = sorted({(self._lecteurs or {}).get(p, ("",))[0] for p in manquants})
+            logger.error(
+                f"[ALARME] [evenements] jour {jour} du run, jour de parution tiré pour "
+                f"{len(attendus)} lecteur(s) de « {e.evenement_id} » : {len(manquants)} n'ont "
+                f"PAS lu — {', '.join(manquants[:10])} (foyer(s) {', '.join(foyers[:10])}). Ne "
+                f"pas compter ce jour comme une exposition de ces foyers dans l'analyse."
             )
 
     def tracer(self, applique: EvenementApplique, person_id: str, timestamp: int,

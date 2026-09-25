@@ -1,3 +1,32 @@
+## [2026-09-25] Un article lu est daté du jour où on le lit, et la fenêtre de parution ne crie plus au loup
+
+Deux sorties du bras traité a09 `2026-09-24_17_50` décrivaient mal ce qui s'était passé.
+
+**La table par jour datait l'article de la veille et ne disait pas son canal.** Arthur (286920)
+a lu l'article le 26 mars à 00:00, jour 11 du run. La frontière de 3 h, juste pour un trajet de
+retour tardif, le rangeait au 25. Un article lu au réveil appartient désormais au jour où il est
+lu ; un choc vécu à l'arrivée garde la règle des 3 h, et les chiffres archivés ne bougent pas
+(vérifié sur cinq runs de choc). Une lecture garde aussi sa ligne un jour où l'agent ne sort pas.
+
+**Avant :** `10,2026-03-25,286920,a09_vent_autan,,1,…`
+**Après :** `11,2026-03-26,286920,a09_vent_autan,lu,1,…`
+
+**Le registre levait l'alarme « 0 exposé » sur des jours où personne n'avait à lire.** Sur une
+fenêtre tirée par foyer (jours 9 à 13), chaque jour comptait comme jour d'événement. Il compare
+maintenant chaque jour aux lecteurs tirés pour ce jour-là : l'alarme nomme un lecteur tiré qui
+n'a pas lu, et dit une seule fois que la prise du réveil n'a jamais tourné.
+
+**Avant :** quatre `[ALARME]` (jours 9, 10, 12, 13) pour un run qui s'était déroulé comme prévu.
+**Après :** `fenêtre de parution, aucun lecteur tiré pour ce jour` en INFO ; le jour 11 se lit
+`JOUR DE PARUTION (1 lecteur(s) tiré(s) pour ce jour)`.
+
+Reste à reprendre après la prochaine campagne : les colonnes « souvenir servi » de la même table
+(elles valent 0 alors que six décisions du foyer portent l'article), le rapport automatique
+`rapport_stabilite_variation.md` et ses figures (phases figées sur l'ancien choc J8-9), et le
+récit du soir, servi à chaque consolidation plutôt que le soir.
+
+---
+
 ## [2026-09-25] Un article lu est devant le lecteur quand il décide, et il le dit à sa famille
 
 Ticket 111. Dans le bras traité a09 `2026-09-24_17_50`, Arthur (286920) a lu l'article sur le

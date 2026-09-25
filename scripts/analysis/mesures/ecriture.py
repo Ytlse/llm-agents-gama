@@ -165,7 +165,8 @@ def _lignes(mesures: Mesures, nom: str) -> list[dict[str, Any]]:
         ]
     return [
         {"jour_simule": l.jour_simule, "date_simulee": l.date_simulee,
-         "person_id": l.person_id, "choc_id": l.choc_id, "expositions": l.expositions,
+         "person_id": l.person_id, "choc_id": l.choc_id, "canal": l.canal,
+         "expositions": l.expositions,
          "minutes_injectees": l.minutes_injectees, "incidents_reseau": l.incidents_reseau,
          "correspondances_ratees": l.correspondances_ratees,
          "souvenir_choc_servi": l.souvenir_choc_servi,

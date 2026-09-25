@@ -516,3 +516,78 @@ def test_les_foyers_declares_existent_dans_la_population_du_059():
             f"{nom} exposerait un foyer TÉMOIN — le témoin est dans le même run, et "
             f"l'exposer effacerait la ligne de base"
         )
+
+
+# ── Alarme « 0 exposé » d'une fenêtre tirée par foyer (run 2026-09-24_17_50) ────────────
+@pytest.fixture
+def journal():
+    """Messages loguru, niveau et texte."""
+    from loguru import logger
+
+    lignes: list[tuple[str, str]] = []
+    sink = logger.add(
+        lambda m: lignes.append((m.record["level"].name, m.record["message"])), level="INFO"
+    )
+    yield lignes
+    logger.remove(sink)
+
+
+def _erreurs(journal) -> list[str]:
+    """Les alarmes de fin de journée seules : la déclaration de test, sans jugement, lève la
+    sienne au chargement, et elle n'a rien à voir avec ce qu'on vérifie ici."""
+    return [m for n, m in journal if n == "ERROR" and " du run" in m]
+
+
+def test_un_jour_de_fenetre_sans_lecteur_tire_ne_leve_pas_dalarme(tmp_path, journal):
+    """Fenêtre 9-13, un jour tiré par foyer : les autres jours n'ont rien à exposer.
+
+    Le run a09 levait « JOUR D'ÉVÉNEMENT clos avec 0 exposé » les jours 9, 10, 12 et 13, alors
+    que son seul foyer avait tiré le jour 11.
+    """
+    r = _registre(tmp_path)
+    try:
+        lecteurs = r.lecteurs(POPULATION)
+        tires = {r.jour_de(p, h) for p, (h, _) in lecteurs.items()}
+        for jour in range(9, 14):
+            _le_jour(r, jour)
+            r.dus_au_reveil(1_700_000_000, POPULATION)
+        r.journaliser_compteurs()
+    finally:
+        _rendre_le_calendrier()
+    assert not _erreurs(journal), _erreurs(journal)
+    parutions = [m for n, m in journal if n == "INFO" and "JOUR DE PARUTION" in m]
+    assert len(parutions) == len(tires), "un jour de parution tiré doit se dire comme tel"
+    assert set(range(9, 14)) - tires, "le test suppose au moins un jour de fenêtre sans tirage"
+    sans_tirage = [m for n, m in journal if "aucun lecteur tiré pour ce jour" in m]
+    assert len(sans_tirage) == 5 - len(tires)
+
+
+def test_un_lecteur_tire_qui_na_pas_lu_leve_une_alarme_qui_le_nomme(tmp_path, journal):
+    r = _registre(tmp_path)
+    try:
+        lecteurs = r.lecteurs(POPULATION)
+        lecteur, (foyer, _) = sorted(lecteurs.items())[0]
+        jour = r.jour_de(lecteur, foyer)
+        _le_jour(r, jour)
+        # Une décision fait basculer la journée, mais la prise du réveil ne tourne pas.
+        r.noter_decision(1_700_000_000, depuis_cache=False)
+        r.journaliser_compteurs()
+    finally:
+        _rendre_le_calendrier()
+    alarmes = _erreurs(journal)
+    assert len(alarmes) == 1 and "[ALARME]" in alarmes[0]
+    assert lecteur in alarmes[0] and foyer in alarmes[0]
+
+
+def test_des_lecteurs_jamais_tires_ne_se_disent_quune_fois(tmp_path, journal):
+    """La prise du réveil n'a jamais tourné : c'est un défaut, dit une fois, pas cinq."""
+    r = _registre(tmp_path)
+    try:
+        for jour in (9, 10, 11):
+            _le_jour(r, jour)
+            r.noter_decision(1_700_000_000, depuis_cache=False)
+        r.journaliser_compteurs()
+    finally:
+        _rendre_le_calendrier()
+    alarmes = _erreurs(journal)
+    assert len(alarmes) == 1 and "jamais été tirés" in alarmes[0]

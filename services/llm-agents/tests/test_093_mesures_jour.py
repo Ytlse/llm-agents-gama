@@ -405,6 +405,53 @@ class TestChoc:
         run = _run(tmp_path, [_t("1", "2026-03-16", "08:00:00", "Marche")])
         assert calculer(run).chocs == []
 
+    # ── Article lu au réveil (défaut du run 2026-09-24_17_50) ───────────────────────────
+    def _lecture(self, agent, horodatage, jour_run):
+        return {"person_id": agent, "horodatage_simule": horodatage, "choc_id": "a09",
+                "evenement_id": "a09", "canal": "lu", "moment": "reveil",
+                "jour_run": jour_run, "retard_injecte_s": 0, "vecu": "Parks closed."}
+
+    def _semaine_de_trajets(self):
+        return [_t("1", f"2026-03-{j}", "08:00:00", "Voiture Privée") for j in (16, 17, 18)]
+
+    def test_E6_un_article_lu_a_minuit_appartient_au_jour_ou_il_est_lu(self, tmp_path):
+        """Injecté à 00:00 le 17, il sortait au 16 : la frontière de 3 h des trajets le reculait."""
+        run = _run(tmp_path, self._semaine_de_trajets(),
+                   chocs=[self._lecture("1", "2026-03-17T00:00:00", jour_run=2)])
+        ligne = calculer(run).chocs[0]
+        assert (ligne.jour_simule, ligne.date_simulee) == (2, "2026-03-17")
+
+    def test_E7_un_choc_vecu_apres_minuit_garde_la_frontiere_de_3_h(self, tmp_path):
+        """Joint à un trajet d'avant 3 h, il tombe le même jour que lui : chiffres du 079 inchangés."""
+        choc = self._choc("1", "2026-03-18T01:30:00")
+        run = _run(tmp_path, self._semaine_de_trajets(), chocs=[choc])
+        ligne = calculer(run).chocs[0]
+        assert (ligne.jour_simule, ligne.date_simulee) == (2, "2026-03-17")
+
+    def test_E8_une_lecture_un_jour_sans_trajet_garde_sa_ligne(self, tmp_path):
+        """On lit le journal même un jour où l'on ne sort pas : l'exposition a eu lieu."""
+        trajets = [_t("1", "2026-03-16", "08:00:00", "Marche"),
+                   _t("1", "2026-03-19", "08:00:00", "Marche")]
+        run = _run(tmp_path, trajets,
+                   chocs=[self._lecture("1", "2026-03-17T00:00:00", jour_run=2)])
+        ligne = calculer(run).chocs[0]
+        assert (ligne.jour_simule, ligne.date_simulee) == (2, "2026-03-17")
+
+    def test_E9_le_canal_est_ecrit_dans_le_csv(self, tmp_path):
+        """L'en-tête portait la colonne ; la ligne ne l'écrivait jamais."""
+        run = _run(tmp_path, self._semaine_de_trajets(),
+                   chocs=[self._lecture("1", "2026-03-17T00:00:00", jour_run=2)])
+        chemin = ecrire(calculer(run), tmp_path / "sortie")["chocs"]
+        with chemin.open(encoding="utf-8") as f:
+            assert [l["canal"] for l in csv.DictReader(f)] == ["lu"]
+
+    def test_E10_un_run_du_079_sans_canal_laisse_la_colonne_vide(self, tmp_path):
+        run = _run(tmp_path, self._semaine_de_trajets(),
+                   chocs=[self._choc("1", "2026-03-17T08:05:00")])
+        chemin = ecrire(calculer(run), tmp_path / "sortie")["chocs"]
+        with chemin.open(encoding="utf-8") as f:
+            assert [l["canal"] for l in csv.DictReader(f)] == [""]
+
 
 # ── F (écriture) — réécriture des flux, conservation des états ─────────────────────────
 

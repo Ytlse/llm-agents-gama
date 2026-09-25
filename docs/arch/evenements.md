@@ -747,6 +747,27 @@ d'annoncer deux jours de choc et une « phase péri-choc J15–J16 » qui n'exis
 **`chocs.jsonl` fait foi, jamais le fichier de déclaration** : le premier dit ce qui a eu lieu,
 le second ce qui était prévu.
 
+### Quand le jour est tiré par foyer, seul le jour tiré compte
+
+Un article déclaré sur une fenêtre (`calendrier.fenetre_jours`) ne paraît pas tous les jours de
+la fenêtre : chaque foyer tire le sien. Un jour de fenêtre où aucun foyer n'a tiré n'a **rien à
+exposer**, et ce n'est pas une alarme. Le journal du soir le dit, jour par jour :
+
+| Ce jour-là | Journal | Alarme |
+|---|---|---|
+| aucun lecteur tiré | `fenêtre de parution, aucun lecteur tiré pour ce jour` | non |
+| n lecteurs tirés, tous servis au réveil | `JOUR DE PARUTION (n lecteur(s) tiré(s) pour ce jour)` | non |
+| un lecteur tiré n'a pas lu | la même ligne | `[ALARME]` qui nomme les lecteurs et leur foyer |
+| les lecteurs n'ont jamais été tirés | `lecteurs PAS ENCORE TIRÉS` | `[ALARME]` une seule fois par run : la prise du réveil n'a pas tourné |
+
+Le jour relatif du journal se compte alors **depuis l'ouverture de la fenêtre**, et le dit ; le
+jour relatif de chaque lecteur, lui, vaut 0 le jour de sa lecture (`evenements.jsonl`).
+
+Avant le 2026-09-25, chaque jour de la fenêtre comptait comme un jour d'événement. Le bras a09
+`2026-09-24_17_50` (fenêtre 9-13, un foyer tiré au jour 11) levait l'alarme « clos avec 0
+exposé » les jours 9, 10, 12 et 13. Un événement déclaré sur des jours fixes (`jours`) garde
+l'alarme d'origine.
+
 ## Limites connues
 
 1. **Un seul choc à la fois**, volontairement : deux chocs superposés rendraient l'attribution

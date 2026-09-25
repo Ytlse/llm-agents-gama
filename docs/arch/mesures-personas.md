@@ -85,7 +85,15 @@ observations de cette activité) voit une dérive lente.
 > lot 5). Le nom du ticket 079 ne décrivait plus que la moitié de ce qu'il porte : un seul
 > fichier couvre désormais les deux régimes, le choc subi à l'arrivée et l'article lu au réveil,
 > et la colonne `canal` les sépare. Elle est **vide** pour un run archivé qui ne portait pas le
-> champ — écrire `vecu` là où rien n'a été mesuré en ferait une mesure.
+> champ — écrire `vecu` là où rien n'a été mesuré en ferait une mesure. Jusqu'au 2026-09-25,
+> elle était vide **partout** : l'en-tête la portait, la ligne ne l'écrivait pas.
+>
+> ⚠ **`souvenir_choc_servi` et `decisions_avec_souvenir_choc` ne disent pas encore ce que
+> leur nom annonce.** Elles cherchent le texte brut de l'événement dans la mémoire longue, ne
+> comptent que les décisions du jour d'exposition, et ne regardent que l'exposé. Sur
+> `2026-09-24_17_50`, elles valent 0 alors que six décisions ultérieures du foyer portent
+> l'article ou une croyance qui en dérive. La refonte attend les runs de la prochaine campagne ;
+> d'ici là, ne pas les citer.
 >
 > La lecture accepte les deux sources : `evenements.jsonl` d'abord, `chocs.jsonl` ensuite. Les
 > runs déjà archivés — ceux qui portent les chiffres publiés du § 7.2 — restent dépouillables
@@ -116,6 +124,14 @@ des horodatages de `chocs.jsonl`. Un test le verrouille.
 
 **La journée simulée commence à 3 h**, comme le point de reprise : un retour à 00 h 30 appartient
 à la soirée de la veille.
+
+**Sauf pour un article lu au réveil** (`moment: reveil`), qui appartient au jour où il est lu.
+Le registre l'injecte au premier pas après minuit, horodaté `T00:00:00` ; la frontière de 3 h
+le reculait d'un jour. Sur `2026-09-24_17_50`, l'article a09 lu le 26 mars (`jour_run: 11`)
+sortait au jour 10, le 25. Le jour de l'horodatage est recoupé avec `jour_run`, et un écart
+s'affiche au lieu de trancher en silence. Une lecture garde aussi sa ligne un jour où l'agent
+ne se déplace pas : on lit le journal même sans sortir. Le choc vécu à l'arrivée garde la
+frontière de 3 h, puisqu'il accompagne un trajet ; les chiffres archivés du § 7.2 ne bougent pas.
 
 **« La veille » est le jour VÉCU précédent.** Le calendrier saute les week-ends — les départs du
 samedi et du dimanche sont reportés au lundi. Comparer au jour calendaire viderait la mesure tous

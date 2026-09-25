@@ -563,7 +563,7 @@ def chocs(chemin_run: Path, journees: Sequence[Journee]) -> list[LigneChoc]:
 
     groupes: dict[tuple[str, str, str], list[dict]] = {}
     for evenement in evenements:
-        journee = journee_du_moment(str(evenement.get("horodatage_simule") or ""))
+        journee = journee_de_l_exposition(evenement, journees)
         agent = str(evenement.get("person_id") or "")
         if journee and agent:
             # `evenement_id` est le nom neuf, `choc_id` celui du 079 : les deux sont écrits
@@ -575,13 +575,15 @@ def chocs(chemin_run: Path, journees: Sequence[Journee]) -> list[LigneChoc]:
 
     lignes = []
     for (date, agent, choc_id), liste in sorted(groupes.items()):
-        journee = index.get(date)
-        if journee is None:
+        # Un article se lit au réveil, que l'agent se déplace ou non ce jour-là : l'exposition
+        # garde sa ligne même un jour sans trajet, indexée depuis la première journée vécue.
+        indice = index[date].index if date in index else _indice_calendaire(date, journees)
+        if indice is None:
             continue
         appariable = bool(docs_du_choc.get(agent))
         decisions = servis.get((date, agent), 0) if appariable else None
         lignes.append(LigneChoc(
-            jour_simule=journee.index,
+            jour_simule=indice,
             date_simulee=date,
             person_id=agent,
             choc_id=choc_id,
@@ -598,6 +600,46 @@ def chocs(chemin_run: Path, journees: Sequence[Journee]) -> list[LigneChoc]:
             appariement="texte" if appariable else "aucun lien",
         ))
     return lignes
+
+
+def journee_de_l_exposition(evenement: dict, journees: Sequence[Journee]) -> str | None:
+    """Journée simulée d'une exposition, selon le moment où l'événement entre.
+
+    ⚠ **Un article lu au réveil appartient au jour où il est lu.** Le registre l'injecte au
+    premier pas après minuit, horodaté `AAAA-MM-JJT00:00:00`. La frontière de 3 h, juste pour un
+    trajet, le reculait d'un jour : l'article a09 du run `2026-09-24_17_50`, lu le 26 mars
+    (`jour_run: 11`), sortait au jour 10. Le jour calendaire de l'horodatage est celui du
+    registre (`ancre_run.jours_ecoules` compte depuis minuit) ; il est recoupé avec `jour_run`
+    quand la ligne le porte, et un écart le dit au lieu de trancher en silence.
+
+    Un choc vécu à l'arrivée (`moment: arrivee`, ou absent dans un run du 079) garde la
+    frontière de 3 h : il est joint au trajet qu'il accompagne, et doit tomber le même jour que
+    lui. C'est ce qui laisse inchangés les chiffres archivés du § 7.2.
+    """
+    horodatage = str(evenement.get("horodatage_simule") or "")
+    if evenement.get("moment") != "reveil":
+        return journee_du_moment(horodatage)
+    date_lue = journee_du_moment(horodatage[:10])
+    jour_run = evenement.get("jour_run")
+    indice = _indice_calendaire(date_lue, journees) if date_lue else None
+    if isinstance(jour_run, int) and indice is not None and indice != jour_run:
+        print(
+            f"  ⚠ exposition de {evenement.get('person_id')} datée du {date_lue} (jour {indice} "
+            f"des mesures) mais `jour_run: {jour_run}` dans evenements.jsonl — la première "
+            f"journée vécue n'est pas le premier jour du run ; la date de l'horodatage est gardée."
+        )
+    return date_lue
+
+
+def _indice_calendaire(date_iso: str, journees: Sequence[Journee]) -> int | None:
+    """Rang calendaire d'une date depuis la première journée vécue, même sans trajet ce jour-là."""
+    if not journees:
+        return None
+    origine = date.fromisoformat(journees[0].date) - timedelta(days=journees[0].index - 1)
+    try:
+        return (date.fromisoformat(date_iso) - origine).days + 1
+    except ValueError:
+        return None
 
 
 def _docs_du_choc(chemin_run: Path, evenements: Sequence[dict]) -> dict[str, set[str]]:
