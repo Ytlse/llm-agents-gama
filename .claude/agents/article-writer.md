@@ -102,7 +102,7 @@ the number they justify.
 itself as one: *we read this as*, *this suggests*. A measurement carries its figure, its unit,
 and its resolution when the resolution matters.
 
-**13. The eighteen form rules apply** (`CONSIGNES_FORME.md`): 26 words per sentence, one colon
+**13. The eighteen form rules apply** (`CONSIGNES_FORME.md`): 30 words per sentence, one colon
 per paragraph, no cleft sentence, referent before pronoun, no forward reference, no
 placeholder, the lexical conversion table of R11.
 

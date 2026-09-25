@@ -1,18 +1,43 @@
 # 5. Results at the nominal regime
 
-<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-24 15:35:31 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 15:16:37 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
 
 <!-- Brouillon anglais, article court AAMAS 2027, PLAN.md § 5 — budget 1,400 mots.
      Rédigé le 2026-09-22 par l'agent article-writer. Hypothèse ticket 103 scénario 1.
      Les chiffres marqués [c2] sont des emplacements nommés, autorisés par l'auteur pour
      cette livraison seulement, dans l'attente des scores du ticket 103. -->
 
+<!-- 2026-09-25, passe de lisibilité, tâche validée par l'auteur (anglais seul ; le .fr.md et le
+     .tex ne suivent pas encore). Règle appliquée : en prose, une affirmation, le chiffre qui la
+     prouve, la comparaison qui lui donne sens ; le reste vit dans les tableaux 1-3 et les
+     figures 2-4, avec un renvoi. Ouverture par les quatre constats (PLAN § 5). Titre du § 5.1
+     mis en affirmation. Correction de méthode au § 5.1 : l'ancien « one crossing » opposait
+     gemini-3.5 minimal (7,02) à mistral-large expert (7,63), écart 0,61 sous la résolution de
+     ±1,3 ; seul l'écart à gemini-3.1 expert (8,98, soit 1,96) la dépasse. Texte et légende de la
+     figure 2 le disent désormais. Une seule convention de signe en prose, positif = meilleur
+     (« trails by »). Composites arrondis au dixième en prose ; tableaux inchangés. « Machine
+     learning models on structured data » devient « reference models », terme du § 4.4. Rapport
+     plancher uniforme / meilleure référence repris en « about fourteen » (50,16 / 3,60 = 13,9),
+     cf. la réserve du commentaire du § 5.1 sur le « facteur douze » du master. Au § 5.4, les deux
+     phrases sur la séparation agrégée du classifieur (annexe H.1, bras « Jev sous consigne
+     gemini-3.5 ») cèdent la place à un renvoi au § 5.3, qui porte l'emplacement des différences
+     appariées du prompt expert du classifieur ; texte retiré conservé dans le commentaire du
+     paragraphe. -->
+
 <!-- source: data/experiences/exp_*_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_*/executions/*/scores.json ;
      cohorte population_1000_AAMAS_v6, jeu …_20260316_EN_c, formule v1_reference (0aeee565…),
      référentiel EMC² 2023 (9ac34597…). 3,154 décisions sur 3,299 attendues, 868 personnes mobiles. -->
 
-The nominal regime is an ordinary simulated day, the one the survey
-describes, with no disruption in it.
+The nominal regime is an ordinary simulated day with no disruption, the day the survey
+describes. On that day the bench yields four findings, one per subsection.
+
+1. The decision-makers rank by family, and a prompt with no general criteria already beats
+   every floor.
+2. Tuning the instructions that highlight the general criteria improves every language model,
+   aligning some dimensions of the modal split and leaving others untouched.
+3. A classifier that reads the same trip description and writes no text reaches the band of
+   the four reference models.
+4. Agreement on the modal split does not carry over to individual trips.
 
 <!-- ⚠ Point 2 généralisé le 2026-09-23 sur demande de l'auteur. Il disait « recovers the
      effect of distance and leaves the two minority modes where it found them », donc il
@@ -28,16 +53,29 @@ describes, with no disruption in it.
      manages it ») et des dimensions de strate de la métrique ; « criteria » aurait collisionné
      avec les quatre critères généraux du prompt, qui sont autre chose. -->
 
-## 5.1 Fifteen decision-makers on one error scale
+## 5.1 Fifteen decision-makers rank by family
 
-The fifteen decision-makers order themselves by family on the composite axis, with one
-crossing (Figure 2). The three floors carry the largest error, from 27.0 for the
-minimum-duration heuristic to 50.2 for a uniform draw over the choice set. The four decision-makers under the minimal
-prompt land between 7.0 and 14.8, the three language models under the expert prompt between
-4.9 and 9.0. The two ranges cross. Under the minimal prompt, gemini-3.5 scores 7.02, below
-mistral-large and gemini-3.1 under the expert prompt, at 7.63 and 8.98. The four machine learning
-models on structured data hold inside half a point, from 3.60 to 4.09. The typed classifier under its
-expert prompt sits among them, at **[re-tuning pending]**.
+The fifteen decision-makers group by family on the composite (Figure 2, Table 1). The uniform
+floor carries about fourteen times the error of the best reference model. Every
+minimal-prompt condition already carries less error than the three floors. The worst of
+these conditions scores 14.8, against 27.0 for the minimum-duration heuristic. A model that receives the
+facts of a trip, and no general criteria, therefore carries behavioural information that the
+physical heuristic lacks. The four reference models hold the lowest errors. The typed
+classifier under its expert prompt sits among them, at **[re-tuning pending]**.
+
+Only the minimal and the expert prompts overlap, and only one pair of them separates by more
+than the ±1.3-point cohort resolution of Section 4.3. The best minimal-prompt condition,
+gemini-3.5, carries 2.0 points less error than gemini-3.1 under the expert prompt. Its gap to mistral-large under the
+expert prompt stays within that resolution.
+
+<!-- 2026-09-25, passe de lisibilité. Chiffres du paragraphe, tous dérivés du tableau 1 du § 4.4 :
+     « about fourteen » = 50,16 / 3,60 = 13,93 ; 14,8 = 14,75 (prompt minimal, mistral-large) ;
+     27,0 = 26,97 ; 2,0 = 8,98 − 7,02 = 1,96, au-dessus de ±1,3 ; écart à mistral-large expert
+     7,63 − 7,02 = 0,61, sous ±1,3, d'où « within that resolution ». Réserve non écrite dans le
+     corps : ±1,3 est la demi-largeur médiane d'UN composite (§ 4.3, 0,9 à 2,1 selon le
+     décideur) ; aucune différence appariée gemini-3.5 minimal / gemini-3.1 expert n'est
+     calculée. Retirés de la prose, restés au tableau 1 : 7,02 ; 7,63 ; 8,98 ; 50,2 ; 7,0 ;
+     4,9 ; 9,0 ; 3,60 ; 4,09 ; « half a point ». -->
 
 <!-- 2026-09-24, décision de l'auteur : le prompt du classifieur se règle sur la cohorte de
      calibration (c2) et se note sur la cohorte scellée (c1). Le 3,65 retiré était
@@ -51,25 +89,18 @@ expert prompt sits among them, at **[re-tuning pending]**.
      3,60 à 4,09. ⚠ La légende du master annonce « un facteur douze » entre le plancher aléatoire
      et le meilleur composite ; 50,16 / 3,60 vaut 13,9. Le rapport n'est pas repris ici. -->
 
-The minimal prompt already carries less error than the best of the three floors. The worst of the four
-minimal-prompt conditions sits at 14.8, against 27.0 for the minimum-duration heuristic.
-A model that receives the facts of a trip, and no
-general criteria, therefore carries behavioural information. That information is not
-the one the physical heuristic encodes.
-
-On two versions of one model family, the backbone model weighs as much as the instruction
-it carries. Served unchanged to a second model from the same provider, the expert text
-leaves 4.15 composite points between the two, interval +2.99 to +5.43.
+The same prompt does not score the same on two versions of one model family. Given the
+expert prompt of the tuned agent unchanged, gemini-3.1 trails gemini-3.5 by 4.2 composite
+points (interval 3.0 to 5.4), three times the cohort resolution.
 
 <!-- source: fr/99_annexes.md, annexe H.1, ligne « gemini-3.1 − gemini-3.5, prompt expert » :
      +4,15 [+2,99 ; +5,43] composite, +5,56 [+4,12 ; +7,02] hors choix unique, +17,4 L1.
      2,000 réplicats, graine 2026, rééchantillonnage par grappe sur 868 personnes communes. -->
 
-Replaying one condition under three seeds moves its composite less than the cohort itself
-does. The tuned gemini-3.5 condition scores 4.86, 4.65 and 4.30 on the same cohort and the
-same evaluation set. The range is 0.56 point, against a cohort resolution of ±1.3 points.
-Two further conditions replayed the same way range by 0.05 and 0.24 point. The sign of
-their difference holds on all three seeds.
+Replaying a condition under three seeds moves its composite less than a new cohort would.
+The tuned agent ranges by 0.6 point across seeds (Table 1), under that resolution. Two
+further conditions range by less than a quarter of a point, and the sign of their
+difference holds on all three seeds.
 
 <!-- source: fr/06_Empirical_Evaluation.md § 6.5 et son commentaire (ticket 073, axe 1) :
      graines 42, 123 et 789, composites 4,857 / 4,646 / 4,299, étendue 0,56 ; hors choix unique
@@ -97,16 +128,15 @@ their difference holds on all three seeds.
      fait que l'ordre compte ; un décideur parfaitement déterministe donnerait lui aussi trois
      scores différents sous ce protocole. -->
 
-*Figure 2 — The decision-makers order by family on the composite axis, with one crossing
-between prompts. The minimal prompt already carries less error than the physical floor.*
+*Figure 2 — The decision-makers group by family on the composite axis, and even the minimal
+prompt carries less error than the physical floor. The best minimal-prompt condition beats
+one expert-prompt condition by more than the cohort resolution.*
 
 ## 5.2 What tuning moves, and what it does not
 
 Successive tuning of the instructions that highlight the general criteria improves every
-language model, by more than a cohort would move on its own (Table 2). The paired gain on
-the composite is 2.27 points for
-gemini-3.5, interval +1.40 to +3.22, then 3.37 points for gemini-3.1 and 7.25 for
-mistral-large. All nine intervals exclude zero.
+language model, by more than a cohort would move on its own (Table 2). The paired gain runs
+from 2.3 to 7.3 composite points, and all nine intervals exclude zero.
 
 *Table 2 — Paired gains of the expert prompt over the minimal prompt, three readings, with
 their 95 % interval in brackets. A positive gain is a lower error.*
@@ -121,12 +151,13 @@ their 95 % interval in brackets. A positive gain is a lower error.*
      (un gain positif est une erreur plus faible). 2,000 réplicats, graine 2026, 868 personnes
      communes, tous les décideurs sur le jeu corrigé du ticket 088. -->
 
-The expert prompt was tuned on gemini-3.5, and on that model it creates a slope rather than
-a level shift (Figure 3). Under one kilometre the car share does not move, 9.7 % before
-tuning and 10.1 % after, where the survey records 18 %. Between one and fifty kilometres it
-rises by six to seven points in every band. The tuned agent then carries
-less error along distance than any machine learning model on structured data, 14.2 weighted points against 16.8 for
-the random forest. Distance is the only dimension where an agent manages it.
+Take gemini-3.5 as an example, the model the expert prompt was tuned on. There, tuning
+creates a slope rather than a level shift (Figure 3). Under one kilometre the car share stays near 10 % before and after
+tuning, where the survey records 18 %. Between one and fifty kilometres it rises by six to
+seven points in every band. Along distance, the tuned agent then carries less error than any
+reference model. Its L1 error, taken within each distance class and averaged by class size,
+is 14.2 points. The random forest, best of the four, scores 16.8. No other dimension
+gives an agent that lead.
 
 <!-- source: fr/06_Empirical_Evaluation.md § 6.3 et son commentaire : part voiture
      prompt_minimal_02 → prompt_expert_05, 9,7 → 10,1 ; 37,7 → 43,4 ; 51,1 → 58,4 ;
@@ -142,24 +173,33 @@ the random forest. Distance is the only dimension where an agent manages it.
      scores.json (detail.distance.strates[0-1km].target.voiture) des deux exécutions de
      l'annexe D, comme les écarts par tranche (+5,7 à +7,3) et la L1 pondérée (24,07 → 14,19). -->
 
+<!-- 2026-09-25, passe de lisibilité. La L1 pondérée n'était définie nulle part en amont ; la
+     clause « taken within each distance class and averaged by class size » reprend la définition
+     du master (article_old_do_not_maintain/fr/06_Empirical_Evaluation.md l. 93, « moyenne des
+     strates couvertes pondérée par leur effectif ») et la rattache à la L1 du § 4.3. « Near
+     10 % » arrondit 9,7 et 10,1. « Best of the four » : forêt 16,79, gradient boosté 17,79,
+     régression à noyau 18,09, logit 20,73 (même source). Tableau 2 : « 2.3 to 7.3 » arrondit
+     2,27 et 7,25 ; les valeurs par modèle restent au tableau. -->
+
 Two errors coexist in the same decision-maker, and the tuning answers only one. The three
 language models put the bike share between 6.8 and 8.1 %, where the survey records 4.1 %.
-This text moves it by less than one point, and pulls public transport down by four to eleven
-points. One stratum resists every decision-maker, the 15–19 year olds (Appendix F).
+The expert prompt pulls public transport down by four to eleven points, but moves the bike
+share by less than one point. One stratum resists every decision-maker, the 15–19 year olds
+(Appendix F).
 
 <!-- source: fr/06_Empirical_Evaluation.md § 6.3, paragraphe des deux modes minoritaires
      (scores.json, detail.<dimension>.strates). Le pic TC des 15-19 ans — 47,4 % dans
      l'enquête, 20,8 % pour l'agent réglé, 26,4 % pour la forêt aléatoire, légende de la
      figure 6.4 — part à l'annexe F (résultats par strate), relecture v1 F2. -->
 
-*Figure 3 — Tuning gives the agent a slope along distance, while the shortest trips stay
+*Figure 3 — On gemini-3.5, tuning gives the agent a slope along distance, while the shortest trips stay
 where the minimal prompt left them.*
 
 ## 5.3 Deliberation does not decide
 
-The typed classifier reaches the band of the four machine learning models on structured
-data. Its composite on the sealed cohort is **[re-tuning pending]**, against 3.60 to 4.09
-points for these four models. The paired differences against those four references are **[sealed cohort, four
+The typed classifier reaches the band of the four reference models. Its composite on the
+sealed cohort is **[re-tuning pending]**, against 3.6 to 4.1 points for these four models.
+The paired differences against those four models are **[sealed cohort, four
 paired differences with their 95 % intervals]**.
 
 <!-- source: ticket 103, lot A. Aucun chiffre en échantillon dans ce paragraphe, par consigne
@@ -186,8 +226,9 @@ paired differences with their 95 % intervals]**.
      source de ce paragraphe : ticket 103, Q2 et lot A. Cinquante-cinq mots rendus. -->
 
 A decision-maker that writes no text scores in the same band as those that write a
-justification. What helps is therefore the reading of the trip, not the sentences produced
-after the choice. Verbalised deliberation added nothing to aggregate fidelity here.
+justification. We read this as placing what helps in the reading of the trip, not in the
+text written after the choice. In our measurements, verbalised deliberation added
+nothing to aggregate fidelity.
 
 <!-- source : passe du 2026-09-23, décision de l'auteur. Deux phrases tombent ici. « The
      published debate on written reasoning reports gains on tasks that have a verifiable
@@ -199,8 +240,8 @@ after the choice. Verbalised deliberation added nothing to aggregate fidelity he
      tabulaires sont ajustées sur ces mêmes choix observés. Le paragraphe garde son constat de
      mesure et sa réserve de portée, qui sont ce qu'il établit. Vingt-huit mots économisés. -->
 
-At an equal load of 23,026 decisions the classifier costs 1.06 dollar against 49.28, a
-factor of about fifty.
+For the same number of decisions, the classifier costs 1.06 dollars where the language model
+costs 49.28, a factor of about fifty.
 
 <!-- source: fr/08_Limitations.md § 8.3 : 1,06 $ contre 49,28 $ à 23,026 décisions. Le
      rapport mesuré au § 9 des masters est de quarante-cinq à cinquante-six selon la charge.
@@ -212,10 +253,10 @@ factor of about fifty.
 
 The tuned agent and the gradient boosted model sit within the cohort resolution of each
 other and still disagree on one trip in three. They put their highest probability on a
-different mode for 30.3 % of trips, counted where both saw at least two options. That
-compares the distributions, not the mode each one drew. Between two machine learning models on structured data the
-same figure runs from 8.4 to 11.0 %. Two agents also differ four times more than two such
-models in the whole distribution, 40.0 points of median distance against 9.8.
+different mode for 30.3 % of trips, counted where both saw at least two options. Between two
+reference models the same count runs from 8.4 to 11.0 %. On the median trip, the summed
+absolute gap between the mode probabilities of two agents is four times that of two
+reference models.
 
 <!-- ⚠ ERREUR DE RÉFÉRENT, INTRODUITE PUIS CORRIGÉE le 2026-09-23, sur question de l'auteur.
      La réécriture de la veille disait « Their whole distributions also sit four times further
@@ -236,11 +277,10 @@ models in the whole distribution, 40.0 points of median distance against 9.8.
      Les 39,0 et 8,3 de la version précédente étaient l'un une paire agent / tabulaire
      (ligne 365), l'autre la plus petite des deux lignes tabulaires. Rapport 40,0 / 9,8 = 4,1. -->
 
-On the declared days of the survey the agent designates the declared mode slightly less
-often than the machine learning models on structured data (Table 3). The tuned agent reaches 67.6 %
-accuracy against 71.5 % for the gradient boosted model, a paired gap of 3.87 points,
-interval −5.47 to −2.28. Its gap to the multinomial logit separates from zero on neither
-accuracy nor cross-entropy.
+On the declared days of the survey, the tuned agent designates the declared mode slightly
+less often than the reference models (Table 3). It trails the gradient boosted model by 3.9
+accuracy points (interval 2.3 to 5.5). No paired interval separates it from the multinomial
+logit, on accuracy or on cross-entropy.
 
 *Table 3 — Unit-level agreement on the declared days, six decision-makers. Accuracy and
 recall in %, cross-entropy in nats on the 5,229 decisions that every distribution-valued
@@ -282,15 +322,25 @@ decision-maker scores.*
      prompt expert − gradient boosté −3,87 [−5,47 ; −2,28], prompt expert − logit multinomial
      −0,98 [−2,61 ; +0,58] et −0,018 [−0,039 ; +0,003]. -->
 
-The typed classifier falls under the all-car floor on individual accuracy. It reaches
-64.7 % where the floor reaches 66.7 %, a paired gap of 2.04 points, interval −3.78 to −0.29.
-On the composite, no paired comparison separates it from the four machine learning models
-on structured data. The two
-other aggregate readings put it behind the kernel regression and the random forest. Its
-probability mass goes to walking rather than to public transport. Walk recall reaches 56.3 %,
-against about 44 % for public transport (Figure 4). The aggregate split hides that exchange.
-A population can therefore reproduce the modal split of a territory while getting more
-individual trips wrong than a rule that reads nothing.
+The typed classifier falls under the all-car floor on individual accuracy. It trails that
+floor by 2.0 accuracy points (interval 0.3 to 3.8), while its composite reaches the band of
+the reference models (Section 5.3). Its probability mass goes to walking rather than to
+public transport. Walk recall reaches 56.3 %, against about 44 % for public transport
+(Figure 4). A population can therefore reproduce the modal split of a territory while
+getting more individual trips wrong than a rule that reads nothing.
+
+<!-- 2026-09-25, passe de lisibilité. TEXTE RETIRÉ, à restituer si l'auteur le juge juste :
+     « On the composite, no paired comparison separates it from the four machine learning
+     models on structured data. The two other aggregate readings put it behind the kernel
+     regression and the random forest. » Motif : la source de ces deux phrases (annexe H.1,
+     lignes « Jev sous consigne gemini-3.5 − <référence> », cf. commentaire ci-dessous) est le
+     classifieur sous le prompt expert de gemini-3.5, alors que la ligne du tableau 3 et
+     l'écart au tout-voiture (−2,04) sont ceux du prompt expert du classifieur ; et le § 5.3
+     annonce ces mêmes différences appariées comme un emplacement non encore rempli. La
+     phrase de remplacement renvoie au § 5.3 et n'affirme rien de plus que sa phrase de tête.
+     Arrondis : 2,04 → 2,0 ; intervalle [−3,78 ; −0,29] rendu en écart positif 0,3 à 3,8.
+     66,7 % (tout-voiture, absent du tableau 3) et 64,7 % (au tableau 3) quittent la prose. -->
+
 
 <!-- source: fr/99_annexes.md I.1 bis, « Jev sous consigne gemini-3.5 − tout-voiture »
      −2,42 [−4,26 ; −0,62] et « Jev prompt expert − tout-voiture » −2,04 [−3,78 ; −0,29] ;
@@ -303,7 +353,7 @@ individual trips wrong than a rule that reads nothing.
      deux lectures sur trois, et la phrase livrée ici nomme la lecture. -->
 
 *Figure 4 — Recall and precision by mode: the typed classifier trades public transport for
-walking, and the aggregate split does not show the exchange.*
+walking, and the modal split does not show the exchange.*
 
 <!-- ⚠ PARAGRAPHE SUPPRIMÉ le 2026-09-23, jugé inutile par l'auteur. TEXTE RETIRÉ :
      « A decision-maker accurate on its own test sample can still produce a worse distribution

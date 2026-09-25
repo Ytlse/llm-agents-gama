@@ -1,6 +1,6 @@
 # 7. Implications, limitations, conclusion
 
-<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-24 15:35:31 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 15:41:33 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
 
 <!-- Brouillon anglais, article court AAMAS 2027, PLAN.md § 7 — budget 550 mots
      (7.1 250, 7.2 150, 7.3 150). Rédigé le 2026-09-22 par l'agent article-writer.
@@ -11,14 +11,15 @@
 
 ## 7.1 What these results say about an architecture
 
-With the models used, the cost of one simulated day fixes where deliberation can be afforded. One weekday over
-1,000 personas asks the language model 2,108 times and consumes 3 million tokens, with
-memory disabled. Turning memory on adds some 2.5 million more. Scaled to the whole study
-area, one simulated day would ask 2.9 million times, for 2.6 to 4.2 billion
-tokens. One published answer to that cost asks the model once per behavioural archetype rather than
-once per agent (Chopra et al., 2025). There, 8.4 million agents cost some 400 queries. Agents of
-one archetype share an estimated probability, and each draws its own action from it. That
-saving is closed to us here, since a non-tabulated event is exactly what no attribute records.
+With the models used, the cost of one simulated day fixes where deliberation can be
+afforded. One weekday over 1,000 personas asks the language model 2,108 times and consumes
+3 million tokens, with memory disabled. Turning memory on adds some 2.5 million more. Scaled
+to the whole study area, one simulated day would ask 2.9 million times, for 2.6 to 4.2
+billion tokens. One published answer to that cost asks the model once per behavioural
+archetype rather than once per agent (Chopra et al., 2025). There, 8.4 million agents cost
+some 400 queries. Agents of one archetype share an estimated probability, and each draws its
+own action from it. That saving is closed to us here, since a non-tabulated event is exactly
+what no attribute records.
 
 <!-- Audit des citations du 2026-09-23. Chopra et al. est paru à AAMAS 2025 (pp. 500-509),
      d'où l'année 2025 ; c'est aussi le PDF déposé. « agents with the same attributes sharing
@@ -62,12 +63,13 @@ saving is closed to us here, since a non-tabulated event is exactly what no attr
      précision décimale n'ajoutant rien. -->
 
 Our measurements suggest a division of labour by regime rather than one decision-maker
-everywhere. We propose this as a possible implementation, though not yet implemented in our system. A
-deterministic stage would remove the options a person cannot take, for want of a licence, of
-a vehicle parked elsewhere, or of an itinerary. A machine learning model on structured data would then hold the nominal
-regime. A typed classifier would rate the severity of what happens. It would also say whether the case has left that regime
-(Section 6.2), and choose the itinerary once it has. The language model would receive what no variable carries and write it
-into memory.
+everywhere. We propose this as a possible implementation, though not yet implemented in our
+system.
+
+- A machine learning model on structured data would hold the nominal regime.
+- A typed classifier would rate the severity of what happens. It would also say whether the
+  case has left that regime (Section 6.2), and choose the itinerary once it has.
+- The language model would receive what no variable carries and write it into memory.
 
 <!-- source: fr/08_Limitations.md § 8.4, premier paragraphe : « un premier étage déterministe
      élague les alternatives physiquement ou légalement impossibles, absence de permis,
@@ -103,18 +105,31 @@ into memory.
      génération de texte (§ 6.2). Ni l'un ni l'autre ne la teste.
      Sort de ce paragraphe, la phrase imposée par la relecture v1 P1 (« Rating its severity
      is its task in the current design, though the traced case did not exercise it ») : sa
-     réserve vit désormais au § 6.2, qui la porte avec sa raison. -->
+     réserve vit désormais au § 6.2, qui la porte avec sa raison.
+     ⚠ Auteur, 2026-09-25 : l'étage déterministe est retiré et les trois étages restants
+     passent en liste. Il n'y a donc plus quatre étages mais trois ; le « then » du premier,
+     qui suivait l'étage déterministe, tombe avec lui, et le paragraphe suivant dit « The
+     nominal stage » là où il disait « The second stage ». -->
 
-The second stage forces a choice our measurements do not settle. A machine learning model on structured data holds both
-scales, though it does not exist before the survey that fits it. The typed classifier needs
-no such survey to run, and still matches, on the aggregate, the band of the machine learning models on structured
-data. A survey is what
-calibrates it, and without one its realism rests on weights trained elsewhere rather than on
-any reading of this territory. And on individual trips it falls below the all-car floor
-(Section 5.4). An architecture that placed it at the nominal stage would buy aggregate fidelity cheaply and lose individual fidelity. A decision-maker
-that reads the context, needs no local survey, holds the aggregate and beats that floor does
-not exist in our measurements. We do not estimate the
-share of trips each stage would take.
+On the ordinary day, our measurements point to the machine learning model on structured
+data. It does best at both scales. It reproduces the modal split of the cohort, and it gets
+the most trips right, 71.5 % against 66.7 % for a rule that sends everyone by car
+(Section 5.4). The typed classifier also reproduces the modal split, but it gets fewer trips
+right than the all-car rule, at 64.7 %. It cannot replace the machine learning model on the
+ordinary day. Its place is the second stage: rating what happens, and detecting when a case
+leaves that day. We do not estimate the share of trips each stage would take.
+
+<!-- ⚠ Auteur, 2026-09-25 : paragraphe réécrit, jugé illisible. Deux corrections de fond.
+     (1) La question n'est pas ouverte : sur la journée ordinaire, le modèle tabulaire est le
+     meilleur aux deux échelles (composite 3,60 au tableau 1 ; exactitude 71,5 % au tableau 3,
+     contre 66,7 % pour le plancher tout-voiture). « forces a choice our measurements do not
+     settle » disait l'inverse.
+     (2) Le classifieur à sortie typée a lui aussi besoin de l'enquête : son prompt expert est
+     réglé sur une cohorte de calibration d'après ses écarts à l'enquête (§ 4.4). L'argument
+     « needs no such survey » tombe, et avec lui l'arbitrage qu'il fondait. Choix de l'auteur :
+     ne plus parler d'enquête dans ce paragraphe (variante B), plutôt que dire que les deux en
+     dépendent.
+     source des chiffres : 05_results.en.md § 5.4, tableau 3 et paragraphe qui le suit. -->
 
 <!-- source: fr/08_Limitations.md § 8.4, cinquième paragraphe : « un modèle tabulaire n'existe
      pas avant l'enquête qui l'ajuste ; le classifieur à sortie typée tient le régime nominal
@@ -149,17 +164,43 @@ share of trips each stage would take.
 
 ## 7.2 Limitations
 
-Four limitations bound what these measurements support. The machine learning models on structured data train on
-39,203 survey trips the agents never read, so no result here compares two
-decision-makers at equal information. What the bench establishes is narrower. A decision-maker
-that reads the 21 variables alone cannot react to an event none of them carries, whatever its
-accuracy. We show that an agent reacts to such an event. We do not show that it decides
-better. The incident of Section 6 leaves the car usable, where a real engine failure would
-immobilise it. Our research convention forbids passing on
-the survey microdata, so re-estimating our machine learning models on structured data requires obtaining the survey
-under the same terms. The reference itself is the fourth limitation. The survey describes one
-weekday outside school holidays, collected as what respondents recall of the day before, for residents aged five and over. Nothing here therefore bears on weekends, on
-holiday periods, or on trips its respondents did not report.
+Four limitations bound what these measurements support.
+
+**A local survey behind every calibration.** Prompt calibration, the training of the machine
+learning models on structured data and the scoring of the bench all rest on a local travel
+survey. Toulouse has one, available to researchers on request. Such surveys are collected very
+unevenly from one country to another. Where none exists, prompts cannot be calibrated, and
+their error on that territory stays unknown.
+
+**A sampled and declared reference.** The reference is a sample of trips that residents
+declare the day after, from memory. It therefore carries a sampling error, largest in the
+smallest strata, and misses the trips respondents forget. Bench scores measure a distance to
+these declared shares, not to the trips actually made.
+
+**One weekday as the reference.** The survey describes a single weekday outside school
+holidays, for residents aged five and over, and our results hold for that day alone. Extending
+the bench to weekends or holidays would need a reference for their activities, which differ
+from those of a working day.
+
+**No observed reaction to compare with.** Our survey records no reaction to an incident or to
+an article. Section 6 therefore shows that an agent reacts to an event none of the 21
+variables carries. It does not show that the agent reacts as a resident would.
+
+<!-- ⚠ § 7.2 RÉÉCRIT en quatre sous-paragraphes titrés, décisions de l'auteur du 2026-09-25.
+     (1) L'écart d'information sort des limites : les modèles sur données structurées sont la
+     référence haute PARCE QU'ils ont lu le terrain, et le § 4.2 le déclare déjà (« We equalise
+     the 21 variables, not the information each side holds »). Seule en reste la borne du § 6,
+     devenue la quatrième limite : aucune réaction observée à laquelle comparer celle de l'agent.
+     (2) La clause du véhicule (« leaves the car usable ») est jugée inutile et sort du corps ;
+     elle n'y figure plus nulle part.
+     (3) La non-diffusabilité des microdonnées n'est pas une limite (tout chercheur obtient
+     l'enquête sur demande, § 4.2). La limite est la dépendance à une enquête locale recueillie
+     puis partagée, très inégale d'un pays à l'autre.
+     (4) Ajout demandé par le tuteur : l'enquête est un échantillon déclaratif, recueilli de
+     mémoire le lendemain ; son erreur d'échantillonnage et ses oublis passent dans la référence.
+     Aucune marge d'erreur publiée de l'enquête n'est citée, faute de source dans le dépôt.
+     (5) Le jour de semaine : ouverture vers tout jour de l'année, week-ends et vacances compris.
+     Budget : environ 210 mots pour 150 au PLAN § 7.2. -->
 
 <!-- source, limite 1 : fr/08_Limitations.md § 8.2, dernier paragraphe des asymétries :
      « Les quatre méthodes tabulaires ont lu 39,203 déplacements réels de l'enquête locale, et
@@ -241,14 +282,30 @@ holiday periods, or on trips its respondents did not report.
 ## 7.3 Conclusion
 
 We asked what verbalised deliberation brings to urban simulation, and where it earns its
-place in a mobility agent. It does not earn that place on the ordinary day. A calibrated generative agent reaches the machine learning models on structured data, fitted on
-that survey, without passing them. A typed classifier that writes no text reaches the same
-band, for a fiftieth of the cost. Neither result justifies billions of tokens per simulated
-day. Deliberation
-earns its price on what the survey does not tabulate, and a hybrid architecture is what
-confines it there. An event no variable carries enters the agent's memory and bends its
-choices over time, then fades. We show through which channel, on one case traced end to end,
-within a population calibrated to that survey.
+place in a mobility agent. On the ordinary day, it brings no measurable gain. A calibrated
+generative agent reaches the machine learning models on structured data, fitted on that
+survey, without passing them. The two sit within the resolution of our cohort, and later
+language models may close the remaining distance or go beyond it. Such an agent remains
+usable in small simulations, where a few dozen travellers can afford one call per decision.
+A city multiplies the bill, in money and in energy, in proportion to its population. A
+smaller model served on local hardware could bring that bill within reach. Whatever the
+model, what a decision-maker consumes weighs in the choice of an architecture as much as its
+accuracy. A typed classifier that writes no text reaches the same band, for a fiftieth of
+the cost. Billions of tokens per simulated day are not justified to reproduce what the
+survey already tabulates. Deliberation earns its price on what the survey does not tabulate,
+and a hybrid architecture is what confines it there. An event no variable carries enters the
+agent's memory and bends its choices over time, then fades. We show through which channel,
+on one case traced end to end, within a population calibrated to that survey.
+
+<!-- Complément de l'auteur, 2026-09-25 : fidélité proche des modèles classiques et ouverte
+     aux modèles à venir, usage en petite simulation, coût financier et énergétique à l'échelle
+     d'une ville, piste d'un modèle local. « within the resolution of our cohort » : § 5.4
+     (« sit within the cohort resolution of each other »). « in proportion to its population » :
+     § 7.1, 2,108 sollicitations pour 1,000 personas, 2.9 millions au périmètre d'enquête.
+     ⚠ L'énergie n'est chiffrée nulle part dans l'article : mention qualitative seulement ;
+     une référence publiée sur l'énergie par requête la renforcerait. Aucun run avec un
+     modèle local n'est mesuré : d'où « could ». Mots du § 7.3 : environ 225 pour 150 au PLAN.
+     Coupe candidate si le budget l'exige : « Billions of tokens per simulated day… ». -->
 
 <!-- source: PLAN § 0, « Ce que le papier établit, en quatre phrases », rendues dans l'ordre.
      Les quatre chiffres qui les portent vivent aux §§ 5.1, 5.3, 5.4 et 6.4 ; la conclusion
@@ -358,7 +415,7 @@ Skeleton       :
   The cost of one simulated day fixes where deliberation can be afforded.
   Our measurements suggest a division of labour by regime rather than one decision-maker
   everywhere.
-  The second stage forces a choice our measurements do not settle.
+  The nominal stage forces a choice our measurements do not settle.
   Four limitations bound what these measurements support.
   We asked what verbalised deliberation brings to urban simulation, and where it earns its
   place in a mobility agent.

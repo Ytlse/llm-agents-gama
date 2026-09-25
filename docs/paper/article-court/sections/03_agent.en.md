@@ -1,6 +1,6 @@
 # 3. The agent under evaluation
 
-<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-24 15:34:46 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 11:17:13 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
 
 <!-- Brouillon anglais, article court AAMAS 2027, PLAN.md § 3 — budget 450 mots.
      Rédigé le 2026-09-22 par l'agent article-writer. Les §§ 4, 5 et 6 sont écrits ;
@@ -34,8 +34,8 @@ only the decision-maker, and we name an agent after it.
 
 ## 3.1 The loop
 
-Three components carry the simulation. The world runs on GAMA, a multi-agent simulation platform
-(Taillandier et al., 2019). It carries the real geography of the study area, the networks,
+Three components make up the simulation. The world runs on GAMA, a multi-agent simulation platform
+(Taillandier et al., 2019). It holds the real geography of the study area, the networks,
 the clock and the physical execution of every trip. OpenTripPlanner, an open-source multimodal
 router (OpenTripPlanner contributors, 2025), produces the public transport itineraries on the
 real timetables. A fastest-path search with
@@ -47,13 +47,18 @@ one hour. An itinerary is one physical way to make it, with its mode, its lines 
 The two engines turn each trip into several itineraries, six at most. The options are those
 the vehicle chain allows (Section 3.4).
 
+<!-- Remarque du tuteur, PDF annoté v1 KOI, p. 4 : « carries » surligné, répété. Le § 3.1 le
+     portait trois fois en trois phrases, le § 3.2 deux fois de suite. Le 2026-09-25 : « make
+     up », « holds », « runs » au § 3.1 ; « gives », « lists » au § 3.2. Restent « The draw thus
+     carries » (§ 3.2) et « The prompt carries the past » (§ 3.3), isolés. -->
+
 <!-- ⚠ Remarque de relecture n° 7, 2026-09-23 : « trip » et « itinerary » employés sans
      définition, et « the direct trips » pour ce qui est un itinéraire. Six au plus :
      experience.yaml, max_candidats: 6 (source du § 4.2). Filtre par la chaîne : verrou de
      sortie par mode véhiculé passé à OTP (experiences/decision.py:124-160, include_*).
      « Option » = itinéraire offert, un seul mot par concept pour la suite. -->
 
-A controller carries the agent lifecycle, holds each agent's state and builds the
+A controller runs the agent lifecycle, holds each agent's state and builds the
 options available at the departure hour. A decision module hosts the decision-maker. The language model
 is called at five points of the loop. It makes the decision, rates an event as it enters
 memory, consolidates memory in the evening and runs a multi-day self-reflection. If required,
@@ -191,8 +196,8 @@ the memory that feeds it.*
 ## 3.2 What the agent receives, and what it returns
 
 The agent receives one trip description and returns one probability per option. The
-description carries a profile of the person and household, the destination, the
-departure time and the weather ahead. It also carries the trips left before returning home,
+description gives a profile of the person and household, the destination, the
+departure time and the weather ahead. It also lists the trips left before returning home,
 the relevant memories, and the numbered list of options.
 
 <!-- source: fr/03_Architecture.md § 3.3, première phrase : prénom, âge, occupation,
@@ -213,7 +218,11 @@ the relevant memories, and the numbered list of options.
 
 The model spreads a probability mass over that list, one entry per option. Probability mass
 is the share of preference placed on an option. The entries of one decision sum to one. The
-decision played is a random draw from that vector, and not the option ranked first.
+decision played is a random draw from those probabilities, and not the option ranked first.
+
+<!-- Remarque du tuteur, PDF annoté v1 KOI, p. 5 : « vector » entouré. Le vecteur p_t est sorti
+     avec le formalisme, mais « that vector » et « returns a vector » restaient sans antécédent.
+     Remplacés le 2026-09-25 par « those probabilities » et « one probability per option ». -->
 
 That draw is a modelling hypothesis, and discrete choice models already make it. A logit also
 returns one probability per option. Drawing from it amounts to maximising a utility whose
@@ -221,7 +230,7 @@ unobserved part follows an independent extreme-value law (McFadden, 1974). The d
 does not say about the person. Playing the first-ranked option would send every persona of
 one profile into the same mode. The spread the survey records within that profile would
 vanish. The options are listed in a random order, so that rank does not become preference. A
-decision-maker that returns a vector can then be scored against a distribution, as Section 4
+decision-maker that returns one probability per option can then be scored against a distribution, as Section 4
 does.
 
 <!-- ⚠ Remarque de relecture n° 4, 2026-09-23 : le tirage apparaissait comme un détail
@@ -247,7 +256,7 @@ does.
      justification de la comparaison distributionnelle ici ; la raison du tirage plutôt que de
      l'argmax vit à la règle 2 du § 4 et n'est pas redite. -->
 
-## 3.3 Two memory registers
+## 3.3 Two memory stores
 
 <!-- ⚠ Paragraphe d'ouverture SUPPRIMÉ le 2026-09-24 sur décision de l'auteur. Il disait
      « Section 5 scores one day, and a one-day run has almost nothing to recall […] Section 6
@@ -271,18 +280,44 @@ does.
      section (« …switched off, so no result of Section 5 depends on the 2.8-day constant »)
      est remontée ici. -->
 
-Two registers hold what an agent has been through. A short-term buffer receives the decisions
+Two stores hold what an agent has been through. A short-term buffer receives the decisions
 and the physical experience the simulation returns. A consolidation pass writes from that
-buffer into the long-term register each evening. An episodic trace says what happened and
+buffer into the long-term store each evening. An episodic trace says what happened and
 when, with a weight that decays on a 2.8-day time constant. A belief says what the agent holds
 true, does not decay, and lives on a confidence that observations move. Trace and belief map
 onto the episodic and semantic memories that Sumers et al. (2024) distinguish in language agents.
+The first keeps the experience of earlier decisions, the second what the agent knows of the world
+and of itself. Memory research has long held episodic memory more exposed to forgetting than
+semantic memory (Renoult & Rugg, 2020). We therefore let only traces decay.
 The exponential form also appears in MemoryBank (Zhong et al., 2024), but the 2.8-day constant
 is a design choice, not a fitted value. It leaves the trace of an uneventful trip less than a tenth
 of its weight after a week. The evening pass adapts the reflection of Park et al. (2023), which
 fires when recent events pass an importance threshold. In the evening each
 household member tells the others their day, and that account enters the hearers'
 reflection.
+
+<!-- Remarques du tuteur sur la version longue (PDF annoté AAMAS_2027___LLM_v1_KOI, p. 6),
+     reprises le 2026-09-25 sur accord de l'auteur.
+     « why episodic traces and concepts behave differently? » : deux phrases ajoutées après
+     Sumers et al. La première rend leurs deux définitions, CoALA § 4.1, vérifiées dans
+     sources/etat_de_lart/Sumers_2024_CoALA.pdf : « Episodic memory stores experience from
+     earlier decision cycles » ; « Semantic memory stores an agent's knowledge about the world
+     and itself ». CoALA ne dit rien de l'oubli : la raison de l'asymétrie vient donc d'une
+     autre source. Renoult & Rugg (2020), Neuropsychologia 139, 107366,
+     doi:10.1016/j.neuropsychologia.2020.107366 (Crossref vérifié ; manuscrit accepté déposé le
+     2026-09-25 sous sources/etat_de_lart/Renoult_2020_Tulving_Episodic_Semantic.pdf ; clé
+     renoult2020historical, sources/sample.bib), p. 10 du manuscrit : « in the 1972 chapter,
+     Tulving assumed that semantic memory was less vulnerable to loss of information,
+     interference and forgetting than episodic memory », les travaux ultérieurs de Tulving
+     (1983, p. 45) tenant l'épisodique pour plus fragile, et la littérature actuelle
+     rejoignant l'idée d'un oubli rapide de l'épisodique. D'où « has long held ».
+     Option B de l'auteur, 2026-09-25 : on cite la seule source lue, Renoult & Rugg, et non
+     Tulving (1972), dont le chapitre n'est toujours pas au dépôt (décision du 2026-09-24).
+     « We therefore let only traces decay » garde la règle pour un choix de conception
+     appuyé sur la littérature, non pour un résultat de Renoult & Rugg.
+     ⚠ Report LaTeX : ajouter renoult2020historical à overleaf/sample.bib.
+     « registers » (surligné) devient « stores », au titre comme dans le corps : le mot est
+     celui de la figure 1 (« Short-term memory », « Long-term memory ») et de CoALA. -->
 
 <!-- Audit des citations du 2026-09-23, Park et al. (2023), § 4.2 : la réflexion se déclenche
      « when the sum of the importance scores for the latest events … exceeds a threshold (150) »,
@@ -451,11 +486,11 @@ Words / budget : 583 / 450 (+29.6 %) — hors marge ±15 %, par la relecture v1 
                  (T1 +110, T2 +20), dont l'arithmétique paie l'ajout par des coupes aux
                  §§ 5, 6 et 7 et non ici. Le budget § 3 du PLAN est à porter de 450 à 580.
 Skeleton       : Each agent turns one trip description into a preference over the options offered.
-                 Three components carry the simulation.
+                 Three components make up the simulation.
                  The loop closes on the simulation's returns.
                  The agent receives one trip description and returns one probability per option.
                  The model spreads a probability mass over that list, one entry per option.
-                 Two registers hold what an agent has been through.
+                 Two stores hold what an agent has been through.
                  Four blocks of the prompt carry the past into a decision, and a measurement can tell which one acted.
                  Deciding each trip on its own produces physically impossible days.
                  These rules bind every decision-maker we compare, tabular models included.

@@ -1,6 +1,6 @@
-population_size: 1
+population_size: 4
 part_of_llm_based_agents: 1.0
 long_term_memory_enabled: true
 long_term_self_reflect_enabled: true
-simulation_max_days: 42
+simulation_max_days: 15
 accidents_enabled: false

@@ -1,3 +1,23 @@
+## [2026-09-25] Article court : une phrase peut compter trente mots, et un titre de paragraphe ne compte pas
+
+La consigne de forme R1 admet désormais une phrase de 30 mots, pour tout l'article court.
+Le vérificateur de forme, la consigne elle-même et la règle 13 de l'agent `article-writer`
+portent le même seuil. Le vérificateur ne compte plus un titre de paragraphe en ligne dans la
+phrase qui le suit (`**Titre court.**` en Markdown, `\paragraph{…}` en LaTeX), ce qui permet
+d'écrire des limites en sous-paragraphes titrés sans fausse alerte.
+
+Le § 7.2 passe en quatre sous-paragraphes titrés : dépendance à une enquête locale recueillie
+et partagée, référence échantillonnée et déclarative, un seul jour de semaine, aucune réaction
+observée à laquelle comparer celle de l'agent. L'écart d'information et la clause du véhicule
+sortent des limites.
+
+**Avant :** `verifier_forme.py` signalait toute phrase de plus de 26 mots, titre en gras
+compris (« **A local survey behind every calibration.** Prompt calibration… » : 31 mots).
+**Après :** le signalement commence à 31 mots et le titre est ignoré (la même phrase : 25 mots,
+sans constat).
+
+---
+
 ## [2026-09-25] On voit enfin quand le souvenir d'un article revient dans une décision, et le foyer se parle le soir
 
 Suite du dépouillement du bras traité a09 `2026-09-24_17_50` : les trois points laissés en

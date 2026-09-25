@@ -6,6 +6,7 @@ modeles:
   stm_reflection: gemini-3.5-flash-lite
   ltm_self_reflection: gemini-3.1-flash-lite
   enquete_affinite: gemini-3.1-flash-lite
+  evenement_relais: gemini-3.1-flash-lite
 temperature_decision: 0.0
 variante_prompt: prompt_expert_05
 population: population_4_foyer_133048

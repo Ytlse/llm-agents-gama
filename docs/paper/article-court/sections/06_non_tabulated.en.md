@@ -1,6 +1,14 @@
 # 6. The non-tabulated regime: a single-agent event traced to the decision
 
-<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-23 23:47:29 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 15:26:04 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+
+<!-- Passe de lisibilité du 2026-09-25, à la demande de l'auteur (même exercice qu'au § 5) :
+     la propension quotidienne est définie en une incise (source : moves.csv, colonne
+     P(Voiture Privée) %, moyenne quotidienne) ; « oscillates between 5 and 52 % » et la bande
+     témoin « 65 to 90 % » quittent la prose, la figure 5 les porte ; « during the period »
+     devient « after the failure (Table 4) », les douze trajets étant les 12/38 du tableau ;
+     « stays at 3 throughout » est remplacé par « does not move », pour ne pas confondre avec
+     le 3 de la sécurité. Aucun chiffre ajouté. -->
 
 <!-- Brouillon anglais, article court AAMAS 2027, PLAN.md § 6 — budget 750 mots.
      Rédigé le 2026-09-22 par l'agent article-writer. Hypothèse ticket 103 scénario 1 ;
@@ -75,11 +83,11 @@ being served.
      master (contradiction datée chez ceux qui continuent d'utiliser le mode) n'est pas
      reprise : elle n'est pas mesurée sur le cas tracé. -->
 
-Two links of this chain are text generation. Writing the trace of what has just
-happened is one, and maintaining the belief drawn from it is the other. The language model
-rates the severity as well, and that link is not text generation. The rating is one level in
-a closed grid, which a typed classifier can return. Whether it could also produce the two
-written links is open.
+The language model does two kinds of work in this chain. It writes prose when it records the
+trace of what has just happened and when it maintains the belief drawn from that trace. When
+it rates the severity, it only picks one of five levels, a label that a typed classifier could
+return as well. Whether such a classifier could also write the trace and the belief is an open
+question.
 
 <!-- source: fr/01_Introduction.md l. 81, commentaire de périmètre du ticket 101 § 2 : la
      consolidation — écrire la trace, entretenir la croyance — est une génération de texte
@@ -171,10 +179,10 @@ The control agent holds its rate throughout.
      taken on 94 %, 32 % then 88 % of the trips where it is offered, against 90, 92 and 87 %
      for the control agent. » -->
 
-The daily propensity to the car falls on the day of the failure and returns **fifteen days**
-later (Figure 5). It drops from 90 % on the eve to 40 % that day, then oscillates between 5
-and 52 %. It rejoins the band of the control agent, which never leaves 65 to 90 %, on
-15 April.
+The daily propensity to the car is the probability the model gives the car, averaged over
+the day's decisions. It falls on the day of the failure and returns **fifteen days** later
+(Figure 5). It drops from 90 % on the eve to 40 % that day, and stays under the range of
+the control agent until it rejoins it.
 
 <!-- source: fr/07_Adaptation.md § 7.2.3 et figure 7.1 : moves.csv, colonne
      P(Voiture Privée) %, moyenne quotidienne des décisions du jour, aucun découpage en
@@ -182,13 +190,14 @@ and 52 %. It rejoins the band of the control agent, which never leaves 65 to 90 
 
 *Figure 5 — The effect lasts exactly as long as the memory stays in the prompt.*
 
-The four blocks by which the past reaches a decision can be told apart, and the trace names
-the one that carried this effect. The account of the failure appears in the block of what has
-changed recently, in 75 of 376 decision prompts. It stays there from the day of the
-failure to the **fifteenth** day after. That span follows from the severity.
-**[TBC — The campaign under way reads what the three other blocks carry.]**
-
-<!-- source: fr/07_Adaptation.md § 7.2.1 : llm_exchanges.jsonl, 75 prompts sur 376 ;
+<!-- ⚠ Relecture de l'auteur, 2026-09-25 : paragraphe jugé inutile et retiré du corps. Il
+     disait : « The four blocks by which the past reaches a decision can be told apart, and the
+     trace names the one that carried this effect. The account of the failure appears in the
+     block of what has changed recently, in 75 of 376 decision prompts. It stays there from the
+     day of the failure to the fifteenth day after. That span follows from the severity. [TBC —
+     The campaign under way reads what the three other blocks carry.] » Ses sources restent
+     ci-dessous pour mémoire.
+     source: fr/07_Adaptation.md § 7.2.1 : llm_exchanges.jsonl, 75 prompts sur 376 ;
      trace_rappel.jsonl, aucune occurrence parmi les souvenirs servis ; llm/noyau.py,
      bloc_connaissances et duree_service_jours, 15,29 jours pour une gravité de 0,70, valeur
      écrite avant l'exécution (specs/ticket_095/tests.md) ; sélection par confiance puis
@@ -216,10 +225,9 @@ failure to the **fifteenth** day after. That span follows from the severity.
      § 6.3 : ce que la campagne lira n'est pas encore un résultat. -->
 
 Measurement separates the two ways an effect can end, and this one ended by wear. The agent
-took the car twelve times during the period. **[TBC — at this time, no contradiction of the
+took the car twelve times after the failure (Table 4). **[TBC — at this time, no contradiction of the
 belief born of the failure. Add an experiment?]** The account leaves the decision prompts
-after 13 April, and the propensity rejoins the control band on 15 April. Two independent
-sources give those dates, the text sent to the model and the probabilities it returned.
+after 13 April, and the propensity rejoins the control band on 15 April.
 
 <!-- source: fr/07_Adaptation.md § 7.2.3, troisième et quatrième paragraphes :
      agent_memory_events.jsonl de l'exécution exposée, zéro contradiction de concept ;
@@ -244,8 +252,8 @@ sources give those dates, the text sent to the model and the probabilities it re
 
 Declared opinions drop after the failure and come back. Five of the six criteria on the car
 fall at the milestone that follows it, safety from 8 to 3 on a scale of ten. The five have
-recovered their starting value at the two later milestones. The environment criterion stays
-at 3 throughout, and the control agent moves on none of the six. Both agents drift on the
+recovered their starting value at the two later milestones. The environment criterion, the
+control question, does not move, and the control agent moves on none of the six. Both agents drift on the
 four other modes without a common pattern, leaving the car as the only mode that separates
 them.
 
@@ -293,7 +301,6 @@ Skeleton       :
   Opinions are collected outside any decision, on six declared criteria, at four milestones.
   Although the car is offered as often as before the failure, it stops being taken.
   The daily propensity to the car falls on the day of the failure and returns fifteen days later (Figure 5).
-  The four blocks by which the past reaches a decision can be told apart.
   Measurement separates the two ways an effect can end, and this one ended by wear.
   Declared opinions drop after the failure and come back.
   A second experiment carries the same channel to information that is only read. (en gras)
@@ -324,19 +331,17 @@ Figures cited  : 94 / 32 / 88 % and 90 / 92 / 87 % (Table 4) — fr/07_Adaptatio
                  90 % → 40 %, then 5 to 52 %, control band 65 to 90 %, return 15 April
                  (Figure 5) — fr/07_Adaptation.md § 7.2.3 and figure 7.1 — daily mean, no
                  phase cutting in the source.
-                 75 of 376 decision prompts, fifteen days — llm_exchanges.jsonl and
-                 llm/noyau.py duree_service_jours (15.29 days for a severity of 0.70) — the
-                 duration was written before the run.
                  Twelve car trips, zero belief contradiction — agent_memory_events.jsonl —
                  RESERVATION, see flags.
                  Safety 8 → 3 on a scale of ten, environment at 3 at the four milestones —
                  fr/07_Adaptation.md § 7.2.3 — two of five falling criteria cited, for space.
                  Five press articles, twenty signs — fr/07_Adaptation.md § 7.3 — campaign
                  running, no result figure by PLAN § 6.4.
-Placeholders   : three [TBC] markers, all worded by the author on 2026-09-23 — "A campaign
-                 now under way" (§ 6.3), "The campaign under way reads what the three other
-                 blocks carry" (§ 6.4), and "at this time, no contradiction of the belief born
-                 of the failure. Add an experiment?" (§ 6.4). Two bold spans remain, and they
+Placeholders   : two [TBC] markers, both worded by the author on 2026-09-23 — "A campaign
+                 now under way" (§ 6.3) and "at this time, no contradiction of the belief born
+                 of the failure. Add an experiment?" (§ 6.4). The third, "The campaign under
+                 way reads what the three other blocks carry", left with its paragraph on
+                 2026-09-25. Two bold spans remain, and they
                  mark what is not yet acquired: the fifteen-day duration, twice, and the whole
                  second-experiment paragraph, of which nothing is measured.
                  Ticket 103 touches no figure of this section.

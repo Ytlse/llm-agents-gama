@@ -144,7 +144,7 @@ data:
   # Ticket 075 — population de TEST à cinq agents (PAS un sceau AAMAS : cf. son MANIFEST).
   # La référence de l'article reste /data/eqasim-output/population_1000_AAMAS_v6/population.json,
   # à remettre ici avant tout run de mesure.
-  population_file: /data/eqasim-output/population_1_861500/population.json
+  population_file: /data/eqasim-output/population_4_foyer_133048/population.json
 
   # ── Jeu de déplacements enregistré (ticket 035, spec 04) ────────────────────────────────
   # `make run JEU=<nom>` écrit `jeu_enregistre` ici et recrée le contrôleur ; sans lui, calcul en
@@ -159,6 +159,3 @@ data:
   #   car: heure
   #   transit: {pas_min: 10}
   #   rail: {pas_min: 10}
-evenements:
-  enabled: true
-  fichier: /app/config/evenements/c2_crevaison__861500.yaml

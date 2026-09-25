@@ -1,6 +1,6 @@
 # 4. The comparison bench
 
-<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-24 15:35:31 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 11:11:43 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
 
 <!-- Brouillon anglais, article court AAMAS 2027, PLAN.md § 4 — budget 900 mots.
      Rédigé le 2026-09-22 par l'agent article-writer. Hypothèse ticket 103 scénario 1.
@@ -201,6 +201,13 @@ occupation, gender and trip purpose. Two are ordered, age class and distance cla
 One composite number carries the aggregate reading. It adds the global divergence to the
 weighted mean divergence of each stratum.
 $$\mathcal{C}_{\text{EMD–JSD}} = \mathrm{JSD}^{\text{global}} + \sum_{d\ \text{nominal}} w_d\,\overline{\mathrm{JSD}}^{\,d} + \sum_{d\ \text{ordinal}} w_d\,\overline{\mathrm{EMD}}^{\,d}$$
+
+Each $d$ is a stratum, $w_d$ its weight, and the bar the mean divergence over that stratum.
+
+<!-- Remarque du tuteur sur la version longue (PDF annoté AAMAS_2027___LLM_v1_KOI, p. 5,
+     « describe all the mathematical notations in the text »), reprise le 2026-09-25 : d, w_d
+     et la barre n'étaient nommés nulle part. La phrase les glose avant que le paragraphe
+     suivant dise comment chaque moyenne se pondère et quelles valeurs prennent les poids. -->
 
 The divergence is Jensen–Shannon (Lin, 1991) in base 2 on nominal strata. Ordered strata take
 the earth mover's distance (Rubner, Tomasi & Guibas, 2000), which respects the class order. Both lie in [0, 1], the distance once divided

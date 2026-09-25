@@ -15,6 +15,66 @@ est l'heure de **début** en UTC, l'heure notée ici est celle de **fin**, lue d
 
 ---
 
+## 2026-09-25 15:14 — Presse a09 V2 (vent d'autan), foyer 133048, deux bras : l'article et le relais atteignent 40 décisions sur 42, l'écart aux témoins reste dans le bruit
+
+**Source :** bras traité `experiments/archive/2026-09-25_13_06` (13:06 → 14:09, 151 trajets),
+bras témoin `experiments/archive/2026-09-25_14_09` (14:09 → 15:14, 151 trajets), recopiés dans
+`experiments/runs/exp_mem_presse_a09_vent_autan_gem31flite_population_4_foy_15j_foyer_2_{treated,control}/`.
+Définition : `data/experiences_memoire/exp_mem_presse_a09_vent_autan_gem31flite_population_4_foy_15j_foyer_2/`
+(état `terminee`). Même configuration que l'entrée du 00:08 ci-dessous, plus
+`evenement_relais: gemini-3.1-flash-lite` ; code `main` à `10f3ad3` (ticket 111, retenue de
+l'horloge `0058908`, récit du foyer servi le soir seulement). Réglages vérifiés 8/8 sur les deux
+bras. Journal : `experiments/enchainement_nuit_20260925_1306.log`.
+
+**Conditions.** Un premier lancement à 13:02 a été arrêté par le lanceur au bout de 3 min : deux
+contrôleurs démarrés dans la même minute partageaient `experiments/archive/2026-09-25_13_02`, dont
+l'identité ne portait pas les réglages de l'expérience. Ce répertoire est sans valeur. Relance
+propre à 13:06. Aucune décision de repli, aucun trajet perdu (286921 : 57 trajets dans chaque bras,
+contre 52 au traité du premier run), 7 erreurs HTTP 503 rattrapées au nouvel essai, 1 réflexion STM
+en retard au réveil du 26 mars.
+
+**L'exposition et le relais.** Lecteur 286920, jour 11 (jeudi 26 mars, 00:00 simulé), gravité 0,30,
+valence négative, modes `['walking', 'cycling']`. Relais : un appel (6,3 s), trois messages, tous
+les membres informés — il ne reste aucun co-résident non informé. Les trois messages parlent de la
+fermeture des parcs à 18 h ; aucun ne parle de vélo ni de mode. Jugés par les informés : 286921
+0,30 (`walking`, `cycling`), 286922 0,50 (aucun mode), 286923 0,30 (aucun mode). Le run finit le
+mardi 31 mars, quatrième des cinq jours de service garantis.
+
+| Mesure | Valeur |
+|---|---|
+| décisions LLM du traité à partir de la lecture portant l'article ou le message du foyer | **40 sur 42** (les 2 autres sans prompt journalisé) |
+| dont décisions calculées avant l'injection (jours 10 et 11) | 10 |
+| contrôle « lecture avant décision » (`scripts/debug/run_report.py`) | 4 agents ✅, 0 🔴 |
+| messages écrits en mémoire longue chez les informés | 3 sur 3 |
+| tableau des quatre voies, informés (38 décisions) | changements 38 · connaissances ~10 · rappel ~2 |
+| tableau des quatre voies, lecteur (4 décisions) | changements 4 · rappel 0 |
+| raisonnements du traité qui citent la tempête ou les parcs | 4 sur 41 décisions appariées |
+| choix du lecteur | voiture dans toutes ses décisions, dans les deux bras |
+
+**Écart aux témoins** (distance de variation totale entre distributions déclarées, 132 décisions
+appariées) : avant la lecture, médiane 5 points, 9e décile 20 ; à partir de la lecture, médiane 5,
+9e décile 45, et 8 décisions sur 41 au-dessus de 20. Modes à partir de la lecture, traité contre
+témoin : 286921 voiture 8/9, marche 7/7, TC 2/1 ; 286923 vélo 11/7, marche 3/7 ; 286920 et 286922
+identiques. Avant la lecture, 286923 diffère déjà (vélo 13 contre 11).
+
+- 286923, vendredi 27 mars 17:36 : P(vélo) 60 % au traité, 0 % au témoin. Le raisonnement du traité
+  cite la tempête (« Given the storm warning and high winds, the child prefers the speed and
+  efficiency of cycling or walking home directly »). Au premier run, même trajet : 0 % au traité,
+  60 % au témoin.
+- 286921, lundi 30 mars 17:10 : écart de 100 points (TC contre voiture) ; au traité, la voiture
+  ne figurait pas parmi les options (chaîne des véhicules).
+- Aucun concept n'a traversé le foyer dans les deux bras (0 sur 26 examens au traité, règles R1 et
+  R2), comme au premier run.
+
+**Fausse alarme connue.** `temoin_souvenir.jsonl` rend « PERDU » pour 286921 le 25 mars : le
+contrôle a tourné avec une heure simulée antérieure à l'écriture (26 mars 00:00) ; le message est
+dans sa mémoire longue (`long_term_memory/user_metadata/shard_89/286921.json`).
+
+**Figure :** `docs/traces/2026-09-25_15-30_a09_v2_presse_foyer/a09_v2_presse_foyer.html` (et `.png`),
+script `figure_a09_v2.py` dans le même dossier, non installé dans le dépôt à cette date.
+
+---
+
 ## 2026-09-25 00:08 — Presse a09 (vent d'autan), foyer 133048, deux bras : l'article traverse le foyer, aucune décision du jour ne le lit
 
 **Source :** bras traité `experiments/archive/2026-09-24_17_50` (segment repris 22:01 → 23:05,

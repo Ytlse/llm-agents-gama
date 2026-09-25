@@ -54,7 +54,7 @@ autorité : sur ces trois points, le signalement se note et ne se corrige pas.
 
 ## § 1. La phrase
 
-### R1 — Vingt-six mots au maximum, une idée par phrase
+### R1 — Trente mots au maximum, une idée par phrase
 
 Au-delà, la phrase se coupe. Aucune exception, y compris pour une énumération : une
 énumération de plus de trois termes devient une liste ou un tableau.
@@ -68,7 +68,7 @@ En faute, § 1.6 (57 mots) :
 
 Corrigé : une phrase pour l'énoncé, une liste pour les trois règles.
 
-**Test :** `verifier_forme.py` signale toute phrase de plus de 26 mots (seuil relevé de 25 à 26 le 2026-09-24, décision de l'auteur).
+**Test :** `verifier_forme.py` signale toute phrase de plus de 30 mots (seuil relevé de 25 à 26 le 2026-09-24, puis de 26 à 30 le 2026-09-25, décisions de l'auteur). Un titre de paragraphe en ligne (`**Titre court.**` en Markdown, `\paragraph{…}` en LaTeX) ne compte pas dans la phrase qui le suit.
 
 ### R2 — Un deux-points par paragraphe au maximum, jamais deux dans une phrase
 

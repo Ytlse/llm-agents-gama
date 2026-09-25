@@ -1,6 +1,6 @@
 # Appendices
 
-<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-24 14:58:01 — le .tex correspondant, overleaf/chapters/08_Appendices.tex (compilé par overleaf/supplementary.tex, pas par main.tex), porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 11:11:43 — le .tex correspondant, overleaf/chapters/08_Appendices.tex (compilé par overleaf/supplementary.tex, pas par main.tex), porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
 
 <!-- Brouillon anglais, article court AAMAS 2027, PLAN.md § 9, annexe D seule. Écrit le
      2026-09-24 à la demande de l'auteur (« on parle de prompt expert ou minimal, ils devraient
@@ -12,6 +12,28 @@
      ⚠ URL du dépôt anonyme : https://anonymous.4open.science/r/TBD, à remplacer avant la
      soumission. Les chemins de fichier des liens supposent que le dépôt anonymisé reprend
      l'arborescence de ce dépôt-ci. -->
+
+<!-- APPENDIX A — NOTE DE RÉDACTION, à lire avant d'écrire l'annexe (2026-09-25).
+     L'annexe A porte le tableau des treize marges que le § 4.1 annonce (« The largest gap is
+     0.50 point (Appendix A) »). Le tuteur a annoté ce même tableau dans la version longue
+     abandonnée (PDF AAMAS_2027___LLM_v1_KOI, p. 6-7, Table 1 « Demographic control of the
+     sealed cohort »). Ses remarques valent pour la nouvelle version :
+     1. En-tête « Margin » marqué « ?? » : le mot ne dit pas ce que la ligne contient. Nommer
+        la colonne par son contenu, par exemple « Controlled trait », et rappeler dans la
+        légende qu'une marge est la part d'un trait dans la population (définition du § 4.1).
+     2. En-tête « Verdict » entouré : le mot juge sans dire le critère. Écrire le critère,
+        par exemple « Within ±1 pt », et laisser la légende dire que la borne d'équivalence a
+        été fixée avant la mesure.
+     3. Source « microdata » entourée : on ne sait pas de quoi. Écrire « survey microdata »,
+        ou « recomputed from the survey microdata », et dire en une phrase pourquoi certaines
+        marges sont recalculées (le rapport publié ne les donne pas).
+     4. « Demographic control » surligné dans la légende : dire ce qui est contrôlé contre
+        quoi, la cohorte scellée de 1,000 personas contre l'enquête.
+     5. Hors tableau, même page : « Each person carries a weight of one » marqué « ? », et le
+        paragraphe des marges jugé « not clear ». Si l'annexe mentionne les poids, les
+        expliquer (chaque persona compte pour une personne, sans redressement) ou ne pas en
+        parler.
+     La valeur maximale annoncée au § 4.1 (0.50 point) doit être celle du tableau. -->
 
 ## Appendix D. The three prompts, and one trip decided under each
 

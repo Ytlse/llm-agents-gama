@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 # --- Seuils. Ils viennent de CONSIGNES_FORME.md et s'y modifient d'abord. ---
-MOTS_MAX_PHRASE = 26
+MOTS_MAX_PHRASE = 30
 DEUX_POINTS_MAX_PAR_PARAGRAPHE = 1
 
 # R11 — table de conversion lexicale. Clé : motif ; valeur : ce qu'il faut écrire.
@@ -78,6 +78,8 @@ def nettoyer(texte: str, extension: str) -> str:
         texte = re.sub(r"\\begin\{([Vv]erbatim)\}.*?\\end\{\1\}", "", texte, flags=re.DOTALL)
         texte = re.sub(r"\\Description\{(?:[^{}]|\{[^{}]*\})*\}", "", texte, flags=re.DOTALL)
         texte = re.sub(r"\\begin\{tabular\w*\}.*?\\end\{tabular\w*\}", "", texte, flags=re.DOTALL)
+        # Titre de paragraphe en ligne : il ne compte pas dans la phrase qui le suit (R1).
+        texte = re.sub(r"\\paragraph\*?\{[^}]*\}", " ", texte)
         texte = re.sub(r"\\(label|includegraphics|graphicspath|setcounter|renewcommand|newcolumntype)\{[^}]*\}", "", texte)
         texte = re.sub(r"\\(texttt|textbf|emph|textit|citep|citet|ref)\{([^{}]*)\}", r"\2", texte)
         texte = re.sub(r"\\[a-zA-Z]+\*?", " ", texte)
@@ -87,6 +89,8 @@ def nettoyer(texte: str, extension: str) -> str:
         texte = re.sub(r"<!--.*?-->", "", texte, flags=re.DOTALL)
         texte = re.sub(r"```.*?```", "", texte, flags=re.DOTALL)
         texte = re.sub(r"^\s*\|.*\|\s*$", "", texte, flags=re.MULTILINE)
+        # Titre de paragraphe en ligne (« **Titre court.** ») : hors de la phrase qui suit (R1).
+        texte = re.sub(r"^\*\*(?:\S+\s+){0,7}\S+\.\*\*\s+", "", texte, flags=re.MULTILINE)
     return texte
 
 

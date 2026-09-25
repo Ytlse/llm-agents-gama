@@ -1,5 +1,5 @@
 % =====================================================================
-% chapters/07_Implications.tex — LaTeX rendering of ../sections/07_implications.en.md (2026-09-24 00:01:41)
+% chapters/07_Implications.tex — LaTeX rendering of ../sections/07_implications.en.md (2026-09-25 14:55:04)
 % Section 7 of the SHORT paper, the last one. \input from main.tex, after 06_Non_tabulated.tex.
 % This file DEFINES \label{sec:implications}, referenced by the reading map of Section 1.4.
 % It REFERENCES sec:mechanism (Section 6.2), sec:individual (Section 5.4) and
@@ -33,6 +33,10 @@
 %   of the conclusion on the typed classifier reaching the same band (written under scenario
 %   1; it leaves the conclusion under scenario 3). Section 7.2 also takes the sentence on seed
 %   coverage after lot B.
+% HAND CARRY OF 2026-09-25 against the .en.md of 2026-09-25 14:55:04: the deterministic
+%   stage is withdrawn and the three remaining stages of 7.1 become an itemize list (no
+%   "then" left in the first item); "tabular model(s)" becomes "machine learning model(s) on
+%   structured data" across the chapter; "The second stage" becomes "The nominal stage".
 % Maintained by hand (no generator since 2026-09-23): carry every validated pass of
 %   ../sections/07_implications.en.md and set the date of line 2 to its marker.
 % =====================================================================
@@ -44,60 +48,62 @@
 \label{sec:architecture-implication}
 
 With the models used, the cost of one simulated day fixes where deliberation can be
-afforded. One weekday over
-1{,}000 personas asks the language model 2{,}108 times and consumes 3 million tokens, with
-memory disabled. Turning memory on adds some 2.5 million more. Scaled to the whole study
-area, one simulated day would ask 2.9 million times, for 2.6 to 4.2 billion
-tokens. One published answer to that cost asks the model once per behavioural
-archetype rather than once per agent \citep{chopra2024limits}. There, 8.4 million agents cost some
-400 queries. Agents of one archetype share an estimated probability, and each draws its own
-action from it. That saving is closed to us here, since a non-tabulated event is exactly what no attribute records.
+afforded. One weekday over 1{,}000 personas asks the language model 2{,}108 times and consumes
+3 million tokens, with memory disabled. Turning memory on adds some 2.5 million more. Scaled
+to the whole study area, one simulated day would ask 2.9 million times, for 2.6 to 4.2
+billion tokens. One published answer to that cost asks the model once per behavioural
+archetype rather than once per agent \citep{chopra2024limits}. There, 8.4 million agents cost
+some 400 queries. Agents of one archetype share an estimated probability, and each draws its
+own action from it. That saving is closed to us here, since a non-tabulated event is exactly
+what no attribute records.
 
 Our measurements suggest a division of labour by regime rather than one decision-maker
 everywhere. We propose this as a possible implementation, though not yet implemented in our
-system. A deterministic stage would remove the options a person cannot take, for want of a
-licence, of a vehicle parked elsewhere, or of an itinerary. A tabular model would then hold
-the nominal regime. A typed classifier would rate the severity of what happens. It would also say whether the case has left that regime
-(Section~\ref{sec:mechanism}), and choose the itinerary once it has. The language model would
-receive what no variable carries and write it into memory.
+system.
+\begin{itemize}
+  \item A machine learning model on structured data would hold the nominal regime.
+  \item A typed classifier would rate the severity of what happens. It would also say whether
+    the case has left that regime (Section~\ref{sec:mechanism}), and choose the itinerary once
+    it has.
+  \item The language model would receive what no variable carries and write it into memory.
+\end{itemize}
 
-The second stage forces a choice our measurements do not settle. A tabular model holds both
-scales, though it does not exist before the survey that fits it. The typed classifier needs
-no such survey to run, and still matches the tabular band on the aggregate. A survey is what
-calibrates it, and without one its realism rests on weights trained elsewhere rather than on
-any reading of this territory. And on individual trips
-it falls below the all-car floor (Section~\ref{sec:individual}). An architecture that placed
-it at the nominal stage would buy aggregate fidelity cheaply and lose individual fidelity. A
-decision-maker that reads the context, needs no local survey, holds the aggregate and beats
-that floor does not exist in our measurements. We do not
-estimate the share of trips each stage would take.
+The nominal stage forces a choice our measurements do not settle. A machine learning model
+on structured data holds both scales, though it does not exist before the survey that fits
+it. The typed classifier needs no such survey to run, and still matches, on the aggregate,
+the band of the machine learning models on structured data. A survey is what calibrates it,
+and without one its realism rests on weights trained elsewhere rather than on any reading of
+this territory. And on individual trips it falls below the all-car floor
+(Section~\ref{sec:individual}). An architecture that placed it at the nominal stage would buy
+aggregate fidelity cheaply and lose individual fidelity. A decision-maker that reads the
+context, needs no local survey, holds the aggregate and beats that floor does not exist in
+our measurements. We do not estimate the share of trips each stage would take.
 
 \subsection{Limitations}
 \label{sec:limitations}
 
-Four limitations bound what these measurements support. The tabular references train on
-39{,}203 survey trips where the agents read none, so no result here compares two
-decision-makers at equal information. What the bench establishes is narrower. A
+Four limitations bound what these measurements support. The machine learning models on
+structured data train on 39{,}203 survey trips the agents never read, so no result here
+compares two decision-makers at equal information. What the bench establishes is narrower. A
 decision-maker that reads the 21 variables alone cannot react to an event none of them
 carries, whatever its accuracy. We show that an agent reacts to such an event. We do not show
 that it decides better. The incident of Section~\ref{sec:nontabulated} leaves the car usable,
 where a real engine failure would immobilise it. Our research convention forbids passing on
-the survey microdata, so re-estimating our tabular references requires obtaining the survey
-under the same terms. The reference itself is the fourth limitation. The survey describes one
-weekday outside school holidays, collected as what respondents recall of the day before, for
-residents aged five and over. Nothing here therefore bears on weekends, on holiday periods,
-or on trips its respondents did not report.
+the survey microdata, so re-estimating our machine learning models on structured data
+requires obtaining the survey under the same terms. The reference itself is the fourth
+limitation. The survey describes one weekday outside school holidays, collected as what
+respondents recall of the day before, for residents aged five and over. Nothing here
+therefore bears on weekends, on holiday periods, or on trips its respondents did not report.
 
 \subsection{Conclusion}
 \label{sec:conclusion}
 
 We asked what verbalised deliberation brings to urban simulation, and where it earns its
-place in a mobility agent. It does not earn that place on the ordinary day. A calibrated generative agent reaches the tabular models fitted on
-that survey without passing them. A typed classifier that writes no text reaches the same
-band, for a fiftieth of the cost. Neither result justifies billions of tokens per simulated
-day. Deliberation
-earns its price on what the survey does not tabulate, and a hybrid architecture is what
-confines it there. An event no variable carries enters the agent's memory and bends its
-choices over time, then fades. We show through which channel, on one case traced end to end,
-within a population calibrated to that survey.
-
+place in a mobility agent. It does not earn that place on the ordinary day. A calibrated
+generative agent reaches the machine learning models on structured data, fitted on that
+survey, without passing them. A typed classifier that writes no text reaches the same band,
+for a fiftieth of the cost. Neither result justifies billions of tokens per simulated day.
+Deliberation earns its price on what the survey does not tabulate, and a hybrid architecture
+is what confines it there. An event no variable carries enters the agent's memory and bends
+its choices over time, then fades. We show through which channel, on one case traced end to
+end, within a population calibrated to that survey.
