@@ -6132,3 +6132,25 @@ tickets:
       à l'échelle d'une cohorte de mille agents. N'ARRÊTE AUCUN RUN. DÉPEND DE : aucun ticket.
       PROLONGE le 106 (canal unique, en amont) et le 108 (l'injection a-t-elle eu lieu, encore
       en amont).
+
+  ticket_111_la_lecture_precede_la_decision_et_se_transmet_au_foyer:
+    status: en veille
+    category: Expériences & Cognition
+    note: >-
+      PLAN VALIDÉ PAR L'AUTEUR LE 2026-09-25, IMPLÉMENTATION DIFFÉRÉE par sa décision : aucune
+      ligne de code n'est écrite. Plan, contrat de tests et décisions D1 à D10 dans
+      `specs/ticket_111/`. Ouvert en analysant le bras traité a09 `2026-09-24_17_50` : le lecteur
+      286920 n'a vu l'article dans AUCUNE décision de son jour de lecture, pour deux causes
+      cumulées. (1) Sa décision du 26/03 05:57 a été pré-calculée la veille, dix-sept heures
+      simulées avant l'injection (horizon glissant). (2) Même calculée après, une décision ne le
+      voit pas : l'entrée `[ PRESSE ]` (`286920_23`, jugée 0,30) porte `rappels: 0` sur tout le
+      run, le bloc « Ce qui a changé récemment » exigeant 0,70 ; l'article n'atteint un prompt
+      que le 30/03, sous forme de concept. Le banc a13 `2026-09-22_14_54`, servi à 86-100 %
+      selon le ticket 110, était pourtant jugé 0,30 et 0,50 : il était servi parce que la mémoire
+      était presque vide (1 à 9 candidats pour 10 places), pas parce que le mécanisme marchait.
+      DÉCIDÉ : la lecture est servie au lecteur au rendu du prompt, quelle que soit sa gravité,
+      pendant 5 jours de déplacement ; le lecteur transmet à sa famille par un appel LLM
+      `evenement_relais`, un message par membre ou rien, et pour un mineur le message est la
+      décision des parents. Recette sur archive : le contrôle doit signaler 286920 le 26/03.
+      DÉPEND DE : aucun ticket — le feu vert de l'auteur pour implémenter. PROLONGE les tickets
+      100 (prise `reveil`) et 110 (présence au prompt).
