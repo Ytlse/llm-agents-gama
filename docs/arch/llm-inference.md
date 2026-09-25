@@ -139,6 +139,7 @@ du client, depuis `settings.llm.instances_admises`.
 | Choix d'itinéraire | `itinary_multi_agent` |
 | Réflexion à court terme (consolidation mémoire) | `stm_reflection` |
 | Auto-réflexion à long terme | `ltm_self_reflection` |
+| Transmission au foyer (ticket 111) | `evenement_relais` |
 
 ⚠ **Pourquoi au seuil et non sur chaque payload.** Le ticket 084 posait la restriction sur le seul
 payload de décision. Mesuré le 2026-09-16 sur un run dont l'objet d'étude était la mémoire :
@@ -732,6 +733,24 @@ quinze jugements sur quinze ont répondu « négligeable », et le défaut s'est
 `test_tout_champ_lu_par_un_gabarit_est_declare_sur_AgentSpec` confronte désormais ce que les
 gabarits lisent sous `agent.` à ce que le modèle déclare. Il ne peut pas prouver qu'un champ
 déclaré est rempli — il rend impossible la troisième occurrence de ce motif-là.
+
+#### Catégorie `evenement_relais` — le lecteur parle à son foyer (ticket 111)
+
+Un appel **par foyer exposé**, sous `relais: {mode: par_destinataire}`, lancé à l'injection de
+00:00. Gabarit `categories/evenement_relais/template.md.j2` (anglais), un seul agent par requête :
+le lecteur, avec sa perception, l'article cité, et la fiche de chaque autre membre mobile
+(`AgentSpec.article` et `AgentSpec.membres`, déclarés pour ne pas être jetés par
+`extra="ignore"`). Réponse `agents[{agent_id, recipients[{agent_id, speaks, message}]}]`.
+`temperature` 0,2, `max_tokens` 2 048 (réserve de raisonnement comprise), instances restreintes
+par `instances_pour("evenement_relais")` comme toute catégorie routée. Son modèle se choisit
+dans l'onglet 🧠 Expériences Mémoire, sixième fonction.
+
+La réponse n'a aucun repli : invalide, elle est refusée avec `[ALARME]` et personne n'est
+informé. Elle est écrite dans `relais_foyer.jsonl` et **relue à la reprise, jamais redemandée**
+— détail dans [`evenements.md`](evenements.md#le-lecteur-le-dit-à-sa-famille).
+
+⚠ La catégorie vit dans le paquet `mobility_llm` : l'image du worker et de la passerelle doit
+être **reconstruite** pour la connaître.
 
 #### Ce que la passerelle fait d'une réponse mal enveloppée
 
@@ -1342,6 +1361,12 @@ suit pas le rythme. La jauge du drainage, `activities_to_compute_count` (trajets
 doivent rester cohérents. Seule exception légitime : deux activités consécutives au même
 endroit (`legs=[]`), où GAMA garde volontairement `is_ready=false` pour éviter un
 deadlock (`Inhabitant.gaml`).
+
+**Ce que l'horizon impose au canal `lu`** (ticket 111). Une décision est calculée environ un
+cycle d'activités avant le départ : celle du jour de lecture l'a été la veille, avant
+l'injection de 00:00. Un article posé en mémoire n'y peut donc rien. La ligne de lecture est
+posée **au rendu du prompt**, sur le jour de **départ** du trajet décidé, et le pré-calcul reste
+tel quel — voir [`evenements.md`](evenements.md#ce-que-lagent-a-lu-est-devant-lui-quand-il-décide-ticket-111).
 
 ### Retenue sur départ imminent /sync — expériences seulement (2026-09-25)
 

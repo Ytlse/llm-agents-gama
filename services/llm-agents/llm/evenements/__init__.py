@@ -54,10 +54,13 @@ from llm.evenements.declaration import (  # noqa: F401 — façade du paquet
 )
 from llm.evenements.exposition import REGLES_EXPOSITION  # noqa: F401
 from llm.evenements.injection import (  # noqa: F401
+    PREFIXE_FOYER,
     a_l_arrivee,
     au_reveil,
     entree_de_lecture,
     joindre,
+    ligne_de_foyer,
+    ligne_de_lecture,
 )
 from llm.evenements.jugement import (  # noqa: F401
     Jugement,
@@ -65,6 +68,7 @@ from llm.evenements.jugement import (  # noqa: F401
     juger,
 )
 from llm.evenements.registre import CompteursJournee, RegistreEvenements  # noqa: F401
+from llm.evenements.relais import Message, RelaisFoyer, RelaisRefuse  # noqa: F401
 from settings import settings
 
 # ── Registre du processus ───────────────────────────────────────────────────────────────────
@@ -106,6 +110,43 @@ def noter_decision(timestamp: int, depuis_cache: bool) -> None:
     if _registre is None:
         return
     _registre.noter_decision(int(timestamp), depuis_cache)
+
+
+async def lignes_du_jour(person_id: str, timestamp: int, *, compter: bool = True) -> list[str]:
+    """Les lignes garanties au prompt de cet agent pour un trajet à `timestamp` — ticket 111.
+
+    Liste vide sans événement, hors des jours de service, ou pour un agent non exposé. Ne lève
+    JAMAIS vers l'appelant : une ligne qui ne se calcule pas ne doit pas faire perdre la
+    décision — mais elle ne disparaît pas en silence, une [ALARME] le dit.
+    """
+    if _registre is None:
+        return []
+    try:
+        return await _registre.lignes_du_jour(str(person_id), int(timestamp), compter=compter)
+    except Exception as err:  # noqa: BLE001
+        logger.error(
+            f"[ALARME] [evenements] lignes de service non calculées pour {person_id} à "
+            f"{timestamp} ({type(err).__name__}: {err}) — la décision part SANS la ligne "
+            f"garantie par le ticket 111."
+        )
+        return []
+
+
+def noter_instant(timestamp: int) -> None:
+    """L'instant simulé du /sync courant. Sans événement, ne fait rien."""
+    if _registre is not None:
+        _registre.noter_instant(int(timestamp))
+
+
+def noter_rendu(person_id: str, timestamp: int, lignes, historique) -> None:
+    """Vérifie qu'une décision porte bien ses lignes de service. Sans événement, ne fait rien."""
+    if _registre is not None and lignes:
+        _registre.noter_rendu(str(person_id), int(timestamp), lignes, historique)
+
+
+def noter_contournement_cache() -> None:
+    if _registre is not None:
+        _registre.noter_contournement_cache()
 
 
 def _declaration_demandee() -> str | None:

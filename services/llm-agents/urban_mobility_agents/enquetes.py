@@ -237,7 +237,9 @@ def modes_interroges() -> tuple[str, ...]:
     return _modes
 
 
-def perception_de(agent: Any, person: Any, timestamp: int) -> str:
+def perception_de(
+    agent: Any, person: Any, timestamp: int, lignes: tuple[str, ...] | list[str] = ()
+) -> str:
     """Ce que l'agent SAIT de lui-même au moment de l'enquête — identité et mémoire noyau.
 
     C'est ici que se joue la fidélité en entrée. Le bloc mémoire est construit par le MÊME appel
@@ -250,6 +252,10 @@ def perception_de(agent: Any, person: Any, timestamp: int) -> str:
     Un bloc qui ne se construit pas ne fait pas perdre l'enquête, mais il ne disparaît pas non
     plus en silence : sans lui, la réponse mesure le modèle de base et non l'agent, et c'est
     exactement le défaut que ce lot corrige.
+
+    `lignes` (ticket 111, D6) — ce qui est garanti au prompt de décision ce jour-là. Une enquête
+    tenue un jour de service voit la MÊME ligne que la décision : sans cela, elle interrogerait
+    un agent qui ne sait pas ce qu'il a lu le matin même.
     """
     pid = str(person.person_id)
     morceaux: list[str] = []
@@ -271,13 +277,13 @@ def perception_de(agent: Any, person: Any, timestamp: int) -> str:
             if getattr(agent, "long_term_memory", None) is not None
             else {}
         )
-        bloc = memoire_noyau(journal, entrees, wall_clock(timestamp), pid)
+        bloc = memoire_noyau(journal, entrees, wall_clock(timestamp), pid, lignes)
     except Exception as err:  # noqa: BLE001
         logger.error(
             f"[ALARME] [enquete] mémoire noyau non construite pour {pid} ({err}) — la réponse "
             f"mesurerait le modèle de base et non l'agent."
         )
-        bloc = []
+        bloc = ["Ce qui a changé récemment", *(f"- {l}" for l in lignes)] if lignes else []
     if bloc:
         morceaux.append("\n".join(bloc))
     return "\n\n".join(morceaux)
@@ -398,7 +404,17 @@ async def executer_enquetes_jalon(
     # personne ne lui présentait jamais qu'un agent à la fois. Les modes, eux, restent
     # SÉQUENTIELS : un lot ne réunit ainsi que des questions sur le même mode, et le prompt
     # fusionné n'en cite jamais qu'un.
-    perceptions = {str(p.person_id): perception_de(agent, p, timestamp) for p in cibles}
+    from llm import evenements as _evenements
+
+    perceptions = {
+        str(p.person_id): perception_de(
+            agent,
+            p,
+            timestamp,
+            await _evenements.lignes_du_jour(str(p.person_id), timestamp, compter=False),
+        )
+        for p in cibles
+    }
     rendus: dict[str, int] = {pid: 0 for pid in perceptions}
     par_persona: dict[str, list[dict[str, Any]]] = {pid: [] for pid in perceptions}
 

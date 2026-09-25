@@ -343,7 +343,10 @@ def _annoncer_sortie(
 
 
 def bloc_changements(
-    entrees, maintenant: datetime | None, person_id: str | None = None
+    entrees,
+    maintenant: datetime | None,
+    person_id: str | None = None,
+    lignes: tuple[str, ...] | list[str] = (),
 ) -> list[str]:
     """« Ce qui a changé récemment » : les chocs, et les croyances mises à l'écart.
 
@@ -363,9 +366,16 @@ def bloc_changements(
     jouer, mais par la `force`, donc sur la durée — pas en rajeunissant l'événement.
 
     `person_id` ne sert qu'au journal ; il est facultatif pour que les appels purs restent purs.
+
+    `lignes` (ticket 111) — ce qui est GARANTI au prompt ce jour-là : l'article lu, ou ce qu'un
+    membre du foyer en a dit. Elles passent EN TÊTE, quelle que soit leur gravité jugée, et ne
+    sont jamais évincées par `memoire__changements_max`. Une entrée de mémoire longue dont le
+    contenu est identique à une ligne n'est pas servie une seconde fois. Sans `lignes`, le bloc
+    est identique octet pour octet à celui d'avant le ticket.
     """
+    garanties = [str(ligne) for ligne in (lignes or ()) if ligne]
     if maintenant is None:
-        return []
+        return garanties
     mode = _mode_fenetre()
     fenetre = _fenetre_jours()
     depuis_chocs = maintenant - timedelta(days=fenetre)
@@ -376,6 +386,8 @@ def bloc_changements(
     chocs_hors: list[tuple] = []
 
     for e in entrees:
+        if garanties and e.content in garanties:
+            continue
         if e.est_episodique:
             if float(e.importance or 0.0) >= seuil_choc:
                 duree = None
@@ -405,14 +417,21 @@ def bloc_changements(
 
     _annoncer_sortie(person_id, chocs_dans, chocs_hors, mode, fenetre)
     lignes.sort(key=lambda kv: kv[0], reverse=True)
-    return [texte for _, texte in lignes[: int(settings.agent.memoire__changements_max)]]
+    ordinaires = [texte for _, texte in lignes[: int(settings.agent.memoire__changements_max)]]
+    if not garanties:
+        return ordinaires
+    return garanties + [t for t in ordinaires if t not in garanties]
 
 
 # ── Le bloc complet ──────────────────────────────────────────────────────────────
 
 
 def memoire_noyau(
-    journal: dict, entrees, maintenant: datetime | None, person_id: str | None = None
+    journal: dict,
+    entrees,
+    maintenant: datetime | None,
+    person_id: str | None = None,
+    lignes: tuple[str, ...] | list[str] = (),
 ) -> list[str]:
     """Le bloc permanent, en lignes prêtes pour le gabarit.
 
@@ -422,7 +441,10 @@ def memoire_noyau(
     sections = (
         ("Mes habitudes", bloc_habitudes(journal or {})),
         ("Ce que je sais", bloc_connaissances(entrees or [])),
-        ("Ce qui a changé récemment", bloc_changements(entrees or [], maintenant, person_id)),
+        (
+            "Ce qui a changé récemment",
+            bloc_changements(entrees or [], maintenant, person_id, lignes),
+        ),
     )
     sortie: list[str] = []
     for titre, lignes in sections:

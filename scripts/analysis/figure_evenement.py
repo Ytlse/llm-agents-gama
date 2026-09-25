@@ -40,13 +40,25 @@ import sys
 from pathlib import Path
 
 RACINE = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(RACINE))
+
+from scripts.analysis import lecture_avant_decision as _lad  # noqa: E402
 
 # Palette catégorielle validée (dataviz, slots 1-3). Ne pas remplacer sans revalider :
 #   node scripts/validate_palette.js "#2a78d6,#eb6834,#1baf7a" --mode light
 ROLES = (
-    ("expose", "Exposed", "#eb6834"),
-    ("co_resident", "Co-resident (heard only)", "#2a78d6"),
-    ("temoin", "Control", "#1baf7a"),
+    ("expose", "Exposed", "#eb6834", ""),
+    ("co_resident", "Co-resident (heard only)", "#2a78d6", ""),
+    ("temoin", "Control", "#1baf7a", ""),
+)
+# Ticket 111 — quand le lecteur a relayé à son foyer (`relais_foyer.jsonl`), le co-résident se
+# sépare en deux. Même teinte, tracé distinct : la palette validée n'a que trois emplacements, et
+# les deux sous-rôles sont deux moitiés du même groupe.
+ROLES_RELAIS = (
+    ("expose", "Exposed", "#eb6834", ""),
+    ("co_resident_informe", "Co-resident, told", "#2a78d6", ""),
+    ("co_resident_non_informe", "Co-resident, not told", "#2a78d6", "6 4"),
+    ("temoin", "Control", "#1baf7a", ""),
 )
 
 # Mode canonique → colonne de probabilité de `moves.csv`. EXPLICITE et non devinée : trois
@@ -79,7 +91,9 @@ def series(run: Path, mode: str) -> tuple[dict, dict, str]:
     Rend `({role: {jour: moyenne}}, {role: {jour: effectif}}, identifiant de l'événement)`.
     """
     colonne = COLONNE_PROBA[mode]
-    valeurs: dict[str, dict[int, list[float]]] = {r: {} for r, _, _ in ROLES}
+    informes = _lad.informes_du_run(run)
+    roles = ROLES if informes is None else ROLES_RELAIS
+    valeurs: dict[str, dict[int, list[float]]] = {r: {} for r, _, _, _ in roles}
     evenement = ""
     chemin = run / "moves.csv"
     if not chemin.is_file():
@@ -99,7 +113,9 @@ def series(run: Path, mode: str) -> tuple[dict, dict, str]:
                 f"savoir qui était exposé, et c'est précisément ce que la colonne porte."
             )
         for ligne in lecteur:
-            role = (ligne.get("Rôle") or "").strip()
+            role = _lad.sous_role(
+                (ligne.get("Rôle") or "").strip(), ligne.get("ID Personne") or "", informes
+            )
             relatif = (ligne.get("Jour relatif au choc") or "").strip()
             brut = (ligne.get(colonne) or "").strip()
             # Une cellule VIDE n'est pas un zéro : c'est une décision sans répartition
@@ -192,7 +208,8 @@ def composer(moyennes: dict, effectifs: dict, mode: str, evenement: str) -> str:
     a(f'<text class="ink2" x="{L - 46}" y="{T - 14}" font-size="11.5">P({libelle})</text>')
 
     absents = []
-    for role, nom, couleur in ROLES:
+    roles = ROLES_RELAIS if any(r.startswith("co_resident_") for r in moyennes) else ROLES
+    for role, nom, couleur, tirets in roles:
         points = moyennes.get(role) or {}
         if not points:
             # « Non concluant » ÉCRIT sur la figure, et non une courbe absente : une série
@@ -201,7 +218,8 @@ def composer(moyennes: dict, effectifs: dict, mode: str, evenement: str) -> str:
             continue
         pts = [(_x(j, jmin, jmax), _y(p)) for j, p in sorted(points.items())]
         d = " ".join(f"{'M' if i == 0 else 'L'}{x:.1f} {y:.1f}" for i, (x, y) in enumerate(pts))
-        a(f'<path d="{d}" fill="none" stroke="{couleur}" stroke-width="2" '
+        dash = f' stroke-dasharray="{tirets}"' if tirets else ""
+        a(f'<path d="{d}" fill="none" stroke="{couleur}" stroke-width="2"{dash} '
           f'stroke-linejoin="round" stroke-linecap="round"/>')
         for x, y in pts:
             a(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4" fill="{couleur}" '
@@ -232,7 +250,8 @@ def main() -> int:
     args = p.parse_args()
 
     moyennes, effectifs, evenement = series(args.run, args.mode)
-    for role, nom, _ in ROLES:
+    roles = ROLES_RELAIS if any(r.startswith("co_resident_") for r in moyennes) else ROLES
+    for role, nom, _, _ in roles:
         total = sum((effectifs.get(role) or {}).values())
         retenus = len(moyennes.get(role) or {})
         print(f"  {nom:28s} {total:5d} décision(s), {retenus} jour(s) au-dessus du seuil")

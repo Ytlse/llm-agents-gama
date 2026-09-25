@@ -1277,6 +1277,27 @@ repli compte : une variante inconnue laissée telle quelle ferait retomber le s�
 premier choix, `b0_pristine`, au lieu du prompt actif — une substitution silencieuse qui finirait
 écrite dans `experience.yaml`.
 
+## Onglet « 🧠 Expériences Mémoire » — un modèle par fonction (tickets 109 et 111)
+
+Le formulaire choisit un modèle pour chacune des **six** fonctions cognitives du run
+(`CATEGORIES_COGNITIVES`, `services/llm-agents/experiences/memoire.py`) :
+
+| # | Fonction | Catégorie |
+|---|---|---|
+| 1 | Choix modal / itinéraire | `itinary_multi_agent` |
+| 2 | Jugement d'événement (injection) | `evenement_jugement` |
+| 3 | Mémoire court terme / soir | `stm_reflection` |
+| 4 | Auto-réflexion long terme | `ltm_self_reflection` |
+| 5 | Enquêtes d'affinité | `enquete_affinite` |
+| 6 | **Transmission au foyer** (ticket 111) | `evenement_relais` |
+
+La sixième ne sert qu'aux déclarations `canal: lu` qui portent `relais` : un appel par foyer
+exposé, où le lecteur dit l'article à chaque membre (voir
+[`evenements.md`](evenements.md#le-lecteur-le-dit-à-sa-famille)). Son défaut est le modèle du
+jugement, ou celui de la décision quand le jugement vaut `aucun`. L'estimation de coût compte un
+appel de relais par foyer exposé et majore les jugements d'un par persona — chaque membre informé
+juge son message.
+
 ## Onglet « 🔁 Campagne » (ticket 074, lot E)
 
 Une campagne dure des jours et passe l'essentiel de son temps à **attendre**. La question que

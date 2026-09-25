@@ -13,25 +13,197 @@ gravité, force, durée de service, consolidation, croyance, contradiction.
 
 | | choc (`canal: vecu`, `moment: arrivee`) | article (`canal: lu`, `moment: reveil`) |
 |---|---|---|
-| Quand | à l'arrivée, **après** le choix | à 3 h simulées, **avant** le premier réveil |
+| Quand | à l'arrivée, **après** le choix | au premier pas de simulation après minuit (00:00), **avant** le premier réveil |
 | Ce qui change dans le monde | un retard chiffré | **rien** |
-| Ce que l'agent sait en décidant | l'offre nominale, rien d'autre | ce qu'il a lu ce matin |
+| Ce que l'agent sait en décidant | l'offre nominale, rien d'autre | ce qu'il a lu ce matin, **garanti au prompt pendant 5 jours de déplacement** (ticket 111) |
 | Écriture en mémoire | texte **joint** à l'observation d'arrivée, courte seulement | entrée **autonome**, courte **et longue** |
 | Jugement | **à l'injection**, attendu | à l'injection |
 | Texte | écrit par nous, jour par jour | **cité**, un seul, avec son empreinte |
-| Qui | `mode`, `tirage`, `agents` | `foyers` — un lecteur par ménage |
+| Qui | `mode`, `tirage`, `agents` | `foyers` — un lecteur par ménage, qui le dit (ou non) aux siens |
 | Quel jour | déclaré, le même pour tous | **tiré par foyer** dans une fenêtre |
 
 Le jour du choc **ne mesure aucun choix** : tout l'effet des jours suivants est imputable au
 souvenir, et à rien d'autre. Le jour de l'article n'en mesure **que**. C'est ce contraste que le
 chapitre 7 mesure, et il n'existe que si les deux prises restent à leur place.
 
-⚠ **L'article écrit AUSSI en mémoire longue, et le choc non.** Ce n'est pas un oubli, c'est le
-régime : une décision ne lit que la mémoire longue, et la consolidation du soir consomme le
-tampon court sans y déverser le texte brut. Un article posé en mémoire courte ne serait vu par
-aucune décision de la journée — « l'agent sait avant de décider » serait faux. Pour le choc, au
-contraire, un effet qui ne commence que le lendemain est exactement ce qu'on veut. Ce qui reste
+⚠ **L'article écrit AUSSI en mémoire longue, et le choc non.** Depuis le ticket 111, ce n'est
+plus cette écriture qui garantit que le lecteur décide en sachant : c'est la **ligne servie au
+rendu** (section suivante), qui ne dépend ni du moment où la décision a été calculée ni de l'état
+du rappel. L'entrée longue sert aux jours **d'après** le service : c'est par elle que le souvenir
+de l'article concourt, sous les règles ordinaires de la mémoire, une fois la garantie levée. Pour
+le choc, un effet qui ne commence que le lendemain est exactement ce qu'on veut. Ce qui reste
 commun aux deux canaux est la **qualification**, pas le chemin d'écriture.
+
+## Ce que l'agent a lu est devant lui quand il décide (ticket 111)
+
+> Ticket [111](../tickets/ticket_111_la_lecture_precede_la_decision_et_se_transmet_au_foyer.md),
+> plan et tests dans [`specs/ticket_111/`](../../specs/ticket_111/).
+
+**Le défaut, mesuré sur le bras a09 `2026-09-24_17_50`.** L'horizon glissant tient environ un
+cycle d'activités d'avance : la décision du lecteur pour le 26 mars 05:57 a été calculée le 25 au
+matin, dix-sept heures simulées avant la lecture. Et même une décision calculée après l'injection
+ne voyait pas l'article : jugé `notable` (0,30), il restait sous `memoire__importance_choc`
+(0,70), seuil du bloc « Ce qui a changé récemment » et du vivier C, et il ne portait pas
+d'`axe_objet` pour le vivier B. Le rappel servait dix bilans « tout s'est bien passé ». L'entrée
+`[ PRESSE ]` de 286920 finit le run avec `rappels: 0`.
+
+**Pourquoi a13 semblait servi.** Le banc a13 `2026-09-22_14_54` est servi dans 86 à 100 % des
+décisions, alors que ses six lecteurs l'ont jugé sous le seuil. L'injection tombait aux jours 1
+et 2 : la mémoire comptait 1 à 9 candidats pour 10 places, tout passait. Le service d'un article
+dépendait donc de **l'âge de la mémoire le jour de lecture**, pas de l'article.
+
+**Le mécanisme.** La ligne est posée **au rendu du prompt**, pas en mémoire, et le pré-calcul
+n'est pas touché :
+
+    [ PRESSE ] This morning I read in the paper: « (Translated from French) … »
+
+- elle vient de la déclaration, pas du rappel : elle est là quelle que soit la gravité jugée ;
+- elle est **en tête** du bloc « Ce qui a changé récemment », et `memoire__changements_max` ne
+  l'évince jamais (voir [`memory-stm-ltm.md`](memory-stm-ltm.md)) ;
+- elle est servie à **chaque décision et chaque enquête d'affinité** des jours de service ;
+- le service dure `service.jours_de_deplacement` jours (5 dans les huit déclarations `lu` livrées),
+  jour de lecture compris, week-ends exclus sous `agent.no_weekend_departures`. Le jour se lit
+  sur l'heure de **départ** du trajet décidé, pas sur l'heure du calcul : une décision du jeudi
+  calculée le mercredi porte la ligne ;
+- après le dernier jour, plus rien n'est garanti : gravité, rappel et concepts décident seuls, et
+  c'est ce qu'on mesure ;
+- **une décision qui doit porter une ligne ne lit ni n'écrit le cache** de décisions : sa clé ne
+  porte pas la ligne, une décision servie de là en serait privée, et une décision stockée la
+  resservirait à un non-lecteur. Le journal compte ces contournements.
+
+Exemple : run ancré le lundi 16 mars, foyer H1 lecteur au jour 4. La lecture tombe le jeudi 19 à
+00:00. Service : jeudi 19, vendredi 20, lundi 23, mardi 24, mercredi 25. La décision du jeudi
+05:57, calculée le mercredi à 07:00, porte la ligne ; le journal l'écrit en INFO — « servi à la
+décision du 19/03 05:57, calculée 17 h avant l'injection ».
+
+Deux clés de déclaration, toutes deux optionnelles :
+
+```yaml
+service: {jours_de_deplacement: 5}   # reveil seulement ; refusé sur un moment: arrivee
+relais: {mode: par_destinataire}     # canal lu + règle foyers + service, sinon refusé
+```
+
+Une déclaration `reveil` qui ne les porte pas garde le comportement d'avant le ticket 111, et le
+chargement le dit en INFO.
+
+**Ce qui se lève.** Une exposition déclarée non avenue **après** qu'une décision a déjà porté sa
+ligne — la décision ne se reprend pas — lève une seule `[ALARME]` qui donne le nombre de décisions
+servies. Une décision qui devait porter une ligne et ne l'a pas au rendu lève `[ALARME]` et
+incrémente `decisions_sans_ligne`. La ligne de compteurs du ticket 111 s'écrit chaque jour,
+**même à zéro** : lectures et messages servis, servis avant injection, relais produits et
+refusés, contournements du cache, décisions sans ligne.
+
+## Le lecteur le dit à sa famille
+
+Sous `relais: {mode: par_destinataire}`, le lecteur transmet. **Un appel LLM par foyer exposé**,
+catégorie `evenement_relais` : le lecteur reçoit l'article, puis la fiche de chaque autre membre
+mobile — prénom, âge, occupation, `(CHILD)` pour un mineur, modes habituels, trajets du jour — et
+écrit un message par membre, **avec ses mots, ou choisit de ne rien dire** (`speaks: false`).
+
+**Pour un mineur, le message est la décision des parents.** Ce sont les parents qui décident du
+trajet d'un enfant ; une version simplifiée de l'article ne le ferait pas changer. Le gabarit
+demande donc au lecteur de « décider pour l'enfant ». Le membre reçoit :
+
+    [ FOYER ] Claire told me this morning: « Take the tram today, the wind is dangerous. »
+    [ FOYER ] My parents decided this morning: « We'll drive you to school today. »
+
+Chaque membre informé :
+
+- reçoit son message en mémoire courte et longue, `origine: entendu` (écriture longue
+  **attendue**, pas en tâche de fond) ;
+- le **juge lui-même**, avec sa propre identité, sous la même grille que le lecteur ;
+- voit la ligne `[ FOYER ]` à chaque décision de **ses** 5 jours de déplacement, à partir de la
+  lecture.
+
+**Le relais est produit à la première demande**, pas à heure fixe : c'est souvent la décision
+d'un membre, calculée la veille, qui le déclenche, et l'injection de 00:00 relit ensuite le même
+résultat. Un seul appel par foyer, partagé par tous ceux qui l'attendent.
+
+L'enfant décide toujours avec son propre appel : il peut ne pas suivre la décision parentale.
+C'est mesuré et rendu par `make report`, pas forcé.
+
+**Ce qui fait foi : `relais_foyer.jsonl`.** Une ligne par foyer : lecteur, messages (qui, parlé
+ou non, texte, mineur), fournisseur, durée, refus. **À la reprise, le relais est relu, jamais
+régénéré** : un deuxième tirage donnerait d'autres messages à des agents qui ont déjà décidé
+avec les premiers. Un relais refusé est écrit aussi, pour la même raison.
+
+**Une panne n'est pas un refus** (décision de l'auteur, 2026-09-25). Une réponse vide, ou une
+exception après la file d'attente du client, est tracée `technique: true` avec son numéro de
+`tentative`. Dans le run, rien n'est retenté : les membres ne voient rien. **À la reprise, le
+relais est redemandé, deux fois au plus** (`TENTATIVES_MAX = 3` tentatives en tout). Après la
+troisième, le refus est définitif. Un refus sur le **contenu** (destinataire inconnu, membre
+manquant…) est définitif dès la première fois. `[ALARME] … ÉCHEC TECHNIQUE, tentative n/3` dit
+combien d'essais restent. ⚠ Coût accepté : un relais obtenu à la reprise après le jour de lecture
+sert ses lignes pour les jours de service restants, mais ses informés n'ont pas l'entrée en
+mémoire de 00:00 de ce jour-là. Un WARNING le rappelle.
+
+**Aucun texte de repli.** Une réponse invalide — réponse vide, lecteur absent, destinataire
+inconnu ou présent deux fois, membre sans réponse, message vide alors que `speaks: true` — est
+**refusée** : `[ALARME] … REFUSÉ … aucun texte de repli`,
+personne n'est informé, le lecteur garde sa propre ligne. Deux gardes de contenu sont **tracées
+sans être appliquées** : `familles_directives` (`adresse` : un marqueur de consigne ; `verdict` : une
+croyance sur un mode ; `intention` : ce que quelqu'un fera) et `directif`, vrai quand une
+famille est présente ou que le message est une décision parentale, directive par nature. On veut savoir ce que le lecteur a dit, pas le corriger.
+
+Un lecteur déclaré non avenu emporte ses informés avec lui : sans lecture, rien à transmettre.
+Un lecteur **sans autre membre mobile** n'a rien à transmettre non plus : pas d'appel, pas
+d'alarme, un relais vide tracé et compté à part (`relais_sans_membre`). Sous
+`lecteurs_par_foyer > 1`, seul le premier lecteur du foyer relaie, et un membre déjà informé
+n'est jamais écrit deux fois.
+
+**À la reprise, qui a lu se relit dans `evenements.jsonl`** — le journal ne porte que des
+injections abouties. Un rejeu qui repasse par le 00:00 du jour de lecture ne rend donc pas la
+lecture due une seconde fois : sans cela, le gel du rejeu l'aurait déclarée non avenue, et une
+lecture réussie aurait perdu ses lignes. À l'inverse, une fois le jour de lecture passé, un
+lecteur que le journal ne connaît pas (exposition non avenue avant l'arrêt) ne sert plus de
+ligne, ni ses informés, et une seule `[ALARME]` le dit.
+
+**Tous les décideurs portent la ligne**, y compris les bras du banc (`decideur_typesafe`,
+`decideur_antigravity`), qui construisent leur prompt avec le même `build_travel_plan_payload`.
+
+**Les informés ne sont pas des lectures.** Leur ligne de `evenements.jsonl` porte
+`origine: entendu`, et les lecteurs qui comptent des expositions l'écartent : le contrôle
+d'injections du ticket 108 (sans quoi dix lectures et dix informés passeraient pour vingt
+lectures conformes), la table `mesures/…choc`, le compte de `figure_rupture_retour.py`. Le tableau
+des quatre voies range les co-résidents sous leurs deux sous-rôles.
+
+**Les rôles.** Dans un foyer où le relais a eu lieu, `co_resident` se lit en deux sous-rôles,
+**à la lecture** — la colonne `Rôle` de `moves.csv` ne change pas en cours de run, elle casserait
+les séries :
+
+- `co_resident_informe` — le lecteur lui a parlé ;
+- `co_resident_non_informe` — le lecteur a choisi de ne rien lui dire. C'est lui, désormais, le
+  témoin interne du foyer ; la diffusion spontanée par la réflexion du soir n'est plus ce qu'on
+  mesure dans ces foyers. Les foyers témoins restent la ligne de base.
+
+`figure_evenement.py` trace les deux (bleu plein, bleu pointillé) et
+`presse/campagne.py --role` les accepte.
+
+### Le contrôle « lecture avant décision »
+
+`scripts/analysis/lecture_avant_decision.py <run>`, branché sur `make report` (section « Lecture
+avant décision »). Il relit `llm_exchanges.jsonl`, découpe chaque prompt fusionné par
+`--- agent_id=<id> | … ---` et teste, **bloc par bloc**, la présence exacte du préfixe : la ligne
+du lecteur n'appartient pas à son co-résident. Par personne et par jour de service :
+`décisions avec ligne / décisions`, et si la **première** décision du jour 1 la portait.
+
+| Verdict | Lecteur ou informé | Non informé |
+|---|---|---|
+| ✅ | toutes les décisions portent la ligne | aucune ne porte de `[ FOYER ]` |
+| 🔴 | une décision en est privée, ou la première du jour 1 | une décision porte un `[ FOYER ]` |
+| ⚪ | aucune décision pendant le service | idem |
+
+Le jour d'un bloc se lit sur son `Departure: HH:MM` et non sur `sim_ts`, qui vaut le plus petit
+départ du **lot** : un lot du soir peut porter la décision du lendemain matin. Le départ est le
+premier instant à cette heure qui suit `sim_ts`, reporté au lundi sous la règle du week-end.
+
+Il rend les succès aussi. Un 🔴 sort en alarme du rapport et en code 1 de la commande. Sur
+l'archive du défaut, `2026-09-24_17_50`, il rend 🔴 pour 286920 : « 26/03 0/1 · 27/03 0/1 ·
+30/03 0/1 · 31/03 0/1 ». Une déclaration archivée sans `service` est contrôlée sur 5 jours.
+
+⚠ **L'image du worker et de la passerelle doit être reconstruite** pour porter la catégorie
+`evenement_relais` du paquet `mobility_llm`. Sur un conteneur ancien l'appel revient sans
+réponse, et le relais est refusé avec `[ALARME]` : personne n'est informé.
 
 ## Lancer
 
@@ -227,6 +399,7 @@ Répartition Gemini par défaut (2026-09-24), mesurée sur 861500 (111 agents-jo
 | Enquête d'affinité | 5 % | `gemini-3.1-flash-lite` |
 | Auto-réflexion (LTM) | 3 % | `gemini-3.1-flash-lite` |
 | Jugement de l'article | < 1 % | `gemini-3.1-flash-lite` |
+| Transmission au foyer (ticket 111) | non mesurée — un appel par foyer exposé | `gemini-3.1-flash-lite` |
 
 Configuration de debug du 2026-09-24, tout Groq (hors quota Gemini) :
 
@@ -248,10 +421,14 @@ vingt agents : au-delà, le garde-fou du ticket 105 coupe le bras.
 | `mesures/evenement_par_jour.csv` | une seule table pour les deux régimes, avec la colonne `canal` |
 | `scripts/analysis/figure_evenement.py` | **une seule figure** : décrochage et retour par rôle, en jour relatif. La figure 7.2 en est la première instance |
 | `scripts/analysis/tableau_quatre_voies.py` | par quelle voie le passé a atteint la décision, par régime et par rôle |
+| `relais_foyer.jsonl` | ticket 111 : un relais par foyer exposé — qui a été informé, avec quel message, ou pourquoi le relais a été refusé. Fait foi pour les sous-rôles du co-résident |
+| `scripts/analysis/lecture_avant_decision.py` | ticket 111 : décision par décision, la ligne garantie était-elle au prompt pendant le service ? Branché sur `make report` |
 
 **Les trois rôles ne se déduisent pas l'un de l'autre.** `expose` a rencontré l'événement ;
 `co_resident` vit sous le même toit et n'a **rien** reçu — c'est chez lui que se lit ce qui se
-transmet ; `temoin` ni l'un ni l'autre. Une colonne vide n'est pas un rôle : elle dit que le
+transmet ; `temoin` ni l'un ni l'autre. Dans un foyer où le lecteur a transmis (ticket 111), `co_resident`
+se scinde à la lecture en `co_resident_informe` et `co_resident_non_informe` (voir « Le lecteur le
+dit à sa famille ») ; le second est le seul témoin interne. Une colonne vide n'est pas un rôle : elle dit que le
 dispositif ne sait pas encore qui lit.
 
 **La garde de vacuité est écrite sur la figure.** Un rôle dont l'effectif tombe sous le minimum

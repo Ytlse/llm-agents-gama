@@ -46,6 +46,11 @@ class AgentSpec(BaseModel):
     # juger une page blanche. Le modèle répondait `negligible` — ce qui était la bonne réponse
     # à la question qu'on lui posait vraiment. Quinze appels sur quinze, sans une erreur.
     evenement: str | None = None
+    # Ticket 111 — le relais au foyer. Même leçon, déclarée d'avance cette fois : l'article lu
+    # et la fiche de chaque autre membre du foyer. Sans ces deux lignes, le lecteur recevrait
+    # une page blanche et un foyer vide, et répondrait qu'il n'a rien à dire à personne.
+    article: str | None = None
+    membres: list[dict[str, Any]] = Field(default_factory=list)
     # Anticipation de la chaîne de la journée (ticket 014).
     day_outlook: str | None = None            # météo des tranches restantes du jour
     agenda: list[str] = Field(default_factory=list)  # trajets restants (agenda glissant)

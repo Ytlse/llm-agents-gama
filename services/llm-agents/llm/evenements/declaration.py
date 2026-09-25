@@ -64,6 +64,10 @@ JUGEMENTS_LIVRES: tuple[str, ...] = ("aucun", "a_l_injection")
 CADENCES: tuple[str, ...] = ("trajet", "jour")
 CADENCE_PAR_DEFAUT = "trajet"
 
+# Ticket 111 — comment le lecteur transmet à son foyer. Un seul mode livré : un message par
+# membre, écrit par le lecteur avec ses mots, et pour un mineur la décision des parents.
+RELAIS_MODES: tuple[str, ...] = ("par_destinataire",)
+
 
 class RefusDEvenement(ValueError):
     """Déclaration invalide. Refuser au chargement vaut mieux qu'un événement fantôme au run."""
@@ -202,6 +206,26 @@ class Exposition:
 
 
 @dataclass(frozen=True)
+class Service:
+    """Combien de temps l'article reste GARANTI au prompt — ticket 111.
+
+    Compté en jours de DÉPLACEMENT : le jour de lecture est le jour 1, et les week-ends ne
+    comptent pas quand aucun départ n'a lieu le week-end. Pendant ces jours, la ligne est
+    servie quelle que soit la gravité jugée ; après, la mémoire décide seule — c'est ce qu'on
+    mesure.
+    """
+
+    jours_de_deplacement: int
+
+
+@dataclass(frozen=True)
+class Relais:
+    """Ce que le lecteur dit à son foyer — ticket 111."""
+
+    mode: str
+
+
+@dataclass(frozen=True)
 class Evenement:
     evenement_id: str
     libelle: str
@@ -221,6 +245,10 @@ class Evenement:
     # de choc lue par le chemin de compatibilité. Journalisé, jamais interprété : il sert à
     # savoir, en relisant un run, sous quelle forme le protocole avait été écrit.
     format_source: str = "100"
+    # Ticket 111. `None` = clé absente : comportement d'avant le ticket, journalisé au
+    # chargement (un fichier muet ne doit pas changer de comportement en silence).
+    service: Service | None = None
+    relais: Relais | None = None
 
     @property
     def premier_jour(self) -> int:
@@ -502,6 +530,33 @@ def _lire_calendrier(brut: dict, evenement_id: str) -> Calendrier:
     return Calendrier(jours=jours, graine=int(brut.get("graine", 59)))
 
 
+def _lire_service(brut: Any, evenement_id: str) -> Service:
+    if not isinstance(brut, dict):
+        raise RefusDEvenement(
+            f"événement « {evenement_id} » : `service` attend un bloc portant "
+            f"`jours_de_deplacement`, pas « {brut} »"
+        )
+    valeur = brut.get("jours_de_deplacement")
+    # `bool` est un `int` en Python : `True` passerait pour un jour. Refusé comme le reste.
+    if isinstance(valeur, bool) or not isinstance(valeur, int) or valeur < 1:
+        raise RefusDEvenement(
+            f"événement « {evenement_id} » : `service.jours_de_deplacement` = {valeur!r} — "
+            f"attendu un entier ≥ 1. Zéro jour de service reviendrait à ne rien garantir en "
+            f"ayant l'air de le faire"
+        )
+    return Service(jours_de_deplacement=valeur)
+
+
+def _lire_relais(brut: Any, evenement_id: str) -> Relais:
+    mode = str((brut or {}).get("mode") or "").strip() if isinstance(brut, dict) else ""
+    if mode not in RELAIS_MODES:
+        raise RefusDEvenement(
+            f"événement « {evenement_id} » : `relais.mode` « {mode} » inconnu — attendu "
+            f"{' ou '.join(RELAIS_MODES)}"
+        )
+    return Relais(mode=mode)
+
+
 def _refuser_les_champs_des_lots_suivants(data: dict, evenement_id: str) -> None:
     """Un champ du lot 2 ou du lot 3 dans un dépôt au lot 1 : refusé, et le lot est nommé.
 
@@ -640,6 +695,53 @@ def charger(chemin: str | Path) -> Evenement:
             f"lecteur lit au réveil. Sur une arrivée, utilisez `agents` ou `mode`"
         )
 
+    # ── Ticket 111 : service garanti et relais au foyer ─────────────────────────────────
+    service = None
+    relais = None
+    if "service" in data:
+        if moment != "reveil":
+            raise RefusDEvenement(
+                f"événement « {evenement_id} » : `service` sur un événement du moment "
+                f"« {moment} ». Le service garanti porte sur ce qui est su AVANT de décider ; "
+                f"un choc s'applique après la décision, et c'est voulu"
+            )
+        service = _lire_service(data.get("service"), evenement_id)
+    if "relais" in data:
+        if canal != "lu":
+            raise RefusDEvenement(
+                f"événement « {evenement_id} » : `relais` sur un `canal: {canal}`. Seul un "
+                f"article LU se raconte au foyer le matin même"
+            )
+        if exposition.regle != "foyers":
+            raise RefusDEvenement(
+                f"événement « {evenement_id} » : `relais` sans la règle d'exposition "
+                f"`foyers`. Le relais va du lecteur aux autres membres de SON foyer : sans "
+                f"foyer tiré, il n'a pas de destinataire"
+            )
+        if service is None:
+            raise RefusDEvenement(
+                f"événement « {evenement_id} » : `relais` sans `service`. Le message reçu est "
+                f"servi pendant les jours de service du destinataire ; sans leur nombre, il "
+                f"n'aurait aucune présence garantie, et rien ne le dirait"
+            )
+        relais = _lire_relais(data.get("relais"), evenement_id)
+    if moment == "reveil":
+        absentes = [c for c, v in (("service", service), ("relais", relais)) if v is None]
+        if absentes:
+            logger.info(
+                f"[evenements] « {evenement_id} » : clé(s) {absentes} absente(s) — "
+                f"comportement d'avant le ticket 111 : "
+                + ("aucune présence garantie au prompt, la gravité et le rappel décident seuls"
+                   if service is None else f"service {service.jours_de_deplacement} j")
+                + ("" if relais is not None else ", aucun relais au foyer")
+                + "."
+            )
+        else:
+            logger.info(
+                f"[evenements] « {evenement_id} » : servi {service.jours_de_deplacement} jour(s) "
+                f"de déplacement au lecteur et aux informés, relais « {relais.mode} »"
+            )
+
     # ── Jugement : accepté à la lecture, refusé à l'armement d'un run (lot 3) ───────────
     if canal == "lu" and jugement == "aucun":
         # Chiffré, pas argumenté : un article ne fait subir aucun retard, sa gravité
@@ -668,4 +770,6 @@ def charger(chemin: str | Path) -> Evenement:
         cadence=cadence,
         empreinte=empreinte,
         format_source=format_source,
+        service=service,
+        relais=relais,
     )

@@ -12,17 +12,23 @@ ferait passer un événement appliqué une fois pour un événement qui rate tro
 
 from __future__ import annotations
 
+import asyncio
 import json
+from collections import Counter
 from dataclasses import dataclass
+from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from loguru import logger
 
 from llm.evenements import calendrier
+from llm.evenements import relais as relais_module
 from llm.evenements.declaration import Evenement, EvenementApplique
 from llm.evenements.exposition import expose, lecteurs
-from sim_clock import wall_clock
+from llm.evenements.injection import ligne_de_foyer, ligne_de_lecture
+from settings import settings
+from sim_clock import gama_timestamp, wall_clock
 
 
 @dataclass
@@ -40,6 +46,16 @@ class CompteursJournee:
     decisions_depuis_cache: int = 0
     # Décisions pour lesquelles le cache a été volontairement contourné (jour d'événement).
     decisions_cache_coupe: int = 0
+    # ── Ticket 111 — la présence garantie au prompt ─────────────────────────────────────
+    lectures_servies: int = 0            # rendus de `[ PRESSE ]` à un lecteur
+    messages_servis: int = 0             # rendus de `[ FOYER ]` à un informé
+    servies_avant_injection: int = 0     # dont décisions calculées AVANT l'injection de 00:00
+    relais_produits: int = 0
+    relais_refuses: int = 0
+    relais_sans_membre: int = 0          # lecteur seul (ou seul mobile) : rien à transmettre
+    cache_contourne_ligne: int = 0       # décisions qui devaient porter une ligne : jamais du cache
+    # Décisions d'un jour de service construites SANS leur ligne. Doit rester à zéro.
+    decisions_sans_ligne: int = 0
 
 
 class RegistreEvenements:
@@ -60,6 +76,94 @@ class RegistreEvenements:
         # persistance du souvenir ne se distinguerait plus de la répétition de sa cause.
         self._lecteurs: dict[str, tuple[str, str]] | None = None
         self._ont_lu: set[str] = set()
+        # ── Ticket 111 — la ligne servie au prompt, et le relais au foyer ────────────────
+        self._journal_relais = (
+            Path(journal).parent / "relais_foyer.jsonl" if journal is not None else None
+        )
+        # Relais déjà produits par CE run : relus à la reprise, jamais régénérés.
+        self._relais: dict[str, relais_module.RelaisFoyer] = relais_module.relire(
+            self._journal_relais
+        )
+        # Échecs techniques à retenter : sortis de `_relais` pour être redemandés, avec le
+        # numéro de la tentative déjà faite.
+        self._tentatives: dict[str, int] = {
+            hh: r.tentative for hh, r in self._relais.items() if r.a_retenter
+        }
+        for hh in self._tentatives:
+            del self._relais[hh]
+        self._relais_taches: dict[str, asyncio.Future] = {}
+        self._producteur_relais: Callable[[str, str, int], Awaitable[Any]] | None = None
+        self._non_avenus: set[str] = set()
+        self._non_avenus_alarmes: set[str] = set()
+        self._servies: Counter = Counter()  # (person_id, date ISO) → rendus
+        self._servies_avant_injection: Counter = Counter()  # person_id → rendus
+        self._entendus: set[str] = set()  # informés déjà écrits en mémoire à 00:00
+        self._lecteurs_inconnus_dit = False
+        self._producteur_absent_dit = False
+        self._jamais_injectes_dits: set[str] = set()
+        # À la reprise, qui a DÉJÀ lu et qui a déjà été informé se relit dans le journal : sans
+        # cela, un rejeu qui repasse par le 00:00 du jour de lecture rendrait la lecture due une
+        # seconde fois, et le gel du rejeu la déclarerait non avenue — une lecture réussie
+        # perdrait ses lignes. Le journal ne porte que des injections abouties (`tracer` suit
+        # l'écriture en mémoire).
+        self._relire_journal()
+        # Instant simulé du dernier /sync : c'est ce qui dit qu'une décision a été calculée
+        # AVANT l'injection, et de combien.
+        self._maintenant: int | None = None
+
+    def _relire_journal(self) -> None:
+        if self._journal is None or self.evenement.moment != "reveil":
+            return
+        chemin = Path(self._journal)
+        if not chemin.is_file():
+            return
+        lus = entendus = 0
+        for brute in chemin.read_text(encoding="utf-8").splitlines():
+            try:
+                ligne = json.loads(brute) if brute.strip() else None
+            except json.JSONDecodeError:
+                continue  # dernière ligne tronquée par un arrêt brutal : sautée, jamais fatale
+            if not ligne or ligne.get("evenement_id") != self.evenement.evenement_id:
+                continue
+            pid = str(ligne.get("person_id") or "")
+            if not pid:
+                continue
+            if ligne.get("origine") == "entendu":
+                self._entendus.add(pid)
+                entendus += 1
+            else:
+                self._ont_lu.add(pid)
+                lus += 1
+        if lus or entendus:
+            logger.info(
+                f"[evenements] reprise — « {self.evenement.evenement_id} » : {lus} lecture(s) et "
+                f"{entendus} membre(s) informé(s) relus dans {chemin.name} ; ni relus ni "
+                f"réinjectés."
+            )
+
+    def _injection_manquee(self, lecteur_id: str) -> bool:
+        """Le jour de lecture est passé et ce lecteur n'a jamais été injecté.
+
+        Arrive à la reprise, quand l'injection n'a pas abouti avant l'arrêt (le registre neuf ne
+        sait pas qu'elle a été déclarée non avenue) : servir la ligne ferait lire un article que
+        la mémoire de l'agent ne porte pas. Le jour même, on sert : la décision peut avoir été
+        calculée avant l'injection, et c'est tout l'objet du ticket.
+        """
+        if lecteur_id in self._ont_lu or self._maintenant is None:
+            return False
+        lecture = self._date_injection(lecteur_id)
+        if lecture is None or self._date_de(self._maintenant) <= lecture:
+            return False
+        if lecteur_id not in self._jamais_injectes_dits:
+            self._jamais_injectes_dits.add(lecteur_id)
+            logger.error(
+                f"[ALARME] [evenements] « {self.evenement.evenement_id} » : le lecteur "
+                f"{lecteur_id} devait lire le {lecture:%d/%m} et n'a jamais été injecté (reprise "
+                f"après une exposition non avenue ?). Ses lignes et celles de son foyer ne sont "
+                f"PAS servies ; {self._servies_avant_injection.get(lecteur_id, 0)} décision(s) "
+                f"les avaient déjà portées avant."
+            )
+        return True
 
     @property
     def choc(self) -> Evenement:
@@ -244,6 +348,288 @@ class RegistreEvenements:
             )
         return dus
 
+    # ── Ticket 111 — ce qui est servi au prompt pendant les jours de service ─────────────
+    def noter_instant(self, timestamp: int) -> None:
+        """L'instant simulé courant, posé à chaque /sync. Sert au journal, jamais au calcul."""
+        self._maintenant = int(timestamp)
+
+    def brancher_producteur_relais(
+        self, producteur: Callable[[str, str, int], Awaitable[Any]]
+    ) -> None:
+        """Le producteur du relais : seul le contrôleur détient population, client et identités."""
+        self._producteur_relais = producteur
+
+    def _jours_de_service(self, cible_id: str, household_id: str) -> tuple:
+        """Les dates de service de cette cible, déterministes : ni horizon, ni rappel n'y entrent."""
+        service = self.evenement.service
+        if service is None:
+            return ()
+        debut = calendrier.date_du_jour_run(self.jour_de(cible_id, household_id))
+        if debut is None:
+            return ()
+        return calendrier.jours_de_service(
+            debut,
+            service.jours_de_deplacement,
+            bool(getattr(settings.agent, "no_weekend_departures", False)),
+        )
+
+    def _lecteur_du_foyer(self, household_id: str) -> str | None:
+        """Le lecteur qui relaie dans ce foyer. Le premier dans l'ordre numérique, s'il y en a plusieurs."""
+        ids = [p for p, (h, _) in (self._lecteurs or {}).items() if h == household_id]
+        if not ids:
+            return None
+        return sorted(ids, key=lambda p: (len(p), p))[0]
+
+    def foyer_expose(self, person_id: str) -> tuple[str, str] | None:
+        """`(household_id, lecteur_id)` si cet agent est un NON-lecteur d'un foyer exposé."""
+        if self._lecteurs is None:
+            return None
+        pid = str(person_id)
+        if pid in self._lecteurs:
+            return None
+        from llm import foyer as _foyer
+
+        mien = _foyer.foyer_de(pid)
+        if not mien:
+            return None
+        lecteur = self._lecteur_du_foyer(mien)
+        return (mien, lecteur) if lecteur else None
+
+    def relais_connu(self, household_id: str):
+        """Le relais de ce foyer s'il est déjà produit (ou refusé), sans rien lancer."""
+        return self._relais.get(str(household_id))
+
+    async def relais_du_foyer(self, household_id: str):
+        """Le relais de ce foyer, produit à la première demande. Un seul appel par foyer.
+
+        Rend `None` quand il n'y a pas de relais à servir : pas de relais déclaré, pas de
+        producteur branché, ou relais refusé (l'alarme a été levée à la production).
+        """
+        hh = str(household_id)
+        if self.evenement.relais is None:
+            return None
+        deja = self._relais.get(hh)
+        if deja is not None:
+            return None if deja.refus else deja
+        if self._producteur_relais is None:
+            if not self._producteur_absent_dit:
+                self._producteur_absent_dit = True
+                logger.error(
+                    f"[ALARME] [evenements] « {self.evenement.evenement_id} » déclare un relais "
+                    f"au foyer, mais aucun producteur n'est branché : AUCUN membre de foyer "
+                    f"exposé ne sera informé. Ne pas compter les co-résidents comme informés."
+                )
+            return None
+        tache = self._relais_taches.get(hh)
+        if tache is None:
+            tache = asyncio.ensure_future(self._produire_relais(hh))
+            self._relais_taches[hh] = tache
+        return await asyncio.shield(tache)
+
+    async def _produire_relais(self, hh: str):
+        lecteur = self._lecteur_du_foyer(hh)
+        jour = self.jour_de(lecteur or "", hh)
+        tentative = self._tentatives.get(hh, 0) + 1
+        if tentative > 1:
+            logger.warning(
+                f"[evenements] relais du foyer {hh} — tentative {tentative}/"
+                f"{relais_module.TENTATIVES_MAX} après un échec technique au run précédent"
+            )
+        try:
+            produit = await self._producteur_relais(lecteur, hh, jour)
+        except relais_module.RelaisRefuse as err:
+            produit = relais_module.RelaisFoyer(
+                household_id=hh, lecteur_id=str(lecteur), lecteur_prenom="",
+                evenement_id=self.evenement.evenement_id, jour_run=int(jour),
+                refus=str(err) or "refusé", technique=err.technique, tentative=tentative,
+            )
+        except Exception as err:  # noqa: BLE001 — le relais ne fait jamais tomber une décision
+            logger.error(
+                f"[ALARME] [evenements] relais du foyer {hh} impossible ({type(err).__name__}: "
+                f"{err}) — lecteur {lecteur}, jour {jour}. Aucun message n'est servi dans ce "
+                f"foyer."
+            )
+            produit = relais_module.RelaisFoyer(
+                household_id=hh, lecteur_id=str(lecteur), lecteur_prenom="",
+                evenement_id=self.evenement.evenement_id, jour_run=int(jour),
+                refus=f"{type(err).__name__}: {err}", technique=True, tentative=tentative,
+            )
+        if produit.refus and produit.technique:
+            reste = relais_module.TENTATIVES_MAX - produit.tentative
+            logger.error(
+                f"[ALARME] [evenements] relais du foyer {hh} : échec technique, tentative "
+                f"{produit.tentative}/{relais_module.TENTATIVES_MAX}. "
+                + (f"Pas de nouvel essai dans ce run ; une reprise retentera ({reste} essai(s) "
+                   f"restant(s))." if reste > 0 else
+                   "Plus aucun essai : le refus est définitif pour ce run et ses reprises.")
+            )
+        self._relais[hh] = produit
+        if not produit.refus and tentative > 1:
+            logger.warning(
+                f"[evenements] relais du foyer {hh} produit à la tentative {tentative} : ses "
+                f"membres informés voient leur ligne pour les jours de service restants. Si le "
+                f"00:00 du jour de lecture est passé, ils n'ont PAS l'entrée en mémoire de ce "
+                f"jour-là (coût accepté par l'auteur le 2026-09-25)."
+            )
+        if produit.refus:
+            self._compteurs.relais_refuses += 1
+        elif not produit.messages:
+            self._compteurs.relais_sans_membre += 1
+        else:
+            self._compteurs.relais_produits += 1
+        relais_module.ecrire(self._journal_relais, produit)
+        return None if produit.refus else produit
+
+    def _date_de(self, timestamp: int) -> date:
+        return wall_clock(int(timestamp)).date()
+
+    async def lignes_du_jour(
+        self, person_id: str, timestamp: int, *, compter: bool = True
+    ) -> list[str]:
+        """Les lignes GARANTIES au prompt de cet agent pour une décision tenue à `timestamp`.
+
+        `timestamp` est l'instant du TRAJET, pas celui du calcul : une décision du jour de
+        lecture se calcule la veille, et c'est précisément ce qui la privait de l'article.
+
+        - lecteur, jour dans ses jours de service → `[ PRESSE ] This morning I read…` ;
+        - membre informé d'un foyer exposé, jour dans ses jours de service → sa ligne
+          `[ FOYER ]`, tirée du relais (produit à la demande s'il ne l'est pas encore) ;
+        - personne déclarée non avenue, ou non informée → rien.
+
+        `compter=False` pour une enquête : elle voit la même ligne, mais n'est pas une décision.
+        """
+        e = self.evenement
+        if e.service is None or e.moment != "reveil":
+            return []
+        if self._lecteurs is None:
+            if not self._lecteurs_inconnus_dit:
+                self._lecteurs_inconnus_dit = True
+                logger.error(
+                    f"[ALARME] [evenements] « {e.evenement_id} » : une décision demande ses "
+                    f"lignes de service alors que les lecteurs ne sont pas encore tirés. Le "
+                    f"contrôleur doit appeler `lecteurs(population)` dès le chargement de la "
+                    f"population ; sans cela, une lecture du jour 1 serait invisible des "
+                    f"décisions du bootstrap."
+                )
+            return []
+        pid = str(person_id)
+        if pid in self._non_avenus:
+            return []
+        jour = self._date_de(timestamp)
+        ligne = None
+        avant = False
+        if pid in self._lecteurs:
+            hh = self._lecteurs[pid][0]
+            if jour not in self._jours_de_service(pid, hh):
+                return []
+            if self._injection_manquee(pid):
+                return []
+            ligne = ligne_de_lecture(e.texte_cite.servi if e.texte_cite else "")
+            avant = pid not in self._ont_lu
+            genre = "lectures_servies"
+        else:
+            expose_ = self.foyer_expose(pid)
+            if expose_ is None or e.relais is None:
+                return []
+            hh, lecteur = expose_
+            if jour not in self._jours_de_service(pid, hh):
+                return []
+            if lecteur is not None and self._injection_manquee(str(lecteur)):
+                return []
+            produit = await self.relais_du_foyer(hh)
+            if pid in self._non_avenus or produit is None:
+                return []
+            message = produit.message_pour(pid)
+            if message is None or not message.parle:
+                return []
+            ligne = ligne_de_foyer(message.texte, produit.lecteur_prenom, message.mineur)
+            avant = pid not in self._entendus
+            genre = "messages_servis"
+        if compter:
+            self._noter_service(pid, jour, timestamp, avant, genre)
+        return [ligne]
+
+    def _noter_service(self, pid: str, jour: date, timestamp: int, avant: bool,
+                       genre: str) -> None:
+        cle = (pid, jour.isoformat())
+        premier = cle not in self._servies
+        self._servies[cle] += 1
+        setattr(self._compteurs, genre, getattr(self._compteurs, genre) + 1)
+        if avant:
+            self._servies_avant_injection[pid] += 1
+            self._compteurs.servies_avant_injection += 1
+        if not premier:
+            return
+        quoi = "article du jour" if genre == "lectures_servies" else "message du foyer"
+        calcul = ""
+        if avant and self._maintenant is not None:
+            injection = gama_timestamp(
+                datetime.combine(self._date_injection(pid) or jour, datetime.min.time())
+            )
+            ecart_h = (injection - self._maintenant) / 3600.0
+            if ecart_h > 0:
+                calcul = f", calculée {ecart_h:.0f} h avant l'injection"
+        logger.info(
+            f"[evenements] {pid} : {quoi} servi à la décision du "
+            f"{wall_clock(int(timestamp)):%d/%m %H:%M}{calcul} "
+            f"(jour de service {jour.isoformat()})"
+        )
+
+    def _date_injection(self, pid: str) -> date | None:
+        hh = (self._lecteurs or {}).get(pid, (None,))[0] or (self.foyer_expose(pid) or (None,))[0]
+        if hh is None:
+            return None
+        return calendrier.date_du_jour_run(self.jour_de(pid, hh))
+
+    def noter_entendu(self, person_id: str) -> None:
+        """Le message de cet informé est écrit en mémoire (injection de 00:00)."""
+        self._entendus.add(str(person_id))
+
+    def declarer_non_avenue(self, person_id: str, motif: str) -> None:
+        """L'exposition de cet agent n'a pas eu lieu. Ses lignes cessent d'être servies.
+
+        Si des décisions ont DÉJÀ porté la ligne — calculées la veille, avant que l'injection
+        ne soit refusée —, elles ne se défont pas : une `[ALARME]`, une seule fois par agent,
+        dit combien, pour qu'elles soient écartées de l'analyse.
+        """
+        pid = str(person_id)
+        self._non_avenus.add(pid)
+        deja = sum(n for (p, _), n in self._servies.items() if p == pid)
+        if deja and pid not in self._non_avenus_alarmes:
+            self._non_avenus_alarmes.add(pid)
+            logger.error(
+                f"[ALARME] [evenements] « {self.evenement.evenement_id} » : l'exposition de "
+                f"{pid} est déclarée NON AVENUE ({motif}), mais {deja} décision(s) ont déjà vu "
+                f"sa ligne au prompt. Elles ne se défont pas : les écarter de l'analyse."
+            )
+        else:
+            logger.warning(
+                f"[evenements] « {self.evenement.evenement_id} » : exposition de {pid} non "
+                f"avenue ({motif}) — aucune décision n'avait encore vu sa ligne."
+            )
+
+    def noter_rendu(self, person_id: str, timestamp: int, lignes, historique) -> None:
+        """Une décision d'un jour de service a-t-elle bien porté ses lignes ? Ne lève jamais."""
+        try:
+            if not lignes:
+                return
+            rendu = "\n".join(str(h) for h in (historique or []))
+            manquantes = [ligne for ligne in lignes if ligne not in rendu]
+            if not manquantes:
+                return
+            self._compteurs.decisions_sans_ligne += 1
+            logger.error(
+                f"[ALARME] [evenements] décision de {person_id} du "
+                f"{wall_clock(int(timestamp)):%d/%m %H:%M} construite SANS sa ligne de "
+                f"service ({manquantes[0][:40]}…) — le bloc de mémoire ne l'a pas rendue. La "
+                f"garantie du ticket 111 ne tient pas pour cette décision."
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
+    def noter_contournement_cache(self) -> None:
+        self._compteurs.cache_contourne_ligne += 1
+
     # ── Cache de décisions ───────────────────────────────────────────────────────────────
     def cache_coupe(self, timestamp: int) -> bool:
         """Le cache de décisions doit-il être contourné à cet instant ? (Q5, 2026-09-22)
@@ -329,6 +715,24 @@ class RegistreEvenements:
                 f"prouve rien à lui seul : la branche sémantique exige 0,95 de similarité de "
                 f"mémoire. Il dit sur quoi porte le doute avant de publier la courbe."
             )
+        if self.evenement.service is not None:
+            # Ticket 111 — journalisé MÊME À ZÉRO : un compteur muet ne distingue pas « rien à
+            # servir aujourd'hui » de « le mécanisme ne tourne plus ».
+            logger.info(
+                f"[evenements] jour {c.jour_run} — service garanti : {c.lectures_servies} "
+                f"lecture(s) servie(s), {c.messages_servis} message(s) du foyer servi(s), dont "
+                f"{c.servies_avant_injection} dans une décision calculée avant l'injection ; "
+                f"relais {c.relais_produits} produit(s), {c.relais_refuses} refusé(s), "
+                f"{c.relais_sans_membre} sans autre membre ; "
+                f"{c.cache_contourne_ligne} décision(s) tenue(s) hors cache pour porter leur "
+                f"ligne ; {c.decisions_sans_ligne} décision(s) de jour de service sans ligne"
+            )
+            if c.decisions_sans_ligne:
+                logger.error(
+                    f"[ALARME] [evenements] jour {c.jour_run} : {c.decisions_sans_ligne} "
+                    f"décision(s) d'un jour de service construite(s) SANS leur ligne. La "
+                    f"présence garantie au prompt ne tient pas ce jour-là."
+                )
         if actif and c.exposes == 0:
             # Une journée d'événement qui ne touche personne est un protocole qui n'a pas eu
             # lieu. Le run du 19 septembre en a eu une — second choc restreint aux trajets en
@@ -342,7 +746,8 @@ class RegistreEvenements:
             )
 
     def tracer(self, applique: EvenementApplique, person_id: str, timestamp: int,
-               gravite: float, detail: Any, jugement: Any = None) -> None:
+               gravite: float, detail: Any, jugement: Any = None,
+               extra: dict | None = None) -> None:
         """Une ligne par application dans `evenements.jsonl`. Jamais d'exception vers l'appelant.
 
         ⚠ **Les champs du ticket 079 sont CONSERVÉS, les nouveaux sont AJOUTÉS.** `choc_id` et
@@ -402,6 +807,10 @@ class RegistreEvenements:
                     round(float(jugement.ecart_au_fait), 4) if jugement else None
                 ),
             }
+            # Ticket 111 — un informé porte en plus le message reçu, qui l'a dit, et s'il est
+            # mineur. Ajoutés, jamais substitués : la ligne du lecteur reste celle d'avant.
+            if extra:
+                ligne.update(extra)
             self._journal.parent.mkdir(parents=True, exist_ok=True)
             with self._journal.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(ligne, ensure_ascii=False) + "\n")

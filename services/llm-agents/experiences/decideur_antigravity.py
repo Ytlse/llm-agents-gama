@@ -201,13 +201,25 @@ class DecideurAntigravity:
         )
 
         # 1. Construction du payload en processus (pur constructeur)
+        # Ticket 111 : la ligne garantie vaut pour tous les décideurs. Vide hors du dispositif.
+        from llm import evenements as _evenements
+
+        _lignes = await _evenements.lignes_du_jour(
+            person.person_id, int(ctx.departure_time or ctx.timestamp)
+        )
         payload = await self.agent.build_travel_plan_payload(
             context,
             options,
             ctx.purpose,
             int(ctx.departure_time),
             ctx.anticipation,
+            lignes=_lignes,
         )
+        if _lignes:
+            _evenements.noter_rendu(
+                person.person_id, int(ctx.departure_time or ctx.timestamp), _lignes,
+                payload["agents"][0].get("history", []),
+            )
 
         # 2. Rendu exact PromptEngine en processus (sans réseau, sans passerelle)
         cat = CATEGORIES["itinary_multi_agent"]

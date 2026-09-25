@@ -45,9 +45,11 @@ from typing import Iterable, Sequence
 
 from loguru import logger
 
-from llm.evenements.injection import PREFIXE_LU, PREFIXE_VECU
+from llm.evenements.injection import PREFIXE_FOYER, PREFIXE_LU, PREFIXE_VECU
 
-PREFIXES = (PREFIXE_VECU, PREFIXE_LU)
+# `[ FOYER ]` (ticket 111) : ce qu'un membre informé a entendu du lecteur. Sans lui, la
+# consolidation d'un informé échapperait au contrôle du souvenir.
+PREFIXES = (PREFIXE_VECU, PREFIXE_LU, PREFIXE_FOYER)
 
 # Longueur minimale d'un mot retenu. En dessous, ce sont des articles, des prépositions et des
 # nombres écrits en chiffres — aucun ne distingue un texte d'un autre.

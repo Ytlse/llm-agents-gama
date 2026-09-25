@@ -6134,11 +6134,12 @@ tickets:
       en amont).
 
   ticket_111_la_lecture_precede_la_decision_et_se_transmet_au_foyer:
-    status: en veille
+    status: en cours
     category: Expériences & Cognition
     note: >-
-      PLAN VALIDÉ PAR L'AUTEUR LE 2026-09-25, IMPLÉMENTATION DIFFÉRÉE par sa décision : aucune
-      ligne de code n'est écrite. Plan, contrat de tests et décisions D1 à D10 dans
+      IMPLÉMENTÉ LE 2026-09-25 (lots 1 à 7), PAS ENCORE FUSIONNÉ dans main — voir l'AVANCE en fin
+      de note. Historique : PLAN VALIDÉ PAR L'AUTEUR LE 2026-09-25, implémentation d'abord
+      différée par sa décision. Plan, contrat de tests et décisions D1 à D10 dans
       `specs/ticket_111/`. Ouvert en analysant le bras traité a09 `2026-09-24_17_50` : le lecteur
       286920 n'a vu l'article dans AUCUNE décision de son jour de lecture, pour deux causes
       cumulées. (1) Sa décision du 26/03 05:57 a été pré-calculée la veille, dix-sept heures
@@ -6153,4 +6154,27 @@ tickets:
       `evenement_relais`, un message par membre ou rien, et pour un mineur le message est la
       décision des parents. Recette sur archive : le contrôle doit signaler 286920 le 26/03.
       DÉPEND DE : aucun ticket — le feu vert de l'auteur pour implémenter. PROLONGE les tickets
-      100 (prise `reveil`) et 110 (présence au prompt).
+      100 (prise `reveil`) et 110 (présence au prompt). AVANCE DU 2026-09-25 : feu vert donné,
+      lots 1 à 7 livrés sur le worktree `intelligent-tereshkova-111a47`. Ligne garantie au rendu
+      (`registre.lignes_du_jour`, `noyau.bloc_changements(…, lignes)`), service de 5 jours
+      ouvrés, relais `evenement_relais` tracé dans `relais_foyer.jsonl` et relu à la reprise,
+      contrôle `scripts/analysis/lecture_avant_decision.py` branché sur `make report`. Tests :
+      `test_111_lecture_et_relais.py` 38 passés (T1 à T12), `test_111_controle_lecture.py` 7
+      passés (T13), `test_evenement_relais.py` (T14) et suite `mobility_llm` au vert. Suites
+      `services/llm-agents` et `scripts/tests` comparées au commit de base 3fb061c dans le même
+      environnement : aucun échec propre au ticket (les 6 et 74 échecs communs viennent des
+      données gitignorées absentes du worktree). Recette sur archive : 286920 rendu 🔴 (26/03
+      0/1, 27/03 0/1, 30/03 0/1, 31/03 0/1). RESTE : fusion dans main (D10, sur demande de
+      l'auteur), reconstruction de l'image worker/passerelle, et un run réel, que D9 écarte pour
+      l'instant. DÉPEND DE : aucun ticket — l'accord de l'auteur pour fusionner. AVANCE DU
+      2026-09-25 (revue spec-critic) : correctifs H10 à H14 dans `specs/ticket_111/questions.md`.
+      Reprise relue dans `evenements.jsonl`, lecteur seul sans refus, un seul relais par foyer,
+      décideurs du banc porteurs de la ligne, informés écartés du contrôle 108. Le contrôle après
+      run lit le jour sur `Departure:` et non sur `sim_ts` du lot. Tests : 45 passés côté
+      service, 11 côté contrôle. Mutation vérifiée : retirer `lignes=_lignes` de l'une ou l'autre
+      branche du payload, ou le refus de stockage au cache, fait échouer un test. Question
+      ouverte Q1 (panne du fournisseur gravée comme refus définitif), à l'auteur. Q1 TRANCHÉE
+      le 2026-09-25 (« 2 retry max ») : un échec technique du relais est retenté à la reprise,
+      trois tentatives au plus (`relais.TENTATIVES_MAX`), 48 tests passés. Commité et fusionné
+      dans main le 2026-09-25 à la demande de l'auteur. RESTE : reconstruire l'image
+      worker/passerelle, et recocher « suites au vert » sur main.

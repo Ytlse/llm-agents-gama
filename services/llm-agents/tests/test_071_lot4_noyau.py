@@ -266,11 +266,14 @@ def test_D5_le_lot_4_ne_coute_aucun_appel_au_modele():
     # `person_id` ajouté par le lot I du 077 : il ne sert qu'au journal — la sortie de fenêtre
     # d'un souvenir de choc était invisible sans lui. Il ne rapproche d'aucun appel au modèle,
     # et la garde qui compte est celle de la source, juste en dessous.
+    # `lignes` ajouté par le ticket 111 : les lignes GARANTIES au prompt (article lu, message
+    # du foyer) arrivent déjà écrites — le noyau les place, il ne les produit pas.
     assert list(inspect.signature(noyau.memoire_noyau).parameters) == [
         "journal",
         "entrees",
         "maintenant",
         "person_id",
+        "lignes",
     ]
     source = inspect.getsource(noyau)
     for interdit in ("llm_client", "execute(", "PromptName", "gateway"):

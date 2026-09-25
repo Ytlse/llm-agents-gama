@@ -239,13 +239,27 @@ class DecideurTypesafe:
         )
         # Le MÊME constructeur de payload que les bras LLM (T1) : la présentation ne se
         # réimplémente pas, sinon les deux bras dérivent sans que rien ne le signale.
+        # Ticket 111 : la ligne garantie (article lu, message du foyer) vaut pour tous les
+        # décideurs, sinon ce bras serait privé de ce que les bras LLM lisent. Vide hors du
+        # dispositif.
+        from llm import evenements as _evenements
+
+        _lignes = await _evenements.lignes_du_jour(
+            person.person_id, int(ctx.departure_time or ctx.timestamp)
+        )
         payload = await self.agent.build_travel_plan_payload(
             context=contexte,
             options=options,
             destination=ctx.purpose,
             departure_time=int(ctx.departure_time),
             anticipation=ctx.anticipation,
+            lignes=_lignes,
         )
+        if _lignes:
+            _evenements.noter_rendu(
+                person.person_id, int(ctx.departure_time or ctx.timestamp), _lignes,
+                (payload.get("agents") or [{}])[0].get("history", []),
+            )
         bloc = (payload.get("agents") or [{}])[0]
         etat = _etat(bloc)
         criteres = _criteres(bloc.get("trajectories") or [])

@@ -1009,6 +1009,34 @@ lecture. Le motif et le créneau, eux, viennent de l'arrivée : ce sont les seul
 Le dernier bloc est l'endroit où l'hystérésis devient lisible dans le prompt lui-même, et non
 plus seulement dans les statistiques de sortie.
 
+### Les lignes garanties passent en tête du dernier bloc (ticket 111)
+
+Une lecture d'article (`[ PRESSE ]`) ou un message du lecteur (`[ FOYER ]`) est **servi au rendu**
+pendant ses jours de service, sans passer par le rappel ni par le seuil de gravité
+(`memoire__importance_choc`). `bloc_changements(entrees, maintenant, person_id, lignes)` et
+`memoire_noyau(…, lignes)` reçoivent ces lignes à part, et trois règles les régissent :
+
+- elles viennent **en premier** dans « Ce qui a changé récemment » ;
+- elles ne comptent pas dans `memoire__changements_max` : un choc récent ne les évince pas, et
+  elles n'évincent pas un choc ;
+- une entrée de mémoire dont le `content` est exactement une ligne servie est **sautée** — une
+  lecture jugée grave ne paraît pas deux fois.
+
+```
+Ce qui a changé récemment
+- [ PRESSE ] This morning I read in the paper: « (Translated from French) Gusts… »
+- Je ne crois plus que : la ligne A est fiable
+```
+
+Sans ligne à servir — pas d'événement, choc vécu, service terminé — le bloc est **identique à
+l'octet près** à celui d'avant. Si le noyau échoue à se construire, le bloc de repli garde les
+lignes : une décision ne perd pas sa lecture parce qu'un autre bloc a cassé. Détail et
+calendrier du service dans [`evenements.md`](evenements.md#ce-que-lagent-a-lu-est-devant-lui-quand-il-décide-ticket-111).
+
+L'entrée longue de l'article (et, chez un membre informé, celle du message, `origine: entendu`)
+reste écrite à l'injection : c'est elle qui concourt au rappel **après** le service. Son
+écriture est désormais **attendue**, comme le jugement.
+
 ### La durée d'un choc se DÉRIVE de sa gravité (ticket 095, lot A)
 
 Un souvenir de gravité de choc est servi dans « Ce qui a changé récemment » **tant que son poids

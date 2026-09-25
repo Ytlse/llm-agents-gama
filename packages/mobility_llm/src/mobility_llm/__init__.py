@@ -47,6 +47,9 @@ CATEGORIES: dict[str, CategorySpec] = {
     # appel par EXPOSITION, et les expositions sont rares par construction : le run du
     # 2026-09-19 en comptait quatre sur toute sa durée.
     "evenement_jugement": _cat("evenement_jugement"),
+    # Ticket 111 — le lecteur transmet à son foyer : un appel par FOYER exposé, un message par
+    # membre (ou rien), et pour un mineur la décision des parents.
+    "evenement_relais": _cat("evenement_relais"),
 }
 
 

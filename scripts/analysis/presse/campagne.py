@@ -124,6 +124,9 @@ def parts_par_role(
     le vocabulaire canonique une seule fois, ici.
     """
     lignes = _decisions(run)
+    from scripts.analysis.lecture_avant_decision import informes_du_run, sous_role
+
+    informes = informes_du_run(run)
     # `avant` = jour relatif < 0 ; `apres` = jour relatif >= 0. Le jour 0 est celui où l'agent
     # reçoit le texte : il décide APRÈS l'avoir lu, puisque la prise est au réveil. Le ranger
     # dans « avant » diluerait l'effet du premier jour, qui est celui qu'on cherche.
@@ -140,8 +143,11 @@ def parts_par_role(
         except ValueError:
             continue
         periode = "apres" if jour >= 0 else "avant"
-        seaux[(role, periode)].append(mode)
-        effectifs[role][periode] += 1
+        # Ticket 111 — le co-résident compte AUSSI sous son sous-rôle (informé ou non), sans
+        # quitter `co_resident` : les campagnes déjà scorées sous ce rôle ne bougent pas.
+        for r in dict.fromkeys((role, sous_role(role, ligne.get("ID Personne") or "", informes))):
+            seaux[(r, periode)].append(mode)
+            effectifs[r][periode] += 1
 
     ecarts: dict[tuple[str, str], EcartModal] = {}
     for role in sorted({r for r, _ in seaux}):
@@ -275,7 +281,13 @@ def main() -> int:
         help="plancher de bruit, en PART (0.032 pour 3,2 %%). Obligatoire : un défaut le ferait "
              "oublier, et un écart plus petit que le bruit n'est pas un effet",
     )
-    p.add_argument("--role", default="expose", choices=("expose", "co_resident", "temoin"))
+    p.add_argument(
+        "--role", default="expose",
+        choices=("expose", "co_resident", "co_resident_informe", "co_resident_non_informe",
+                 "temoin"),
+        help="co_resident_informe / co_resident_non_informe : ticket 111, lus dans "
+             "relais_foyer.jsonl",
+    )
     p.add_argument(
         "--grille", type=Path,
         default=RACINE / "docs" / "paper" / "sources" / "actualites" / "grille_signes.yaml",

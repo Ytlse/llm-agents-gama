@@ -2,7 +2,8 @@
 
 DÉCISIONS DE L'AUTEUR (2026-09-24) :
   (D1) Onglet dédié dans le tableau de bord Streamlit : scripts/dashboard/memoire.py.
-  (D2) 5 fonctions cognitives configurables (itinéraire, jugement, STM, LTM, enquêtes)
+  (D2) 6 fonctions cognitives configurables (itinéraire, jugement, STM, LTM, enquêtes, relais au
+  foyer — ticket 111)
        avec persistance des choix du formulaire d'une session à l'autre.
   (D3) Orchestration contrefactuelle A/B consécutive : bras traité (avec événement)
        puis bras témoin apparié (sans événement). L'expérience n'est terminée que si les deux
@@ -34,13 +35,14 @@ ETAT_FORMULAIRE_MEMOIRE = (
 )
 PROVIDERS_YAML = REPO_ROOT / "config" / "llm_gateway" / "providers.yaml"
 
-# Les 5 fonctions cognitives exposées (D2)
+# Les fonctions cognitives exposées (D2) ; la sixième, `evenement_relais`, vient du ticket 111.
 CATEGORIES_COGNITIVES = (
     "itinary_multi_agent",
     "evenement_jugement",
     "stm_reflection",
     "ltm_self_reflection",
     "enquete_affinite",
+    "evenement_relais",
 )
 
 LIBELLES_CATEGORIES: dict[str, str] = {
@@ -49,6 +51,7 @@ LIBELLES_CATEGORIES: dict[str, str] = {
     "stm_reflection": "3. Mémoire court terme / Soir (STM)",
     "ltm_self_reflection": "4. Auto-réflexion long terme (LTM)",
     "enquete_affinite": "5. Enquêtes d'affinité / Perception",
+    "evenement_relais": "6. Transmission au foyer (relais du lecteur)",
 }
 
 DESCRIPTIONS_CATEGORIES: dict[str, str] = {
@@ -57,6 +60,7 @@ DESCRIPTIONS_CATEGORIES: dict[str, str] = {
     "stm_reflection": "Consolidation nocturne, formation des croyances et récit du soir au foyer.",
     "ltm_self_reflection": "Synthèse périodique (24 h) des croyances et concepts en mémoire longue.",
     "enquete_affinite": "Réponse aux questionnaires d'affinité modale quotidiens ou périodiques.",
+    "evenement_relais": "Le lecteur écrit ce qu'il dit de l'article à chaque membre de son foyer (un appel par foyer exposé, ticket 111).",
 }
 
 # Cohorte de référence historique (Ticket 077/095)
@@ -278,6 +282,9 @@ def defauts() -> dict[str, Any]:
             "stm_reflection": "gemini-3.5-flash-lite",
             "ltm_self_reflection": "gemini-3.1-flash-lite",
             "enquete_affinite": "gemini-3.1-flash-lite",
+            # Ticket 111 — même modèle que le jugement par défaut : les deux appels portent sur
+            # le même article, au même instant.
+            "evenement_relais": "gemini-3.1-flash-lite",
         },
         "temperature_decision": 0.0,
         "variante_prompt": "prompt_expert_05",

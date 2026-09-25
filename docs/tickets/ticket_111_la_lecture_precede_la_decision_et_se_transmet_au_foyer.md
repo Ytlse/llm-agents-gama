@@ -2,7 +2,7 @@
 
 > Le statut de ce ticket vit dans `scripts/dashboard/tickets_status.yaml`, seule source de
 > vérité. Ouvert le 2026-09-25 en analysant le bras traité a09 `2026-09-24_17_50`. **Plan validé
-> par l'auteur le 2026-09-25, implémentation différée.**
+> par l'auteur le 2026-09-25, implémenté le même jour (lots 1 à 7), pas encore fusionné.**
 >
 > Plan : [`specs/ticket_111/plan.md`](../../specs/ticket_111/plan.md) · contrat de tests :
 > [`specs/ticket_111/tests.md`](../../specs/ticket_111/tests.md) · décisions et hypothèses :
@@ -125,22 +125,26 @@ Le détail est dans le plan. En bref :
 
 ## 7. Critères d'acceptation
 
-- [ ] La première décision du lecteur le jour de lecture porte `[ PRESSE ]` dans son prompt, y
+- [x] La première décision du lecteur le jour de lecture porte `[ PRESSE ]` dans son prompt, y
       compris quand elle a été calculée avant l'injection.
-- [ ] La ligne est servie pendant 5 jours de déplacement, week-ends exclus, puis cesse d'être
+- [x] La ligne est servie pendant 5 jours de déplacement, week-ends exclus, puis cesse d'être
       garantie.
-- [ ] Chaque membre informé voit son message dès le jour 0 ; un mineur voit la décision de ses
+- [x] Chaque membre informé voit son message dès le jour 0 ; un mineur voit la décision de ses
       parents ; un membre non informé ne voit rien.
-- [ ] Un relais invalide ou refusé ne produit aucun message, et le dit.
-- [ ] Une exposition déclarée non avenue après un premier service lève une `[ALARME]` qui donne
+- [x] Un relais invalide ou refusé ne produit aucun message, et le dit.
+- [x] Une exposition déclarée non avenue après un premier service lève une `[ALARME]` qui donne
       le nombre de décisions concernées.
-- [ ] Une décision qui doit porter une ligne n'est jamais servie depuis le cache.
-- [ ] À la reprise, le relais est relu, jamais régénéré.
-- [ ] Sans événement, ou pour un choc vécu, le bloc de mémoire est identique à celui d'avant.
-- [ ] `make report` rend le contrôle dans les deux sens, et signale le défaut sur
+- [x] Une décision qui doit porter une ligne n'est jamais servie depuis le cache.
+- [x] À la reprise, le relais est relu, jamais régénéré.
+- [x] Sans événement, ou pour un choc vécu, le bloc de mémoire est identique à celui d'avant.
+- [x] `make report` rend le contrôle dans les deux sens, et signale le défaut sur
       `2026-09-24_17_50`.
-- [ ] `evenements.md`, `memory-stm-ltm.md`, `llm-inference.md` et le changelog sont à jour.
+- [x] `evenements.md`, `memory-stm-ltm.md`, `llm-inference.md` et le changelog sont à jour.
 - [ ] Suites de tests au vert : `services/llm-agents`, `packages/mobility_llm`, `scripts/tests`.
+      *(2026-09-25 : `mobility_llm` au vert ; `services/llm-agents` et `scripts/tests` sans aucun
+      échec propre au ticket, comparées au commit de base dans le même worktree. Les échecs
+      communs viennent des données gitignorées absentes du worktree. À recocher sur `main`, où
+      elles sont présentes.)*
 
 ## 8. Voir aussi
 

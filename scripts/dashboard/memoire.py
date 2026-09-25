@@ -424,6 +424,19 @@ def render(
             help="Questionnaires d'affinité quotidiens (Ticket 095).",
         )
 
+        # 6. Transmission au foyer (ticket 111) — même modèle que le jugement par défaut.
+        _defaut_relais = modeles_courants.get("evenement_relais") or (
+            mod_jugement if mod_jugement != "aucun" else mod_decision
+        )
+        idx_m_rel = modeles_dispos.index(_defaut_relais) if _defaut_relais in modeles_dispos else 0
+        mod_relais = st.selectbox(
+            "6. Transmission au foyer (evenement_relais)",
+            options=modeles_dispos,
+            index=idx_m_rel,
+            key="mem_mod_relais",
+            help="Le lecteur écrit ce qu'il dit de l'article à chaque membre de son foyer — un appel par foyer exposé, canal « lu » seulement (ticket 111).",
+        )
+
         # Réglage STM min entries
         stm_min = st.number_input(
             "Seuil d'entrées STM pour consolidation (min_entries)",
@@ -441,6 +454,7 @@ def render(
         "stm_reflection": mod_stm,
         "ltm_self_reflection": mod_ltm,
         "enquete_affinite": mod_enquete,
+        "evenement_relais": mod_relais,
     }
     routage_b = memoire.resoudre_instances_admises(modeles_selectionnes, adaptateur=adaptateur)
 
@@ -572,6 +586,7 @@ def render(
             "stm_reflection": mod_stm,
             "ltm_self_reflection": mod_ltm,
             "enquete_affinite": mod_enquete,
+            "evenement_relais": mod_relais,
         },
         "variante_prompt": variante_prompt,
         "population": population_choisie,

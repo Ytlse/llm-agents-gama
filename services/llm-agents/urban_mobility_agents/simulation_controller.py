@@ -19,6 +19,7 @@ Modèle de planification :
 
 import asyncio
 import contextlib
+import dataclasses
 import datetime
 import heapq
 import json
@@ -704,12 +705,92 @@ class SimulationLoopV1(BaseScenario):
         self._last_sync_wall: float | None = None
         self._post_pause_drain_seen: int = 0
 
+        self._brancher_evenements()
+
         if settings.agent.reschedule_activity__version == 2:
             self.reschedule_amount_function = self.reschedule_amount_v2
             logger.info("Using reschedule activity function version v2")
         else:
             self.reschedule_amount_function = self.reschedule_amount
             logger.info("Using reschedule activity function version v1")
+
+    def _brancher_evenements(self) -> None:
+        """Ticket 111 — lecteurs tirés dès le chargement, et producteur du relais branché.
+
+        Avant ce ticket, les lecteurs n'étaient connus qu'au premier `/sync` : une lecture du
+        jour 1 aurait été invisible des décisions du bootstrap. Le producteur du relais vit
+        ici parce que le contrôleur est le seul à détenir la population, le client LLM et les
+        identités.
+        """
+        registre = evenements_module.registre()
+        if registre is None or registre.evenement.moment != "reveil":
+            return
+        try:
+            registre.lecteurs(self.population.get_people_list())
+        except Exception as err:  # noqa: BLE001
+            logger.error(
+                f"[ALARME] [evenements] lecteurs non tirés au chargement ({err}) : les lignes "
+                f"de service ne seront PAS servies."
+            )
+        if registre.evenement.relais is not None and self.agent is not None:
+            registre.brancher_producteur_relais(self._produire_relais)
+
+    async def _produire_relais(self, lecteur_id: str, household_id: str, jour: int):
+        """Un appel `evenement_relais` pour ce foyer. Lève `RelaisRefuse` sans repli."""
+        from llm import foyer as _foyer
+        from llm.evenements import relais as relais_module
+
+        registre = evenements_module.registre()
+        lecteur = self.population.people.get(str(lecteur_id))
+        if lecteur is None or registre is None:
+            raise relais_module._refuser(
+                household_id, registre.evenement.evenement_id if registre else "?",
+                f"lecteur {lecteur_id} absent de la population",
+            )
+        lecteurs = registre._lecteurs or {}
+        membres = [
+            self.population.people[m.person_id]
+            for m in _foyer.autres_membres(str(lecteur_id))
+            if m.person_id in self.population.people and m.person_id not in lecteurs
+        ]
+        if not membres:
+            # Rien à transmettre n'est pas un refus : pas d'appel, pas d'alarme. Le relais vide
+            # est tracé comme les autres, pour que la reprise ne le redemande pas.
+            logger.info(
+                f"[evenements] relais du foyer {household_id} : le lecteur {lecteur_id} n'a aucun "
+                f"autre membre mobile — rien à transmettre, aucun appel."
+            )
+            return relais_module.RelaisFoyer(
+                household_id=str(household_id), lecteur_id=str(lecteur_id),
+                lecteur_prenom=relais_module.prenom_de(lecteur),
+                evenement_id=registre.evenement.evenement_id, jour_run=int(jour),
+            )
+        fiches = [
+            relais_module.fiche_membre(p, self._modes_habituels(p)) for p in membres
+        ]
+        e = registre.evenement
+        return await relais_module.produire(
+            self.agent.llm_client,
+            lecteur,
+            self.agent.get_person_identity_description(lecteur),
+            fiches,
+            e.texte_cite.servi if e.texte_cite else "",
+            e.evenement_id,
+            jour,
+            household_id,
+        )
+
+    def _modes_habituels(self, personne) -> list[str]:
+        """Les modes que ce membre a pris, du plus au moins fréquent, lus dans son journal."""
+        ltm = getattr(self.agent, "long_term_memory", None)
+        if ltm is None:
+            return []
+        try:
+            from llm.evenements.relais import modes_habituels
+
+            return modes_habituels(ltm.journal_trajets(str(personne.person_id)))
+        except Exception:  # noqa: BLE001 — une fiche incomplète vaut mieux qu'un relais perdu
+            return []
 
     # -------------------------------------------------------------------------
     # BaseScenario — interface publique Worker
@@ -2073,15 +2154,19 @@ class SimulationLoopV1(BaseScenario):
     async def _injecter_evenements_du_reveil(self, timestamp: int) -> None:
         """Ce que les agents ont lu ce matin, déposé avant leur première décision.
 
-        Ticket 100, lot 2. Rien quand aucun événement n'est déclaré, ou quand l'événement
-        déclaré est du moment `arrivee` — la très grande majorité des runs ne passe donc
-        jamais par ici.
+        Ticket 100, lot 2 ; ticket 111. Rien quand aucun événement n'est déclaré, ou quand
+        l'événement déclaré est du moment `arrivee` — la très grande majorité des runs ne passe
+        donc jamais par ici.
+
+        ⚠ **Quand.** Lancée à CHAQUE synchronisation, hors du bloc du point de reprise : elle
+        agit au premier pas de simulation après minuit, à 00:00, et non à 3 h. `dus_au_reveil`
+        est idempotente par agent.
 
         ⚠ **Le gel du rejeu (ticket 075) est vérifié ICI, et pas seulement en aval.**
         `add_short_term_memory` renvoie sans rien écrire tant que l'agent rejoue une journée
         déjà apprise : un article dont le jour de parution tombe dans la fenêtre de rejeu
         disparaîtrait donc en silence, et le protocole aurait sauté sans qu'une ligne le dise.
-        Le refus est FRANC et nommé.
+        Le refus est FRANC et nommé, et l'exposition est déclarée non avenue (ticket 111).
 
         FAIL-OPEN pour le reste : une injection qui échoue lève une alarme et laisse la
         simulation continuer — mais elle laisse une alarme, pas un silence.
@@ -2103,113 +2188,213 @@ class SimulationLoopV1(BaseScenario):
                     f"injections seraient perdues sans trace. Le protocole n'a PAS eu lieu ce "
                     f"jour-là — ne pas le compter dans l'analyse."
                 )
+                for person_id, _ in dus:
+                    self._declarer_foyer_non_avenu(registre, person_id, "gel du rejeu")
                 return
             for person_id, applique in dus:
-                personne = self.population.people.get(person_id)
-                if personne is None:
+                try:
+                    lu = await self._injecter_une_lecture(registre, person_id, applique, timestamp)
+                    if lu and registre.evenement.relais is not None:
+                        await self._injecter_le_relais(registre, person_id, applique, timestamp)
+                except Exception as err:  # noqa: BLE001 — un lecteur n'emporte pas les autres
                     logger.error(
-                        f"[ALARME] [evenements] lecteur « {person_id} » retenu pour "
-                        f"« {applique.evenement_id} » mais absent de la population chargée : "
-                        f"l'injection n'a pas eu lieu."
+                        f"[ALARME] [evenements] injection au réveil de {person_id} impossible "
+                        f"à {humanize_date(timestamp)} ({type(err).__name__}: {err}). Son "
+                        f"exposition est déclarée non avenue."
                     )
-                    continue
-                # Gravité DÉTERMINISTE d'un article : zéro, et c'est un fait — lire le journal
-                # ne fait subir aucun retard. Le jugement de l'agent (lot 3) est ce qui lui
-                # donnera son poids ; sans lui, l'entrée vit 2,8 jours et le chargement l'a
-                # déjà dit en [ALARME].
-                _contexte = Context(
-                    person=personne,
-                    activity_id=None,
-                    timestamp=timestamp,
-                    data={"evenement": applique.evenement_id, "canal": applique.canal},
-                )
-                _texte = evenements_module.entree_de_lecture(applique)
-
-                # ── Le jugement, AVANT l'écriture (ticket 100, lot 3, D4) ──────────────
-                # Juger d'abord et écrire ensuite évite toute requalification : l'entrée naît
-                # avec sa gravité DÉFINITIVE, donc avec la bonne durée de vie. La force est
-                # fixée à l'écriture (`longterm.py`) ; relever l'importance après coup ne la
-                # recalculerait pas, et le souvenir porterait une gravité en vivant selon une
-                # autre.
-                #
-                # À 3 h simulées rien n'attend — aucune arrivée à traiter, aucun agent
-                # réveillé — donc cet appel ne retarde rien. C'est ce qui permet de juger ici
-                # plutôt que dans la file du soir : différé, l'article passerait la journée à
-                # gravité 0,00, hors du bloc « Ce qui a changé récemment », donc sans effet le
-                # jour même — ce qui viderait le régime de son sens.
-                _importance = 0.0
-                _valence = "neutre"
-                _jugement = None
-                if registre.evenement.jugement == "a_l_injection":
-                    try:
-                        _jugement = await evenements_module.juger(
-                            self.agent.llm_client,
-                            str(person_id),
-                            self.agent.get_person_identity_description(personne),
-                            applique.texte,
-                            gravite_deterministe=0.0,
-                            evenement_id=applique.evenement_id,
-                            jour=applique.jour_run,
-                        )
-                    except evenements_module.JugementRefuse:
-                        # L'alarme a été levée par `juger`. L'exposition est non avenue : on
-                        # n'écrit RIEN plutôt que d'écrire une entrée non jugée qui se
-                        # compterait comme les autres.
-                        continue
-                    _importance = _jugement.importance_retenue
-                    _valence = _jugement.valence
-                # (1) Mémoire COURTE — pour que la réflexion du soir voie ce que l'agent a lu
-                # et puisse en tirer une croyance. C'est le seul chemin vers un concept.
-                self.agent.add_short_term_memory(
-                    context=_contexte,
-                    msg=_texte,
-                    timestamp=timestamp,
-                    importance=_importance,
-                    valence=_valence,
-                    origine=applique.canal,
-                )
-                # (2) Mémoire LONGUE — et sans elle, ce régime ne ferait pas ce qu'il annonce.
-                #
-                # ⚠ MESURÉ, pas supposé : la décision d'un agent ne lit QUE la mémoire longue
-                # (`query_past_experiences_for_travel` → `aquery_user_memories`), et la
-                # consolidation du soir CONSOMME le tampon court en n'écrivant que la réflexion
-                # et les concepts — le texte brut n'atteint jamais la mémoire longue tel quel.
-                # Une entrée posée à 3 h en mémoire courte ne serait donc vue par AUCUNE
-                # décision de la journée, et « l'agent sait avant de décider » serait faux.
-                #
-                # C'est la seule asymétrie entre les deux prises, et elle EST le régime : un
-                # choc s'applique après la décision, son effet commence le lendemain et c'est
-                # voulu ; un article est su avant, il doit donc être consultable le jour même.
-                # Ce qui reste commun aux deux canaux est la QUALIFICATION — gravité, valence,
-                # origine, force, durée de service — pas le chemin d'écriture.
-                self._spawn(
-                    self.agent.aadd_long_term_memory(
-                        _contexte,
-                        MemoryEntry(
-                            content=_texte,
-                            timestamp=wall_clock(timestamp),
-                            memory_type=MemoryType.CONVERSATION,
-                            person_id=str(person_id),
-                            importance=_importance,
-                            valence=_valence,
-                            origine=applique.canal,
-                        ),
-                    )
-                )
-                registre.tracer(
-                    applique, person_id, timestamp, _importance, None, jugement=_jugement
-                )
-                logger.info(
-                    f"[evenements] « {applique.evenement_id} » lu par {person_id} à "
-                    f"{humanize_date(timestamp)} (jour {applique.jour_run} du run, "
-                    f"{applique.raison})"
-                )
+                    self._declarer_foyer_non_avenu(registre, person_id, f"exception : {err}")
         except Exception as err:  # noqa: BLE001
             logger.error(
                 f"[ALARME] [evenements] injection au réveil impossible à "
                 f"{humanize_date(timestamp)} : {err}. La simulation continue, mais le "
                 f"protocole de ce jour-là n'a pas eu lieu."
             )
+
+    def _declarer_foyer_non_avenu(self, registre, lecteur_id: str, motif: str) -> None:
+        """Le lecteur ET les membres de son foyer (hypothèse H7 du ticket 111).
+
+        Une transmission qui découle d'une lecture déclarée non avenue n'a pas plus eu lieu
+        que la lecture elle-même.
+        """
+        registre.declarer_non_avenue(str(lecteur_id), motif)
+        if registre.evenement.relais is None:
+            return
+        from llm import foyer as _foyer
+
+        for membre in _foyer.autres_membres(str(lecteur_id)):
+            if registre.foyer_expose(membre.person_id):
+                registre.declarer_non_avenue(
+                    membre.person_id, f"lecture de {lecteur_id} non avenue ({motif})"
+                )
+
+    async def _injecter_une_lecture(self, registre, person_id: str, applique, timestamp: int) -> bool:
+        """Le lecteur : jugement, mémoire courte, mémoire longue ATTENDUE. Rend vrai si écrit."""
+        personne = self.population.people.get(person_id)
+        if personne is None:
+            logger.error(
+                f"[ALARME] [evenements] lecteur « {person_id} » retenu pour "
+                f"« {applique.evenement_id} » mais absent de la population chargée : "
+                f"l'injection n'a pas eu lieu."
+            )
+            self._declarer_foyer_non_avenu(registre, person_id, "absent de la population")
+            return False
+        # Gravité DÉTERMINISTE d'un article : zéro, et c'est un fait — lire le journal ne fait
+        # subir aucun retard. Le jugement de l'agent (lot 3) est ce qui lui donne son poids.
+        _texte = evenements_module.entree_de_lecture(applique)
+        _importance, _valence, _jugement = await self._juger_a_l_injection(
+            registre, personne, applique.texte, applique
+        )
+        if _importance is None:
+            # L'alarme a été levée par `juger`. L'exposition est non avenue : on n'écrit RIEN
+            # plutôt que d'écrire une entrée non jugée qui se compterait comme les autres.
+            self._declarer_foyer_non_avenu(registre, person_id, "jugement refusé")
+            return False
+        await self._ecrire_injection(personne, _texte, timestamp, _importance, _valence,
+                                     applique.canal, applique.evenement_id)
+        registre.tracer(applique, person_id, timestamp, _importance, None, jugement=_jugement)
+        logger.info(
+            f"[evenements] « {applique.evenement_id} » lu par {person_id} à "
+            f"{humanize_date(timestamp)} (jour {applique.jour_run} du run, {applique.raison})"
+        )
+        return True
+
+    async def _juger_a_l_injection(self, registre, personne, texte: str, applique):
+        """`(importance, valence, jugement)`, ou `(None, None, None)` si le jugement est refusé.
+
+        Juger d'abord et écrire ensuite évite toute requalification : l'entrée naît avec sa
+        gravité DÉFINITIVE, donc avec la bonne durée de vie. La force est fixée à l'écriture
+        (`longterm.py`) ; relever l'importance après coup ne la recalculerait pas.
+
+        À 00:00 simulées rien n'attend — aucune arrivée à traiter, aucun agent réveillé — et
+        on est dans une tâche de fond : l'appel ne retarde aucune synchronisation.
+        """
+        if registre.evenement.jugement == "a_l_injection":
+            try:
+                jugement = await evenements_module.juger(
+                    self.agent.llm_client,
+                    str(personne.person_id),
+                    self.agent.get_person_identity_description(personne),
+                    texte,
+                    gravite_deterministe=0.0,
+                    evenement_id=applique.evenement_id,
+                    jour=applique.jour_run,
+                )
+            except evenements_module.JugementRefuse:
+                return None, None, None
+            return jugement.importance_retenue, jugement.valence, jugement
+        # Ablation déclarée (`jugement: aucun`) : aucun appel, gravité déterministe nulle.
+        return 0.0, "neutre", None
+
+    async def _ecrire_injection(self, personne, texte: str, timestamp: int, importance: float,
+                                valence: str, origine: str, evenement_id: str) -> None:
+        """Mémoire courte puis mémoire longue, la seconde ATTENDUE (ticket 111).
+
+        (1) Mémoire COURTE — pour que la réflexion du soir voie ce que l'agent a lu ou entendu
+        et puisse en tirer une croyance. C'est le seul chemin vers un concept.
+
+        (2) Mémoire LONGUE — la décision ne lit QUE la mémoire longue, et la consolidation du
+        soir consomme le tampon court sans recopier le texte brut. Depuis le ticket 111, la
+        garantie du jour de lecture ne dépend plus d'elle (la ligne est servie au rendu du
+        prompt) ; elle sert aux jours d'après, où la mémoire décide seule. Elle est attendue et
+        non plus lancée en fond : l'entrée est lisible dès le retour de l'injection.
+        """
+        _contexte = Context(
+            person=personne,
+            activity_id=None,
+            timestamp=timestamp,
+            data={"evenement": evenement_id, "canal": origine},
+        )
+        self.agent.add_short_term_memory(
+            context=_contexte,
+            msg=texte,
+            timestamp=timestamp,
+            importance=importance,
+            valence=valence,
+            origine=origine,
+        )
+        await self.agent.aadd_long_term_memory(
+            _contexte,
+            MemoryEntry(
+                content=texte,
+                timestamp=wall_clock(timestamp),
+                memory_type=MemoryType.CONVERSATION,
+                person_id=str(personne.person_id),
+                importance=importance,
+                valence=valence,
+                origine=origine,
+            ),
+        )
+
+    async def _injecter_le_relais(self, registre, lecteur_id: str, applique, timestamp: int) -> None:
+        """Chaque membre informé reçoit le message du lecteur — ticket 111, lot 4.
+
+        Le relais est le plus souvent déjà produit la veille, par la première décision d'un
+        membre qui l'a demandé ; sinon il est produit ici. Chaque informé JUGE lui-même ce
+        qu'il a entendu, avec sa propre identité ; l'entrée porte `origine: entendu` et ne
+        repartira jamais (garde G3). Un membre à qui le lecteur n'a rien dit ne reçoit rien :
+        c'est le témoin interne du foyer, par le choix du lecteur.
+        """
+        hh = (registre._lecteurs or {}).get(str(lecteur_id), ("",))[0]
+        if not hh:
+            return
+        # Un seul lecteur relaie par foyer (`lecteurs_par_foyer > 1`) : les autres ont lu, ils
+        # ne transmettent pas une seconde fois ce que le premier a dit.
+        if registre._lecteur_du_foyer(hh) != str(lecteur_id):
+            return
+        produit = await registre.relais_du_foyer(hh)
+        if produit is None:
+            return
+        for message in produit.messages:
+            if not message.parle:
+                continue
+            mid = message.destinataire_id
+            if mid in registre._entendus:
+                continue  # déjà écrit en mémoire : jamais deux fois le même message
+            membre = self.population.people.get(mid)
+            if membre is None:
+                logger.error(
+                    f"[ALARME] [evenements] informé « {mid} » du foyer {hh} absent de la "
+                    f"population chargée : son message n'est pas écrit."
+                )
+                registre.declarer_non_avenue(mid, "absent de la population")
+                continue
+            try:
+                ligne = evenements_module.ligne_de_foyer(
+                    message.texte, produit.lecteur_prenom, message.mineur
+                )
+                recu = dataclasses.replace(applique, raison=f"relais:{lecteur_id}", texte=ligne)
+                importance, valence, jugement = await self._juger_a_l_injection(
+                    registre, membre, ligne, recu
+                )
+                if importance is None:
+                    registre.declarer_non_avenue(mid, "jugement du message refusé")
+                    continue
+                await self._ecrire_injection(membre, ligne, timestamp, importance, valence,
+                                             "entendu", applique.evenement_id)
+                registre.noter_entendu(mid)
+                registre.tracer(
+                    recu, mid, timestamp, importance, None, jugement=jugement,
+                    extra={
+                        "origine": "entendu",
+                        "lecteur_id": str(lecteur_id),
+                        "household_id": hh,
+                        "message": message.texte,
+                        "mineur": message.mineur,
+                        "directif": message.directif,
+                        "familles_directives": list(message.familles),
+                    },
+                )
+                logger.info(
+                    f"[evenements] « {applique.evenement_id} » entendu par {mid} de "
+                    f"{lecteur_id} (foyer {hh}{', mineur' if message.mineur else ''}) à "
+                    f"{humanize_date(timestamp)}"
+                )
+            except Exception as err:  # noqa: BLE001 — un informé n'emporte pas les autres
+                logger.error(
+                    f"[ALARME] [evenements] message du foyer {hh} non écrit pour {mid} "
+                    f"({type(err).__name__}: {err}). Son exposition est déclarée non avenue."
+                )
+                registre.declarer_non_avenue(mid, f"exception : {err}")
 
     async def _tirer_accidents_du_jour(self, timestamp: int) -> None:
         """Tire les accidents de la journée simulée en cours, si le régime est actif.
@@ -2380,9 +2565,10 @@ class SimulationLoopV1(BaseScenario):
         # après avoir choisi. Le contraste entre les deux est ce que le chapitre 7 mesure, et
         # il n'existe que si les deux prises restent à leur place.
         #
-        # Posé au même jalon que le point de reprise — 3 h simulées — donc après le drainage
-        # nocturne des réflexions et le plancher de 22 h, sur des tampons vides, et avant le
-        # premier réveil de la journée. Idempotent par journée, comme le tirage des accidents.
+        # Lancée à CHAQUE synchronisation, hors du bloc du point de reprise : elle agit au
+        # premier pas de simulation après minuit, à 00:00 (et non à 3 h, comme on l'a longtemps
+        # écrit — ticket 111, § 2.4). Idempotente par agent, comme le tirage des accidents.
+        evenements_module.noter_instant(timestamp)
         self._spawn(self._injecter_evenements_du_reveil(timestamp))
 
         # Ticket 077 — enquête d'affinité modale déclarée, aux jalons DÉCLARÉS

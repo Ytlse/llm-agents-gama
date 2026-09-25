@@ -37,6 +37,24 @@ logger = logging.getLogger("orchestrateur_memoire")
 CODE_BRAS_SUSPENDU = 7
 
 
+def _foyers_avec_relais(evenement: str) -> int:
+    """Nombre de foyers exposés d'une déclaration qui porte un relais (ticket 111), sinon 0."""
+    if not evenement or evenement == "0":
+        return 0
+    chemin = memoire.DOSSIER_EVENEMENTS / f"{evenement}.yaml"
+    if not chemin.is_file():
+        return 0
+    try:
+        import yaml
+
+        data = yaml.safe_load(chemin.read_text(encoding="utf-8")) or {}
+    except Exception:  # noqa: BLE001 — une estimation ne fait pas tomber le lancement
+        return 0
+    if not data.get("relais"):
+        return 0
+    return len((data.get("exposition") or {}).get("foyers") or [])
+
+
 def estimer_cout(config: dict[str, Any]) -> dict[str, Any]:
     """Estime le volume d'appels LLM pour les deux bras consécutifs."""
     horizon = int(config.get("horizon_jours", 42))
@@ -50,6 +68,12 @@ def estimer_cout(config: dict[str, Any]) -> dict[str, Any]:
     appels_ltm = nb_personas * (horizon // 1)
     appels_enquetes = nb_personas * horizon * 5
     appels_jugement = nb_personas * 2  # ~2 expositions max
+    # Ticket 111 — un appel de relais par foyer exposé, et un jugement par membre informé
+    # (au plus les autres membres du foyer ; compté large, un par agent non lecteur).
+    foyers_relais = _foyers_avec_relais(str(config.get("evenement", "")))
+    appels_relais = foyers_relais
+    if foyers_relais:
+        appels_jugement += nb_personas
 
     par_bras = {
         "itinary_multi_agent": appels_decision,
@@ -57,6 +81,7 @@ def estimer_cout(config: dict[str, Any]) -> dict[str, Any]:
         "ltm_self_reflection": appels_ltm,
         "enquete_affinite": appels_enquetes,
         "evenement_jugement": appels_jugement,
+        "evenement_relais": appels_relais,
     }
     total_bras = sum(par_bras.values())
     total_ab = total_bras * 2  # Facteur 2 pour A/B (traité + témoin)
@@ -215,7 +240,10 @@ def rapprochement_injections(config: dict[str, Any], workdir_traite: Path) -> di
     if evt_jsonl.is_file():
         try:
             lignes = [json.loads(l) for l in evt_jsonl.read_text().splitlines() if l.strip()]
-            produites = len(lignes)
+            # Ticket 111 : un membre informé par le lecteur a sa ligne (`origine: entendu`),
+            # mais ce n'est pas une lecture. La compter masquerait une lecture manquante :
+            # dix lectures sur vingt et dix informés passeraient pour « conforme ».
+            produites = sum(1 for l in lignes if l.get("origine") != "entendu")
         except Exception:
             pass
 

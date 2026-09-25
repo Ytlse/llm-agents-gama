@@ -42,3 +42,41 @@ def jour_tire(graine: int, evenement_id: str, cible: str, fenetre: tuple[int, in
     largeur = fin - debut + 1
     rang = int(tirage_stable(graine, evenement_id, f"parution:{cible}") * largeur)
     return debut + min(rang, largeur - 1)
+
+
+def date_du_jour_run(jour: int):
+    """La date murale du jour `jour` du run (1 = premier jour), ou `None` sans ancre.
+
+    Lue sur l'ancre du ticket 075, comme `jour_du_run` : la même abscisse dans les deux sens.
+    """
+    from datetime import timedelta
+
+    from sim_clock import wall_clock
+    from urban_mobility_agents.utils.ancre_run import ancre
+
+    debut = ancre()
+    if debut is None:
+        return None
+    return wall_clock(int(debut)).date() + timedelta(days=int(jour) - 1)
+
+
+def jours_de_service(debut, n: int, sans_week_end: bool) -> tuple:
+    """Les `n` jours de DÉPLACEMENT qui commencent à `debut` — ticket 111, décision D3.
+
+    `debut` compte comme jour 1 s'il est ouvrable. Quand aucun départ n'a lieu le week-end
+    (`agent.no_weekend_departures`), samedi et dimanche sont sautés : un article lu un jeudi est
+    servi jeudi, vendredi, lundi, mardi et mercredi. Sans cette règle, cinq jours calendaires ne
+    donneraient que trois jours de décisions à un foyer qui lit un jeudi.
+
+    Calendrier MURAL, déterministe : le résultat ne dépend pas du moment où la décision est
+    pré-calculée, et c'est ce qui rend la ligne servie indépendante de l'horizon glissant.
+    """
+    from datetime import timedelta
+
+    jours = []
+    courant = debut
+    while len(jours) < int(n):
+        if not (sans_week_end and courant.weekday() >= 5):
+            jours.append(courant)
+        courant = courant + timedelta(days=1)
+    return tuple(jours)

@@ -117,6 +117,8 @@ def texte_injecte(run: Path) -> str:
     if not chemin.is_file():
         raise SystemExit(f"❌ {chemin} introuvable — ce run ne porte aucune injection")
     lignes = [json.loads(l) for l in chemin.read_text(encoding="utf-8").splitlines() if l.strip()]
+    # Ticket 111 : un membre informé (`origine: entendu`) n'est pas une injection de plus.
+    lignes = [l for l in lignes if l.get("origine") != "entendu"]
     if not lignes:
         raise SystemExit(f"❌ {chemin} est vide — ce run ne porte aucune injection")
     if len(lignes) > 1:

@@ -635,6 +635,62 @@ def section_temoin_souvenir(run: Path, out: list[str], alarms: list[str]) -> Non
         )
 
 
+def section_lecture_avant_decision(run: Path, out: list[str], alarms: list[str]) -> None:
+    """L'article lu était-il devant le modèle quand l'agent décidait ? — ticket 111.
+
+    Le 2026-09-25, le bras a09 `2026-09-24_17_50` a montré qu'il ne l'était pas : la décision
+    du jour de lecture était pré-calculée la veille, et les suivantes ne voyaient pas un article
+    jugé sous le seuil de choc. La section rend les succès ET les défauts, et dit aussi quand il
+    n'y a rien à contrôler : une section absente ne distingue pas « rien à voir » de « le
+    contrôle ne tourne plus ».
+    """
+    import importlib.util
+
+    chemin = Path(__file__).resolve().parents[1] / "analysis" / "lecture_avant_decision.py"
+    spec = importlib.util.spec_from_file_location("lecture_avant_decision", chemin)
+    module = importlib.util.module_from_spec(spec)
+    # Enregistré AVANT l'exécution : les dataclasses du module résolvent leurs annotations
+    # dans `sys.modules`, et un module anonyme les fait échouer.
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    out.append("\n## 📰 Lecture avant décision (ticket 111)\n")
+    try:
+        constats = module.controler(run)
+    except Exception as err:  # noqa: BLE001 — une section ne fait pas tomber le rapport
+        out.append(f"_Contrôle impossible : {type(err).__name__}: {err}_\n")
+        alarms.append(f"🔴 Contrôle « lecture avant décision » impossible ({err}).")
+        return
+    if not constats:
+        out.append(
+            "_Aucun événement `lu` dans ce run (ou aucune lecture tracée) : rien à contrôler._\n"
+        )
+        return
+    out.extend(module.rendre(constats))
+    rouges = [c for c in constats if c.verdict == "🔴"]
+    verts = [c for c in constats if c.verdict == "✅"]
+    out.append(
+        f"\n{len(constats)} agent(s) contrôlé(s) : {len(verts)} ✅, {len(rouges)} 🔴, "
+        f"{len(constats) - len(verts) - len(rouges)} sans décision sur ses jours de service.\n"
+    )
+    for c in rouges:
+        if c.attend_ligne:
+            quoi = (
+                f"la première décision du {c.date_lecture:%d/%m} ne porte pas la ligne"
+                if c.premiere is False
+                else f"{c.privees} décision(s) de ses jours de service sans la ligne"
+            )
+            alarms.append(
+                f"🔴 LECTURE ABSENTE DE LA DÉCISION — `{c.person_id}` ({c.role}) : {quoi}. "
+                f"L'effet mesuré sur ces jours n'est pas celui d'un agent qui SAIT."
+            )
+        else:
+            alarms.append(
+                f"🔴 LIGNE DU FOYER CHEZ UN NON-INFORMÉ — `{c.person_id}` : {c.privees} "
+                f"décision(s) portent `[ FOYER ]` alors que le lecteur ne lui a rien dit."
+            )
+
+
 def section_activity_coverage(run: Path, out: list[str], alarms: list[str]) -> None:
     """Couverture des activités par jour simulé.
 
@@ -910,6 +966,7 @@ def main() -> int:
     section_decisions(run, out, alarms)
     section_replis_autour_evenement(run, out, alarms)
     section_temoin_souvenir(run, out, alarms)
+    section_lecture_avant_decision(run, out, alarms)
     section_activity_coverage(run, out, alarms)
     section_arrivals(run, out, alarms)
     section_quotas(run, out, alarms)

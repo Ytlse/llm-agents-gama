@@ -813,7 +813,10 @@ class LlmAgent:
         return _build_profile_narrative(person.identity.traits_json)
 
     async def query_past_experiences_for_travel(
-        self, context: Context, options: list[TravelPlan]
+        self,
+        context: Context,
+        options: list[TravelPlan],
+        lignes: tuple[str, ...] | list[str] = (),
     ) -> list[str]:
         def get_plan_text(plan: TravelPlan) -> str:
             return env_ob_to_text("travel_plan_query", plan.model_dump())
@@ -924,6 +927,7 @@ class LlmAgent:
                 _entrees,
                 wall_clock(context.timestamp),
                 context.person.person_id,
+                lignes,
             )
         except Exception as err:  # noqa: BLE001
             # Un bloc qui ne se construit pas ne doit pas faire perdre la décision — mais il
@@ -933,7 +937,13 @@ class LlmAgent:
                 f"[noyau] mémoire noyau non construite pour {context.person.person_id} "
                 f"({err}) — repli sur les souvenirs bruts seuls"
             )
-            _bloc = []
+            # Ticket 111 — la ligne GARANTIE survit à un bloc qui ne se construit pas : c'est
+            # précisément ce qu'elle garantit.
+            _bloc = (
+                ["Ce qui a changé récemment", *(f"- {ligne}" for ligne in lignes)]
+                if lignes
+                else []
+            )
 
         if not _bloc:
             return resp
@@ -956,6 +966,7 @@ class LlmAgent:
         destination: str,
         departure_time: int = 0,
         anticipation: dict | None = None,
+        lignes: tuple[str, ...] | list[str] = (),
     ) -> dict[str, Any]:
         agent_id = context.person.person_id
         perception = self.get_person_identity_description(
@@ -973,7 +984,9 @@ class LlmAgent:
             _rec = _pl.get_record(context.person.person_id) if _pl is not None else None
             if _rec is not None:
                 _rec.T_ltm_start = time.time()
-            history = await self.query_past_experiences_for_travel(context, options)
+            history = await self.query_past_experiences_for_travel(
+                context, options, lignes
+            )
             if _rec is not None:
                 _rec.T_ltm_end = time.time()
 
@@ -1161,11 +1174,22 @@ class LlmAgent:
             self.long_term_memory is not None
             and self.long_term_memory.has_memories(context.person.person_id)
         )
+        # ── Ticket 111 — ce qui est GARANTI au prompt ce jour-là, calculé AVANT le cache ────
+        # L'article lu (lecteur) ou ce qu'un membre du foyer en a dit (informé), pendant ses
+        # jours de service. Le jour est celui du TRAJET, pas celui du calcul : la décision du
+        # jour de lecture se calcule la veille, avant l'injection, et c'est ce qui la privait
+        # de l'article. Vide hors du dispositif — et le reste de la méthode est alors inchangé.
+        from llm import evenements as _evenements
+
+        _lignes = await _evenements.lignes_du_jour(
+            context.person.person_id, int(departure_time or context.timestamp)
+        )
         payload = None
         memory_text = None
         if has_memories:
             payload = await self.build_travel_plan_payload(
-                context, shuffled_options, destination, departure_time, anticipation
+                context, shuffled_options, destination, departure_time, anticipation,
+                lignes=_lignes,
             )
             # Texte mémoire : sérialisation du champ history déjà calculé dans le payload
             memory_text = json.dumps(
@@ -1197,11 +1221,15 @@ class LlmAgent:
         # ⚠ La coupure ne porte QUE sur ce jour. La fenêtre d'après — celle qu'on mesure —
         # garde son cache, et les compteurs de `evenements` disent jour par jour combien de
         # décisions y ont été servies depuis le cache.
-        from llm import evenements as _evenements
-
         _cache_coupe = _evenements.cache_coupe(context.timestamp)
+        if self.llm_cache is not None and _lignes:
+            # Ticket 111 — une décision qui doit porter une ligne ne consulte JAMAIS le cache.
+            # `cache_coupe` ne couvre que la fenêtre de tirage : un jour de service situé après
+            # pourrait sinon ressortir une décision prise sans l'article.
+            _evenements.noter_decision(context.timestamp, depuis_cache=False)
+            _evenements.noter_contournement_cache()
 
-        if self.llm_cache is not None and not _cache_coupe:
+        if self.llm_cache is not None and not _cache_coupe and not _lignes:
             cache_hit = await self.llm_cache.lookup(
                 agent_id=context.person.person_id,
                 activity_id=context.activity_id,
@@ -1283,7 +1311,15 @@ class LlmAgent:
         # Cache miss sur la branche « mémoire vide » : le payload reste à construire.
         if payload is None:
             payload = await self.build_travel_plan_payload(
-                context, shuffled_options, destination, departure_time, anticipation
+                context, shuffled_options, destination, departure_time, anticipation,
+                lignes=_lignes,
+            )
+        if _lignes:
+            _evenements.noter_rendu(
+                context.person.person_id,
+                int(departure_time or context.timestamp),
+                _lignes,
+                payload["agents"][0].get("history", []),
             )
 
         _pl = PipelineLogger.get()
@@ -1467,6 +1503,16 @@ class LlmAgent:
                         logger.info(
                             f"[cache] store refusé — distribution de repli uniforme non persistée | "
                             f"agent={context.person.person_id} activity={context.activity_id}"
+                        )
+                    elif self.llm_cache is not None and _lignes:
+                        # Ticket 111 — une décision prise AVEC une ligne de service n'entre
+                        # pas au cache : le cache est commun aux runs d'une même population,
+                        # et le bras témoin pourrait se voir resservir une décision prise en
+                        # lisant l'article.
+                        logger.info(
+                            f"[cache] store refusé — décision portant une ligne de service "
+                            f"(ticket 111) | agent={context.person.person_id} "
+                            f"activity={context.activity_id}"
                         )
                     elif self.llm_cache is not None:
                         mode = chosen_plan.mode_label()

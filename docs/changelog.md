@@ -1,3 +1,57 @@
+## [2026-09-25] Un article lu est devant le lecteur quand il décide, et il le dit à sa famille
+
+Ticket 111. Dans le bras traité a09 `2026-09-24_17_50`, Arthur (286920) a lu l'article sur le
+vent d'autan le 26 mars à 00:00. Sa décision de 05:57 avait été calculée la veille, dix-sept
+heures avant la lecture. Celles des jours suivants ne le voyaient pas non plus : jugé `notable`
+(0,30), l'article restait sous le seuil de choc (0,70), et le rappel servait dix bilans « tout
+s'est bien passé ». Son entrée finit le run avec `rappels: 0`. Rien ne l'avait signalé.
+
+**La lecture est garantie au prompt pendant 5 jours de déplacement**, à chaque décision et à
+chaque enquête d'affinité. Le jour de lecture compte comme jour 1 et les week-ends ne comptent
+pas. La ligne est posée au rendu, en tête de « Ce qui a changé récemment », quelle que soit la
+gravité jugée, y compris pour une décision calculée la veille. Ensuite, la mémoire ordinaire
+reprend la main, et c'est ce qu'on mesure.
+
+**Avant :** décision du jour de lecture sans l'article ; les jours suivants, l'article n'apparaît que s'il est jugé grave ou si la mémoire est presque vide
+**Après :** `[ PRESSE ] This morning I read in the paper: « … »` dans chaque décision des 5 jours de service ; le journal dit combien ont été servies avant l'injection
+
+**Le lecteur parle à sa famille.** Il fait un appel LLM par foyer (fonction n° 6 de l'onglet
+🧠 Expériences Mémoire) : il lit la fiche de chaque autre membre (âge, occupation, modes
+habituels, trajets du jour) et lui écrit un message, ou ne lui dit rien. Pour un enfant, le
+message est la décision des parents. Chaque membre informé juge ce qu'il a entendu, le garde en
+mémoire (`origine: entendu`) et voit `[ FOYER ] Claire told me this morning: « … »` (ou « My
+parents decided this morning: ») pendant ses propres 5 jours de service. L'enfant décide
+toujours lui-même.
+
+**Avant :** les co-résidents d'un lecteur ne reçoivent rien, sauf ce qui filtre par la réflexion du soir
+**Après :** deux sous-rôles à la lecture, `co_resident_informe` et `co_resident_non_informe` ; le second est le témoin interne du foyer
+
+Le relais est écrit dans `relais_foyer.jsonl`, relu à la reprise et jamais régénéré. Une réponse
+invalide n'informe personne et lève `[ALARME]`, sans texte de repli. Une panne du fournisseur
+n'est pas un refus : une reprise retente le relais, deux fois au plus. À la reprise, les lectures
+et les informés déjà écrits se relisent dans `evenements.jsonl` : un rejeu ne les refait pas et
+ne les annule pas.
+
+Les membres informés ont leur ligne dans `evenements.jsonl` (`origine: entendu`), mais ils ne
+comptent pas comme des lectures. Le contrôle d'injections du ticket 108 continue donc de
+signaler une lecture manquante.
+
+**`make report` contrôle la lecture avant la décision.** Il vérifie décision par décision, pour
+le lecteur, les informés et les non-informés, et rend les succès comme les échecs. Sur
+`2026-09-24_17_50`, il rend 🔴 pour 286920 : « 26/03 0/1 · 27/03 0/1 · 30/03 0/1 · 31/03 0/1 ».
+
+**Ce que cela change pour la mesure :**
+- l'injection a lieu à 00:00, et non « à 3 h » comme l'annonçait la documentation ;
+- une décision qui doit porter une ligne ne passe plus par le cache de décisions ;
+- les runs a09 déjà archivés ne sont plus comparables sur les jours de service ;
+- le coût monte d'un appel par foyer exposé et d'un jugement par membre informé.
+
+Les huit déclarations `lu` livrées portent désormais `service` et `relais`. Une déclaration sans
+ces clés garde le comportement d'avant. L'image du worker et de la passerelle doit être
+reconstruite pour connaître la nouvelle catégorie `evenement_relais`.
+
+---
+
 ## [2026-09-25] Une expérience ne sert plus un trajet en retard : elle attend la décision, ou s'arrête
 
 Le 2026-09-24, dans le bras traité `2026-09-24_17_50` (quatre agents), la décision du départ de

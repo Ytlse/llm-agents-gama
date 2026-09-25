@@ -52,6 +52,7 @@ RACINE = Path(__file__).resolve().parents[2]
 if str(RACINE) not in sys.path:
     sys.path.insert(0, str(RACINE))
 
+from scripts.analysis.lecture_avant_decision import informes_du_run, sous_role
 from scripts.analysis.memoire.sources import lire_echanges
 
 # Les en-têtes que `llm/noyau.py` pose dans le prompt. LUS ICI, et il faut qu'ils restent
@@ -152,7 +153,10 @@ def depouiller(run: Path) -> dict:
             f"❌ ni `evenements.jsonl` ni `chocs.jsonl` dans {run} : aucun événement n'a été "
             f"appliqué. Ce n'est pas un résultat nul, c'est un run sans événement."
         )
-    roles = roles_du_run(run)
+    # Ticket 111 : dans un foyer où le lecteur a parlé, le co-résident informé et celui à qui
+    # rien n'a été dit ne se mêlent pas — `relais_foyer.jsonl` fait foi.
+    informes = informes_du_run(run)
+    roles = {pid: sous_role(r, pid, informes) for pid, r in roles_du_run(run).items()}
     textes = {
         str(e.get("person_id")): str(e.get("texte") or e.get("vecu") or "")
         for e in evenements

@@ -88,7 +88,9 @@ def test_catalogue_evenements_filtrage():
 def test_persistance_etat_formulaire(tmp_memoire_env):
     defauts = memoire.defauts()
     assert "modeles" in defauts
-    assert len(defauts["modeles"]) == 5
+    # Six fonctions depuis le ticket 111 : `evenement_relais`, le relais du lecteur à son foyer.
+    assert set(defauts["modeles"]) == set(memoire.CATEGORIES_COGNITIVES)
+    assert len(defauts["modeles"]) == 6
 
     personnalise = dict(defauts)
     personnalise["population"] = "1250941"

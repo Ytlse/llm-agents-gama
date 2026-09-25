@@ -313,3 +313,26 @@ def verifier_empreinte(chemin: str, sha256_declare: str, evenement_id: str, refu
             f"contre le manifeste du corpus — {fichier.name}, empreinte {empreinte[:12]}…"
         )
     return brut.decode("utf-8")
+
+
+def familles_directives(texte: str) -> tuple[str, ...]:
+    """Les familles de gardes qu'un texte déclenche, SANS refuser — ticket 111.
+
+    Sert au relais du lecteur à son foyer. Ce message n'est pas un stimulus que nous écrivons :
+    c'est la cognition du lecteur, et un parent qui dit « take the bus today » dit ce qu'il
+    pense. Le refuser serait réécrire le lecteur ; le laisser passer sans le dire rendrait la
+    mesure illisible. Les familles sont donc TRACÉES (`directif`), jamais appliquées.
+
+    `adresse` — un marqueur de consigne ; `verdict` — une croyance sur un mode ; `intention` —
+    ce que quelqu'un fera. La seule deuxième personne n'est pas comptée : un message adressé à
+    quelqu'un la porte par nature.
+    """
+    bas = (texte or "").lower()
+    familles = []
+    if any(m in bas for m in MARQUEURS_CONSIGNE):
+        familles.append("adresse")
+    if any(m in bas for m in MARQUEURS_VERDICT):
+        familles.append("verdict")
+    if any(m in bas for m in MARQUEURS_INTENTION):
+        familles.append("intention")
+    return tuple(familles)

@@ -35,6 +35,10 @@ PREFIXE_VECU = "[ INCIDENT ]"
 # Préfixe du canal `lu`, posé ici pour que les deux vivent au même endroit. Utilisé au lot 2.
 PREFIXE_LU = "[ PRESSE ]"
 
+# Ticket 111 — ce qu'un membre du foyer a ENTENDU du lecteur. Rendu mot pour mot, c'est ce qui
+# permet au contrôle après run d'être exact, sans heuristique.
+PREFIXE_FOYER = "[ FOYER ]"
+
 
 def a_l_arrivee(registre, person_id: str, mode: str | None, timestamp: int):
     """L'événement applicable à cette arrivée, ou `None`.
@@ -82,5 +86,27 @@ def entree_de_lecture(applique) -> str:
     """
     prefixe = PREFIXE_LU if applique.canal == "lu" else PREFIXE_VECU
     if applique.canal == "lu":
-        return f"{prefixe} This morning I read in the paper: « {applique.texte} »"
+        return ligne_de_lecture(applique.texte)
     return f"{prefixe} {applique.texte}"
+
+
+def ligne_de_lecture(texte: str) -> str:
+    """L'entrée de lecture, construite depuis le seul texte — ticket 111.
+
+    La ligne servie au prompt pendant les jours de service et l'entrée de mémoire longue sont
+    la MÊME chaîne. C'est ce qui permet au bloc de ne pas la servir deux fois quand l'agent a
+    jugé l'article grave, et au contrôle après run de la retrouver mot pour mot.
+    """
+    return f"{PREFIXE_LU} This morning I read in the paper: « {texte} »"
+
+
+def ligne_de_foyer(message: str, prenom_lecteur: str, mineur: bool) -> str:
+    """Ce qu'un membre informé voit, et garde en mémoire — ticket 111.
+
+    Pour un mineur, c'est la DÉCISION DES PARENTS (D5) : dans la réalité, ce sont eux qui
+    décident du trajet d'un enfant, et une version simplifiée de l'article ne le ferait pas
+    changer. Le nom de l'autre parent n'est pas dit : la population ne porte pas la filiation.
+    """
+    if mineur:
+        return f"{PREFIXE_FOYER} My parents decided this morning: « {message} »"
+    return f"{PREFIXE_FOYER} {prenom_lecteur or 'Someone at home'} told me this morning: « {message} »"

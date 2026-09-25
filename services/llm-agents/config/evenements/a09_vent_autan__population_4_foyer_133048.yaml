@@ -28,3 +28,14 @@ exposition:
   lecteurs_par_foyer: 1
   graine: 59
 cadence: jour
+
+# Ticket 111 — l'article est GARANTI au prompt pendant 5 jours de déplacement (week-ends exclus,
+# le jour de lecture compte comme jour 1), quelle que soit la gravité jugée : la décision du jour
+# de lecture est pré-calculée la veille, et une gravité sous `memoire__importance_choc` laissait
+# l'article hors du bloc « Ce qui a changé récemment ». Ensuite, la mémoire décide seule.
+service:
+  jours_de_deplacement: 5
+# Le lecteur écrit un message par membre de son foyer, ou choisit de ne rien dire ; pour un
+# mineur, le message est la décision des parents (ticket 111, D5).
+relais:
+  mode: par_destinataire

@@ -552,6 +552,9 @@ def chocs(chemin_run: Path, journees: Sequence[Journee]) -> list[LigneChoc]:
     evenements = _jsonl(Path(chemin_run) / "evenements.jsonl")
     if not evenements:
         evenements = _jsonl(Path(chemin_run) / "chocs.jsonl")
+    # Ticket 111 : la ligne d'un membre informé (`origine: entendu`) n'est pas une exposition.
+    # Ce qu'il a reçu se lit dans `relais_foyer.jsonl` et par le sous-rôle du co-résident.
+    evenements = [e for e in evenements if e.get("origine") != "entendu"]
     if not evenements:
         return []
     index = {j.date: j for j in journees}

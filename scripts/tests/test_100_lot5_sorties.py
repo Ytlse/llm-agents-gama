@@ -108,7 +108,7 @@ def test_la_figure_se_compose_et_nomme_le_resultat(tmp_path):
     svg = fig.composer(moyennes, effectifs, "car", ev)
     assert svg.startswith("<svg") and svg.endswith("</svg>")
     assert "Who changes, and for how long" in svg
-    for _role, nom, _couleur in fig.ROLES:
+    for _role, nom, *_style in fig.ROLES:
         assert nom in svg
     # Figure en ANGLAIS, légende comprise : toutes celles de l'article le sont.
     for mot_francais in ("exposé", "témoin", "jour relatif"):
