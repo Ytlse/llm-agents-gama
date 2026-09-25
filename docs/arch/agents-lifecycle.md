@@ -184,6 +184,21 @@ libérations. Cela étale la charge sur la gateway sans allonger le temps de boo
         └── precompute_in_progress = False
 ```
 
+### Ancre du chaînage après un push tardif (2026-09-25)
+
+Quand un trajet est poussé à GAMA, `_try_schedule_next_after` date l'activité qu'il ouvre en
+cherchant sa prochaine occurrence à partir d'un instant de référence, puis pré-planifie le
+trajet suivant depuis la fin de cette activité. Cette référence est désormais
+`min(temps courant, départ du trajet poussé)` (`_base_du_chainage`). Avant, c'était le temps
+courant seul : un push arrivé **après le début** de l'activité la datait du lendemain.
+
+Exemple, le 2026-09-24 (agent 286921) : trajet de 17:01 vers « other » (début 17:48, fin
+19:07), poussé à 18:15. Avec l'ancienne ancre, « other » était daté du 25 et le retour au
+domicile partait le 25 à 19:07, d'où une journée entière sautée et cinq trajets manquants face
+au témoin. Avec la nouvelle ancre (17:01), « other » est daté du 24 et le retour part le 24 à
+19:07. Un push en avance (le cas nominal) garde son ancre : le temps courant est alors le plus
+petit des deux.
+
 ---
 
 ## Dispatcher EDF (Earliest Deadline First)
@@ -200,6 +215,8 @@ Deadlines posées aux points de spawn (aucun calcul nouveau) :
 | `_try_schedule_next_after` (act[N+1]) | `plan` | `act_end_ts` (fin de l'activité en cours) |
 | `_refill_precomputed_queue` | `refill` | `from_act_end_ts` (départ lointain → dépriorisé) |
 | push d'un move déjà calculé | `push` | `0` (toujours prioritaire) |
+
+**Registre des décisions de départ en attente** (2026-09-25). `_dispatch` inscrit chaque tâche `plan`/`refill` dans `_decisions_depart` avec l'heure de départ que la décision calculera (`depart_prevu`, même calcul que `_compute_move_for_activity`, report du week-end compris). L'entrée est retirée à la fin de la coroutine, qu'elle réussisse, échoue ou soit annulée ; `stop_worker()` vide le registre. La file EDF ne voit plus une tâche qu'un consommateur a dépilée, alors que le registre la garde jusqu'à ce que la décision revienne. `overdue_decision_count` et la retenue sur départ imminent (expériences, cf. [llm-inference.md](llm-inference.md#retenue-sur-départ-imminent-sync--expériences-seulement-2026-09-25)) lisent ce registre.
 
 Le `seq` monotone départage les égalités (heapq exige un tri total). Les invariants sont préservés : `scheduling_in_progress` / `precompute_in_progress` / `_worker_in_progress` sont posés **au spawn** (une tâche en file compte comme « en vol »), et `activities_to_compute_count` conserve sa sémantique (file + en exécution). La file est vidée et les consommateurs annulés par `stop_worker()` au remplacement de scénario.
 
@@ -234,6 +251,8 @@ retenir le /sync si ∃k : T_k · marge > slack_k        (marge = world.predicti
 La rétention réutilise la boucle du mode drainage (ré-échantillonnage toutes les `drain_poll_interval` s, borne dure `min_internal_coeff_cap` = read timeout HTTP de GAMA). `R` est **figé** à l'entrée en rétention (pendant la rétention, aucun `/sync` n'est servi → le rythme mesuré s'effondrerait et rétroagirait sur la condition de sortie). Le **mode drainage à hystérésis** (`drain_*`) reste évalué en **dernier recours** (surcharge permanente > 100 % d'utilisation → EDF fait tout rater, le gel par ratio est la protection ultime).
 
 Le moniteur de débit `D` mesure la fin de `_plan_one` / `_precompute_one` (le pipeline complet OTP+LLM est l'unité qui draine la file ; les hits du cache sémantique complètent en ms et gonflent naturellement `D`). `tau` configurable via `world.throughput_ewma_tau_s` (défaut 90 s — assez court pour réagir à un épuisement de quota par minute), plancher `world.throughput_floor_per_s` (défaut 0.05, évite `T=∞`).
+
+**Angle mort : la décision en cours d'exécution.** Le test ne lit que la file : une décision dépilée par un consommateur et bloquée sur l'appel au modèle n'y figure plus. Le 2026-09-24, une seule décision tenue ~70 s par un 503 a laissé GAMA filer de 14:30 à 18:15 sans aucune rétention. Dans les expériences, la **retenue sur départ imminent** couvre ce cas : elle précède le test prédictif, lit le registre des décisions de départ en attente et arrête le run plutôt que de laisser partir un trajet en retard. Voir [llm-inference.md](llm-inference.md#retenue-sur-départ-imminent-sync--expériences-seulement-2026-09-25). Dans un run classique, ce trajet part en retard et déclenche l'alarme « Départ servi en retard ».
 
 **Notification GAMA** (topic `system/throttle`, hystérésis) : au-delà de `world.throttle_notify_threshold_s` (défaut 5 s) de rétention cumulée sur un `/sync`, Python pousse un message `active: true` (débit LLM réel, vitesse sim, backlog, T estimé), rafraîchi toutes les `world.throttle_notify_refresh_s` (défaut 30 s), levé (`active: false`) au premier `/sync` servi sans rétention. Côté GAMA (`LLMAgent.gaml`), les globales `THROTTLE_ACTIVE` / `LLM_RATE_PER_MIN` / `SIM_RATIO_PYTHON` alimentent l'UI ; le champ `message` reste autoporteur (traitable comme un log).
 
@@ -272,7 +291,8 @@ Voir [observability.md](../observability.md) et [pipeline.md](../pipeline.md) po
 | Métrique | Description |
 |----------|-------------|
 | `controller_scheduling_in_progress` | Agents en planification active |
-| `agent_scheduling_lag_seconds` | Écart entre départ théorique et envoi effectif |
+| `agent_scheduling_lag_seconds` | Écart entre départ théorique et **retour de la décision** (temps simulé courant ; positif = en retard). Jusqu'au 2026-09-24, l'envoi était daté de la base de planification, et un départ servi une heure après son heure comptait à l'heure |
+| `controller_departures_at_risk` / `controller_departure_hold_seconds` / `controller_departure_holds_total{issue}` | Retenue sur départ imminent (expériences) : décisions attendues dans l'horizon, durée de la dernière retenue, issues `relachee`/`cap`/`arret` |
 | `gama_sim_step_interval_seconds` | Temps entre deux pas de simulation |
 | `gama_evaluate_plan_calls_total` | Nombre de plans évalués |
 | `agent_activity_decisions_total{outcome,phase}` | Décisions de mobilité ventilées par issue (`llm`/`llm_fallback`/`single`/…) **et par phase** (`bootstrap` = pré-calcul /init, `live` = simulation en marche) |

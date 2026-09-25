@@ -312,6 +312,19 @@ class WorldConfig(BaseSettings, WorkdirPathResolutionMixin):
     # dégradé persiste (évite le spam à chaque /sync).
     throttle_notify_refresh_s: float = 30.0
 
+    # Retenue sur départ imminent (2026-09-25) — EXPÉRIENCES SEULEMENT : armée par le même
+    # verrou que l'arrêt sur repli (`EXPERIMENT_STOP_ON_FALLBACK=1`, posé par
+    # `run_sequential_cohort.py`), muette dans un run classique. Tant qu'une décision de
+    # départ n'est pas rendue et que ce départ tombe dans cet horizon (secondes SIMULÉES),
+    # chaque réponse /sync est retenue jusqu'à `min_internal_coeff_cap`. Si relâcher GAMA
+    # lui ferait dépasser l'heure de départ, le run s'arrête (hibernation, motif
+    # `decision_en_retard`) plutôt que de servir le trajet en retard. 3600 s = 4 retenues de
+    # 30 s, soit ~2 min réelles laissées à la décision avant l'arrêt.
+    departure_hold_lookahead_s: float = 3600.0
+    # Run classique : l'alarme « départ servi en retard » (front montant) se réarme après ce
+    # nombre de secondes SIMULÉES sans nouveau retard.
+    late_departure_alarm_rearm_s: float = 3600.0
+
     # Cockpit : un agent est "bloqué" s'il n'a obtenu aucune planification réussie
     # depuis plus que ce nombre d'heures de temps SIMULÉ (métrique controller_agents_stuck).
     stuck_agent_threshold_hours: float = 20.0

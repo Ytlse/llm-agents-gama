@@ -25,7 +25,9 @@ import uvicorn
 from backpressure import (
     backlog_alarm_transition,
     compute_backpressure_interval,
+    departures_at_risk,
     edf_feasibility,
+    hold_while,
     time_ewma,
     update_drain_mode,
 )
@@ -176,7 +178,7 @@ CTRL_PENDING_REFLECTIONS = Gauge(
 )
 CTRL_OVERDUE_DECISIONS = Gauge(
     "controller_overdue_decisions",
-    "Décisions d'itinéraire (plan/refill) en file EDF dont l'échéance sim est dépassée — signal de vraie saturation",
+    "Décisions d'itinéraire (plan/refill) en file EDF ou en cours dont l'heure de départ est dépassée — signal de vraie saturation",
 )
 CTRL_SYNC_DURATION = Histogram(
     "controller_sync_duration_seconds",
@@ -185,7 +187,21 @@ CTRL_SYNC_DURATION = Histogram(
 )
 CTRL_DEADLINE_MISSES = Counter(
     "controller_deadline_misses_total",
-    "Arrivées planifiées après l'heure de départ prévue (expected_arrive_at < timestamp) — expose _late_count",
+    "Décisions de départ rendues après l'heure du départ (temps simulé au retour de la décision) — expose late_since_last_sync",
+)
+# Retenue sur départ imminent (2026-09-25, expériences seulement)
+CTRL_DEPARTURE_HOLD = Gauge(
+    "controller_departure_hold_seconds",
+    "Retenue /sync sur départ imminent appliquée à la dernière réponse (secondes réelles)",
+)
+CTRL_DEPARTURE_HOLDS = Counter(
+    "controller_departure_holds_total",
+    "Retenues /sync sur départ imminent, par issue : relachee (décision rendue), cap (budget épuisé, départ encore loin), arret (run arrêté)",
+    ["issue"],
+)
+CTRL_DEPARTURES_AT_RISK = Gauge(
+    "controller_departures_at_risk",
+    "Décisions de départ en attente dont le départ tombe dans l'horizon de retenue",
 )
 
 _last_sync_wall_time: float = 0.0
@@ -1375,7 +1391,7 @@ async def _sync_impl(raw: Request):
         except Exception:
             pass
         in_progress_before_sync = loop_container.scenario.activities_to_compute_count
-        # Deadline misses (ticket 003) : _late_count est remis à 0 par sync() → le lire avant.
+        # Départs servis en retard (ticket 003, recompté le 2026-09-25) : vidés par sync() → les lire avant.
         # Conservé dans _late_before_sync : c'est aussi un des deux signaux de vraie
         # saturation de l'alarme backlog (ticket 010, A2).
         _late_before_sync = loop_container.scenario.late_since_last_sync
@@ -1386,10 +1402,14 @@ async def _sync_impl(raw: Request):
         await loop_container.scenario.sync(
             request.timestamp, _t_sync=now, _t_parse=_t_parse_end
         )
+        # Avance de GAMA entre deux /sync (temps SIMULÉ) : mesurée ci-dessous, à défaut le pas
+        # déclaré. C'est ce que GAMA franchira si la réponse est rendue maintenant.
+        _pas_sync_sim = float(settings.world.time_step)
         try:
             SIM_LOGICAL_TIME.set(request.timestamp)
             if _last_logical_time > 0 and request.timestamp > _last_logical_time:
                 sim_delta = request.timestamp - _last_logical_time
+                _pas_sync_sim = float(sim_delta)
                 SIM_STEP_LOGICAL_DURATION.set(sim_delta)
                 if real_delta > 0:
                     _ratio = sim_delta / real_delta
@@ -1539,13 +1559,82 @@ async def _sync_impl(raw: Request):
         CTRL_MIN_SLACK.set(_feas.min_slack_sim_s)
         CTRL_EDF_QUEUE_DEPTH.set(loop_container.scenario.edf_queue_depth)
 
+        # --- Retenue sur départ imminent (2026-09-25) — EXPÉRIENCES SEULEMENT ---
+        # Tant qu'une décision de départ n'est pas rendue et que ce départ tombe dans
+        # l'horizon `departure_hold_lookahead_s`, la réponse est retenue (au plus `cap` :
+        # read timeout HTTP de GAMA), puis retenue à nouveau au /sync suivant. Aucun des
+        # freins ci-dessous ne voit une décision en cours d'exécution — le 2026-09-24, un
+        # 503 Google l'a tenue ~70 s pendant que GAMA filait de 14:30 à 18:15. Si, le budget
+        # épuisé, relâcher GAMA lui ferait franchir l'heure d'un départ encore en attente,
+        # le run s'arrête (hibernation `decision_en_retard`) : une expérience ne sert pas de
+        # trajet en retard. Muette dans un run classique (verrou d'expérience absent).
+        _departure_hold_s = 0.0
+        _risque_depart = []
+        if loop_container.scenario.arret_experience_arme:
+            _horizon_depart = settings.world.departure_hold_lookahead_s
+
+            def _departs_a_risque():
+                return departures_at_risk(
+                    loop_container.scenario.pending_departures(),
+                    request.timestamp,
+                    _horizon_depart,
+                )
+
+            _risque_depart = _departs_a_risque()
+            if _risque_depart:
+                _tete = _risque_depart[0]
+                logger.info(
+                    f"[depart] /sync retenu à {humanize_date(request.timestamp)} : "
+                    f"{len(_risque_depart)} décision(s) de départ en attente dans l'horizon "
+                    f"de {_horizon_depart / 60:.0f} min — la plus urgente : "
+                    f"person={_tete.person_id} activité={_tete.purpose} ({_tete.activity_id}) "
+                    f"départ {humanize_date(int(_tete.departure_sim))}, demandée à "
+                    f"{humanize_date(int(_tete.requested_sim))}"
+                )
+                _departure_hold_s = await hold_while(
+                    lambda: bool(_departs_a_risque()),
+                    budget_s=_cap,
+                    poll_s=settings.world.drain_poll_interval,
+                )
+                loop_container.scenario.noter_retenue_depart(_departure_hold_s)
+                _restants = _departs_a_risque()
+                # Ce que GAMA franchirait d'ici le prochain /sync si on le relâchait.
+                _franchis = departures_at_risk(
+                    _restants, request.timestamp, _pas_sync_sim
+                )
+                if not _restants:
+                    CTRL_DEPARTURE_HOLDS.labels(issue="relachee").inc()
+                    logger.info(
+                        f"[depart] décision(s) rendue(s) avant le départ — main rendue à "
+                        f"GAMA après {_departure_hold_s:.1f}s"
+                    )
+                elif _franchis:
+                    CTRL_DEPARTURE_HOLDS.labels(issue="arret").inc()
+                    CTRL_DEPARTURE_HOLD.set(_departure_hold_s)
+                    await loop_container.scenario.arreter_pour_decision_en_retard(
+                        _franchis[0], request.timestamp
+                    )
+                    return MessageResponse(data="arret_experience", success=True)
+                else:
+                    CTRL_DEPARTURE_HOLDS.labels(issue="cap").inc()
+                    logger.info(
+                        f"[depart] budget de {_cap:.0f}s épuisé, {len(_restants)} décision(s) "
+                        f"encore attendue(s), départ le plus proche "
+                        f"{humanize_date(int(_restants[0].departure_sim))} — GAMA avance "
+                        f"d'un pas, nouvelle retenue au prochain /sync"
+                    )
+        CTRL_DEPARTURES_AT_RISK.set(len(_risque_depart))
+        CTRL_DEPARTURE_HOLD.set(_departure_hold_s)
+        # Une réponse ne dépasse jamais `cap` : les rétentions suivantes n'ont que le reste.
+        _budget_retenue = max(0.0, _cap - _departure_hold_s)
+
         _predictive_hold_s = 0.0
         if _drain_mode_active:
             # Filet de sécurité ultime (surcharge permanente > 100 % d'utilisation) :
             # gel par ratio à hystérésis, inchangé. Prioritaire sur le prédictif.
             _drain_start = time.time()
             _live_ratio = _backlog_ratio
-            while _drain_mode_active and (time.time() - _drain_start) < _cap:
+            while _drain_mode_active and (time.time() - _drain_start) < _budget_retenue:
                 await asyncio.sleep(settings.world.drain_poll_interval)
                 _live_count = loop_container.scenario.activities_to_compute_count
                 _live_ratio = _live_count / max(1, settings.data.population_size)
@@ -1583,7 +1672,7 @@ async def _sync_impl(raw: Request):
             _live_feas = _feas
             if _feas.hold and _R_frozen > 0:
                 _hold_start = time.time()
-                while _live_feas.hold and (time.time() - _hold_start) < _cap:
+                while _live_feas.hold and (time.time() - _hold_start) < _budget_retenue:
                     await asyncio.sleep(settings.world.drain_poll_interval)
                     _live_D = loop_container.scenario.throughput_per_s()
                     _live_deadlines = loop_container.scenario.edf_snapshot_deadlines()

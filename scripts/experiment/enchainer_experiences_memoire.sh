@@ -13,8 +13,9 @@
 # Sur un code 7 (bras suspendu par le garde-fou du ticket 105), la cause se lit dans
 # experiments/current/en_attente_quota.json :
 #   - quota_journalier : passage à l'expérience suivante (elle peut appeler d'autres clés) ;
-#   - replis (saturation amont, HTTP 503) : nouvel essai dans ATTENTE_S secondes ; après
-#     ESSAIS_MAX suspensions de suite sans jour simulé gagné, passage à la suivante.
+#   - replis_consecutifs ou decision_en_retard (saturation amont, HTTP 503 : le modèle ne
+#     décide plus, ou pas avant l'heure d'un départ) : nouvel essai dans ATTENTE_S secondes ;
+#     après ESSAIS_MAX suspensions de suite sans jour simulé gagné, passage à la suivante.
 # Tout autre code : échec de cette expérience, passage à la suivante. La chaîne s'arrête au
 # bout de la file. Une expérience suspendue se reprend en relançant la même commande.
 #

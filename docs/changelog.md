@@ -1,3 +1,44 @@
+## [2026-09-25] Une expérience ne sert plus un trajet en retard : elle attend la décision, ou s'arrête
+
+Le 2026-09-24, dans le bras traité `2026-09-24_17_50` (quatre agents), la décision du départ de
+17:01 de l'agent 286921 est restée bloquée environ 70 s réelles sur un HTTP 503 « high demand »
+de Google. Aucun frein ne la voyait : une décision sur quatre ne ralentissait presque pas GAMA, qui
+a filé de 14:30 à 18:15. Le trajet est parti à 18:22, le retour au domicile a été daté du
+lendemain, et cinq trajets de l'agent manquent face au témoin. Aucune alarme n'a sonné.
+
+**Dans les expériences mémoire et choc** (verrou `EXPERIMENT_STOP_ON_FALLBACK=1`, posé par toute
+campagne), GAMA est retenu tant qu'une décision de départ est attendue dans l'heure simulée qui
+vient : jusqu'à 30 s par `/sync`, puis de nouveau au `/sync` suivant, soit environ deux minutes de
+patience réelle avant le départ. Si la décision n'est toujours pas revenue quand relâcher GAMA lui
+ferait franchir l'heure du départ, le run s'arrête proprement (motif `decision_en_retard`) et
+l'enchaînement de nuit le relance comme après une saturation (30 min plus tard, six fois au plus).
+Aucun trajet ne part en retard dans la mesure.
+
+**Avant :** décision attendue 70 s → GAMA avance de près de quatre heures, trajet servi 81 min après son heure, journée décalée d'un jour
+**Après :** décision revenue en moins de deux minutes → départ à l'heure ; sinon, arrêt ordonné avec un marqueur qui dit quel départ, quelle activité et depuis combien de temps
+
+**Dans un run classique**, rien n'est retenu ni arrêté par défaut. Un départ servi en retard est
+désormais compté et signalé.
+
+**Avant :** `late_since_last_sync=0` en permanence (le test comparait l'arrivée à la base de planification), aucune alarme
+**Après :** `[ALARME] Départ servi en retard : person=… activité=… départ prévu … — décision rendue à …, retard ≥ N min`, une fois par épisode, levée après une heure simulée sans retard ; bilan quotidien `[depart] bilan au jour N`
+
+**La journée ne glisse plus d'un jour après un push tardif.** L'activité ouverte par un trajet est
+datée à partir du départ de ce trajet, et non plus de l'heure à laquelle il a été poussé.
+
+**Avant :** trajet de 17:01 vers « other » (17:48 → 19:07) poussé à 18:15 → retour au domicile le 25 à 19:07
+**Après :** retour au domicile le 24 à 19:07
+
+**Mesures.** `controller_overdue_decisions` compte aussi les décisions en cours d'exécution (une
+décision dépilée par un consommateur y échappait). `agent_scheduling_lag_seconds` et
+`agent_departures_punctuality_total` datent le retour de la décision au temps simulé courant : un départ
+servi une heure après son heure ne compte plus « à l'heure ». Nouvelles jauges de la retenue :
+`controller_departures_at_risk`, `controller_departure_hold_seconds`,
+`controller_departure_holds_total{issue}`. Réglages : `world.departure_hold_lookahead_s` (3 600 s)
+et `world.late_departure_alarm_rearm_s` (3 600 s).
+
+---
+
 ## [2026-09-25] Le tableau des quatre voies se lit sur les runs réels
 
 `tableau_quatre_voies.py` tombait sur tout run réel avant d'afficher une ligne. Il lisait

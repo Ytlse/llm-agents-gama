@@ -31,7 +31,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-from backpressure import ThroughputEwma
+from backpressure import (
+    PendingDeparture,
+    ThroughputEwma,
+    late_departure_alarm_transition,
+)
 from chaine_activites import activite_suivante
 from experiences.decision import (  # ticket 035, spec 02 — la décision unique
     PREFIXE_RECALCUL_HORAIRE,
@@ -339,6 +343,70 @@ def _arret_sur_repli_arme() -> bool:
     return any(os.getenv(nom) == "1" for nom in _VERROUS_ARRET_EXPERIENCE)
 
 
+def _depart_du_trajet(activite: Activity, base_ts: int) -> tuple[int, int]:
+    """Heure de départ vers `activite` planifiée depuis `base_ts`, et le retard de planification.
+
+    Calcul UNIQUE, partagé par la décision (`_compute_move_for_activity`) et par le registre
+    des décisions de départ en attente : la retenue du /sync doit viser l'heure que la décision
+    calculera, pas une approximation. Bouclage J+1 compris (heure 24 h déjà passée à `base_ts`
+    ⇒ lendemain) ; le report du week-end reste à la charge de l'appelant (il journalise).
+    """
+    target_24h = (
+        activite.scheduled_start_time
+        if activite.scheduled_start_time is not None
+        else activite.end_time
+    )
+    depart = to_timestamp_based_on_day(target_24h_timestamp=target_24h, based_on=base_ts)
+    retard_planification = max(0, base_ts - depart)
+    if depart < base_ts:
+        depart += 86400  # activité du lendemain (bouclage J+1)
+    return depart, retard_planification
+
+
+def depart_prevu(activite: Activity, base_ts: int) -> int:
+    """Heure de départ que la décision retiendra, report du week-end compris (sans journal)."""
+    depart, _ = _depart_du_trajet(activite, base_ts)
+    if settings.agent.no_weekend_departures:
+        depart = shift_weekend_departure_to_monday(depart)
+    return depart
+
+
+def _depart_du_move(move: PersonMove) -> int:
+    """Heure de départ d'un trajet calculé — celle que `moves.csv` consigne (« Heure de départ »)."""
+    if move.plan is not None and move.plan.start_time:
+        return int(move.plan.start_time // 1000)
+    return int(move.expected_arrive_at)
+
+
+def _duree_en_minutes(secondes: float) -> str:
+    """« 74 min » — `humanize_duration` rend « 1 hour » pour 74 min (il coupe au premier
+    « and ») : un retard doit se lire à la minute près."""
+    secondes = int(secondes)
+    return f"{secondes // 60} min" if secondes >= 60 else f"{secondes} s"
+
+
+@dataclass(frozen=True)
+class DepartServiEnRetard:
+    """Décision de départ rendue APRÈS l'heure du départ (2026-09-25).
+
+    `servi_sim` est le temps simulé connu du contrôleur quand la décision revient (dernier
+    /sync, avancé par les observations) : une BORNE BASSE du temps de GAMA, qui peut avoir
+    jusqu'à un intervalle de /sync d'avance. Le retard mesuré ne peut donc que sous-estimer —
+    jamais de fausse alarme.
+    """
+
+    person_id: str
+    activity_id: str | None
+    purpose: str | None
+    depart_sim: int
+    servi_sim: int
+    kind: str
+
+    @property
+    def retard_s(self) -> int:
+        return self.servi_sim - self.depart_sim
+
+
 def _next_checkpoint_ts(
     after_ts: int, hour_24h: int = _POPULATION_CHECKPOINT_HOUR
 ) -> int:
@@ -495,7 +563,27 @@ class SimulationLoopV1(BaseScenario):
             settings.agent.max_reschedule_amount or self.MAX_ADJUST_START_TIME
         )
         self._messages = []
-        self._late_count = 0
+        # Départs servis en retard depuis le dernier /sync (remis à zéro par sync()). Avant le
+        # 2026-09-25, un simple compteur alimenté par `expected_arrive_at < timestamp`, où
+        # `timestamp` est la BASE de planification (fin de l'activité en cours) : la condition
+        # ne pouvait pas être vraie, et le départ de 17:01 servi à 18:15 le 2026-09-24 a laissé
+        # `late_since_last_sync=0` tout du long.
+        self._departs_en_retard: list[DepartServiEnRetard] = []
+        self._departs_en_retard_total = 0
+        # Run classique : alarme à front montant, réarmée après une heure simulée sans retard.
+        self._alarme_retard_active = False
+        self._dernier_retard_sim: float | None = None
+        self._episode_retards = 0
+        self._episode_retard_max_s = 0
+        # Registre des décisions de départ DEMANDÉES et pas encore RENDUES — en file EDF comme
+        # en cours d'exécution. La file seule ne suffit pas : un consommateur dépile la tâche
+        # avant d'appeler le modèle, et le 2026-09-24 la décision attendue ~70 s (HTTP 503
+        # Google) n'était plus visible d'aucun frein. Lu par la retenue du /sync (expériences).
+        self._decisions_depart: dict[int, PendingDeparture] = {}
+        self._decisions_depart_seq = 0
+        # Retenues /sync sur départ imminent, pour le bilan journalier.
+        self._retenues_depart = 0
+        self._retenues_depart_s = 0.0
         self._max_departure_delay_s = (
             0.0  # pire retard observé, alimente DEPARTURE_DELAY_MAX
         )
@@ -638,10 +726,25 @@ class SimulationLoopV1(BaseScenario):
 
     @property
     def late_since_last_sync(self) -> int:
-        """Nombre d'arrivées planifiées en retard (expected_arrive_at < timestamp)
-        accumulées depuis le dernier /sync (remis à 0 par sync()). Lu par le contrôleur
-        avant sync() pour alimenter le compteur controller_deadline_misses_total."""
-        return self._late_count
+        """Décisions de départ rendues APRÈS l'heure du départ depuis le dernier /sync (remis
+        à 0 par sync()). Lu par le contrôleur avant sync() pour alimenter le compteur
+        controller_deadline_misses_total et l'alarme backlog."""
+        return len(self._departs_en_retard)
+
+    @property
+    def arret_experience_arme(self) -> bool:
+        """Verrou d'expérience (`EXPERIMENT_STOP_ON_FALLBACK=1`) : retenue sur départ imminent
+        et arrêt plutôt que retard. Faux dans un run classique."""
+        return _arret_sur_repli_arme()
+
+    def pending_departures(self) -> list[PendingDeparture]:
+        """Décisions de départ demandées et pas encore rendues (en file ou en cours)."""
+        return list(self._decisions_depart.values())
+
+    def noter_retenue_depart(self, duree_s: float) -> None:
+        """Compte une retenue /sync sur départ imminent (bilan journalier)."""
+        self._retenues_depart += 1
+        self._retenues_depart_s += float(duree_s)
 
     @property
     def activities_to_compute_count(self) -> int:
@@ -700,6 +803,7 @@ class SimulationLoopV1(BaseScenario):
         self._edf_seq = 0
         self._edf_event = asyncio.Event()
         self._edf_consumers = []
+        self._decisions_depart.clear()
         if settings.world.edf_enabled:
             self._edf_consumers = [
                 asyncio.create_task(self._edf_consumer(i)) for i in range(concurrency)
@@ -738,6 +842,9 @@ class SimulationLoopV1(BaseScenario):
         self._stm_reflecting.clear()
         self._stm_reflect_due.clear()
         self._stm_floor_day.clear()
+        # Même raison pour les décisions de départ : un job détruit en file ne passe jamais
+        # par le `finally` qui le retire du registre.
+        self._decisions_depart.clear()
         cancelled = 0
         for task in list(self._inflight_tasks):
             if not task.done():
@@ -766,12 +873,44 @@ class SimulationLoopV1(BaseScenario):
         kind: str,
         make_coro: Callable[[], Coroutine],
         person_id: str,
+        activity: Activity | None = None,
+        departure_sim: float | None = None,
     ) -> None:
         """Route une tâche de planification : file EDF si activée, sinon spawn direct FIFO.
 
         Les invariants (scheduling_in_progress / precompute_in_progress / _worker_in_progress)
         sont posés par l'APPELANT avant l'appel — une tâche en file compte comme « en vol ».
+
+        Une décision de départ (`plan`, `refill`) est inscrite au registre des décisions en
+        attente jusqu'à ce que sa coroutine se termine — succès, échec ou annulation. Le
+        registre voit donc aussi la tâche que la file EDF a déjà rendue à un consommateur.
+        `departure_sim` : l'heure de départ que la décision calculera (`depart_prevu`) ; à
+        défaut, l'échéance EDF.
         """
+        if kind in ("plan", "refill"):
+            self._decisions_depart_seq += 1
+            cle = self._decisions_depart_seq
+            self._decisions_depart[cle] = PendingDeparture(
+                key=cle,
+                person_id=str(person_id),
+                activity_id=getattr(activity, "id", None),
+                purpose=getattr(activity, "purpose", None),
+                departure_sim=float(
+                    departure_sim if departure_sim is not None else deadline_sim
+                ),
+                kind=kind,
+                requested_sim=float(self._current_sim_timestamp),
+                requested_wall=time.monotonic(),
+            )
+            fabrique = make_coro
+
+            async def _suivie() -> None:
+                try:
+                    await fabrique()
+                finally:
+                    self._decisions_depart.pop(cle, None)
+
+            make_coro = _suivie
         if settings.world.edf_enabled and self._edf_event is not None:
             self._edf_seq += 1
             job = _EdfJob(
@@ -914,13 +1053,14 @@ class SimulationLoopV1(BaseScenario):
             )
 
     def overdue_decision_count(self, now_sim: float) -> int:
-        """Décisions d'itinéraire (plan/refill) en file EDF dont l'échéance sim est
-        dépassée — le signal d'une VRAIE saturation : un agent attend son départ.
-        Les push (sentinelle 0) et les réflexions sont hors du compte."""
+        """Décisions d'itinéraire (plan/refill) en attente — en file EDF OU en cours
+        d'exécution — dont l'heure de départ est dépassée : le signal d'une VRAIE saturation,
+        un agent attend son départ. Les push et les réflexions sont hors du compte.
+
+        Lu dans le registre et non plus dans la file (2026-09-25) : une décision dépilée par
+        un consommateur et bloquée sur l'appel au modèle y échappait."""
         return sum(
-            1
-            for _, _, job in self._edf_heap
-            if job.kind in ("plan", "refill") and job.deadline_sim < now_sim
+            1 for d in self._decisions_depart.values() if d.departure_sim < now_sim
         )
 
     # -------------------------------------------------------------------------
@@ -1060,6 +1200,8 @@ class SimulationLoopV1(BaseScenario):
             deadline_sim=act_end_ts,
             kind="plan",
             person_id=person.person_id,
+            activity=next_act,
+            departure_sim=depart_prevu(next_act, act_end_ts),
             make_coro=lambda: self._plan_one(
                 person,
                 next_act,
@@ -1099,6 +1241,8 @@ class SimulationLoopV1(BaseScenario):
             deadline_sim=from_act_end_ts,
             kind="refill",
             person_id=person.person_id,
+            activity=next_act,
+            departure_sim=depart_prevu(next_act, from_act_end_ts),
             make_coro=lambda: self._precompute_one(
                 person, horizon_act, from_act_end_ts, next_act
             ),
@@ -1117,6 +1261,10 @@ class SimulationLoopV1(BaseScenario):
                     from_location_override=from_act.location,
                 )
             if move:
+                _retard = self._constater_depart_en_retard(person, to_act, move, "refill")
+                if _retard is not None and _arret_sur_repli_arme():
+                    await self.arreter_pour_decision_en_retard(_retard)
+                    return
                 person.state.precomputed_moves.append(move)
                 person.state.precomputed_horizon_act = to_act
                 person.state.precomputed_horizon_ts = move.expected_arrive_at
@@ -1168,6 +1316,8 @@ class SimulationLoopV1(BaseScenario):
             deadline_sim=timestamp,
             kind="plan",
             person_id=person.person_id,
+            activity=next_act,
+            departure_sim=depart_prevu(next_act, timestamp),
             make_coro=lambda: self._plan_one(person, next_act, timestamp),
         )
         return True
@@ -1309,6 +1459,8 @@ class SimulationLoopV1(BaseScenario):
                     deadline_sim=timestamp,
                     kind="plan",
                     person_id=person.person_id,
+                    activity=activity,
+                    departure_sim=depart_prevu(activity, timestamp),
                     make_coro=lambda _p=person, _a=activity: self._plan_one(
                         _p, _a, timestamp
                     ),
@@ -1354,6 +1506,7 @@ class SimulationLoopV1(BaseScenario):
             else None
         )
         _dispatched_act: Activity | None = None
+        _dispatched_move: PersonMove | None = None
         try:
             PROCESS_PERSON_CALLS.inc()
             move, _ = await self._compute_move_for_activity(
@@ -1365,17 +1518,12 @@ class SimulationLoopV1(BaseScenario):
             )
 
             if move:
-                if move.expected_arrive_at < timestamp:
-                    _, _time24h = to_24h_timestamp_full(timestamp)
-                    _late_s = timestamp - move.expected_arrive_at
-                    self._late_count += 1
-                    PLANNING_LATE.inc()
-                    AGENT_LATE_DEPARTURE.observe(_late_s)
-                    logger.warning(
-                        f"[worker] LATE — person={person.person_id} activity={activity.purpose} "
-                        f"scheduled={humanize_time(activity.start_time)} "
-                        f"sim_time={humanize_time(_time24h)} late={humanize_duration(_late_s)}"
-                    )
+                _retard = self._constater_depart_en_retard(person, activity, move, "plan")
+                if _retard is not None and _arret_sur_repli_arme():
+                    # Expérience : le trajet partirait après son heure. Ni stockage ni push —
+                    # le run s'arrête, et la reprise redécidera ce départ à temps.
+                    await self.arreter_pour_decision_en_retard(_retard)
+                    return
 
                 self._itinerary_success_count += 1
                 if self._itinerary_success_count >= 100:
@@ -1385,7 +1533,10 @@ class SimulationLoopV1(BaseScenario):
                     self._itinerary_success_count = 0
                     self._itinerary_window_start = time.monotonic()
 
-                _, _send_time24h = to_24h_timestamp_full(timestamp)
+                # Heure d'ENVOI = temps simulé au retour de la décision, pas la base de
+                # planification (fin de l'activité en cours) : avec celle-ci, le départ de
+                # 17:01 servi à 18:15 le 2026-09-24 comptait « à l'heure ».
+                _, _send_time24h = to_24h_timestamp_full(self._current_sim_timestamp)
                 _target_24h = (
                     activity.scheduled_start_time or activity.start_time
                 ) % 86400
@@ -1410,6 +1561,7 @@ class SimulationLoopV1(BaseScenario):
                 pushed = await self._push_planned_move(person)
                 if pushed:
                     _dispatched_act = move.for_activity
+                    _dispatched_move = move
             else:
                 logger.warning(f"[worker] No move computed for {person.person_id}")
         finally:
@@ -1421,7 +1573,7 @@ class SimulationLoopV1(BaseScenario):
         # la même logique s'applique ici que dans _bootstrap_one (ligne ~754).
         if _dispatched_act is not None and person.state.heading_to is not None:
             self._try_schedule_next_after(
-                person, _dispatched_act, self._current_sim_timestamp
+                person, _dispatched_act, self._base_du_chainage(_dispatched_move)
             )
 
     # -------------------------------------------------------------------------
@@ -1500,10 +1652,23 @@ class SimulationLoopV1(BaseScenario):
                 self._refill_precomputed_queue(person)
             else:
                 self._try_schedule_next_after(
-                    person, activity, self._current_sim_timestamp
+                    person, activity, self._base_du_chainage(move)
                 )
 
         return True
+
+    def _base_du_chainage(self, move: PersonMove) -> int:
+        """Instant de référence pour dater l'activité que `move` vient d'ouvrir.
+
+        `_try_schedule_next_after` date l'activité en cherchant sa prochaine occurrence à partir
+        de cet instant. Partir de l'heure COURANTE faisait glisser la journée d'un jour dès que
+        le push arrivait après le début de l'activité : le 2026-09-24, le trajet de 17:01 vers
+        « other » (début 17:48) poussé à 18:15 datait « other » du lendemain, le retour au
+        domicile partait le 25 à 19:07, et cinq trajets manquaient face au témoin. L'activité
+        commence après le départ de son propre trajet : le départ est la bonne ancre. Le
+        minimum garde l'ancre historique pour un push en avance (cas nominal, inchangé).
+        """
+        return min(int(self._current_sim_timestamp), _depart_du_move(move))
 
     # -------------------------------------------------------------------------
     # BaseScenario interface
@@ -1588,15 +1753,164 @@ class SimulationLoopV1(BaseScenario):
         if mesures_jour.actif():
             await asyncio.to_thread(mesures_jour.ecrire_mesures_du_jour, settings.workdir)
 
+    # -------------------------------------------------------------------------
+    # Départs servis en retard (2026-09-25)
+    # -------------------------------------------------------------------------
+
+    def _constater_depart_en_retard(
+        self, person: Person, activity: Activity, move: PersonMove, kind: str
+    ) -> DepartServiEnRetard | None:
+        """Constate qu'une décision revient après l'heure de son départ, et la compte.
+
+        Référence : l'heure de départ du trajet (« Heure de départ » de `moves.csv`) contre le
+        temps simulé connu au retour de la décision. Rend le constat, ou None si le départ est
+        encore devant.
+        """
+        depart = _depart_du_move(move)
+        servi = int(self._current_sim_timestamp)
+        if servi <= depart:
+            return None
+        retard = DepartServiEnRetard(
+            person_id=str(person.person_id),
+            activity_id=getattr(activity, "id", None),
+            purpose=getattr(activity, "purpose", None),
+            depart_sim=depart,
+            servi_sim=servi,
+            kind=kind,
+        )
+        self._departs_en_retard.append(retard)
+        self._departs_en_retard_total += 1
+        PLANNING_LATE.inc()
+        AGENT_LATE_DEPARTURE.observe(retard.retard_s)
+        logger.warning(
+            f"[worker] LATE — person={retard.person_id} activity={retard.purpose} "
+            f"({retard.activity_id}) départ={humanize_date(depart)} "
+            f"décision rendue à {humanize_date(servi)} "
+            f"retard≥{_duree_en_minutes(retard.retard_s)} ({kind})"
+        )
+        return retard
+
+    async def arreter_pour_decision_en_retard(
+        self,
+        decision: PendingDeparture | DepartServiEnRetard,
+        maintenant_sim: int | None = None,
+    ) -> None:
+        """Expérience : arrêt ordonné plutôt qu'un trajet servi après son heure.
+
+        Deux constats y mènent :
+          - `PendingDeparture` — le /sync a retenu GAMA tout son budget et la décision n'est
+            toujours pas revenue ; relâcher GAMA lui ferait franchir l'heure du départ ;
+          - `DepartServiEnRetard` — la décision est revenue, mais après le départ (filet de
+            sécurité : le trajet n'est ni stocké ni poussé).
+        """
+        maintenant = int(
+            maintenant_sim if maintenant_sim is not None else self._current_sim_timestamp
+        )
+        if isinstance(decision, PendingDeparture):
+            attente_s = time.monotonic() - decision.requested_wall
+            constat = (
+                f"décision du départ de {humanize_date(int(decision.departure_sim))} "
+                f"(activité {decision.purpose}, {decision.activity_id}) toujours attendue après "
+                f"{attente_s:.0f} s réelles, demandée à {humanize_date(int(decision.requested_sim))} "
+                f"— relâcher GAMA à {humanize_date(maintenant)} lui ferait franchir ce départ."
+            )
+            details = {
+                "etat": "en_attente",
+                "activity_id": decision.activity_id,
+                "purpose": decision.purpose,
+                "kind": decision.kind,
+                "depart_ts": int(decision.departure_sim),
+                "depart": humanize_date(int(decision.departure_sim)),
+                "demandee_ts": int(decision.requested_sim),
+                "attente_reelle_s": round(attente_s, 1),
+                "temps_simule_ts": maintenant,
+            }
+        else:
+            constat = (
+                f"décision du départ de {humanize_date(decision.depart_sim)} "
+                f"(activité {decision.purpose}, {decision.activity_id}) rendue à "
+                f"{humanize_date(decision.servi_sim)}, soit "
+                f"{_duree_en_minutes(decision.retard_s)} APRÈS le départ — trajet ni stocké ni poussé."
+            )
+            details = {
+                "etat": "rendue_en_retard",
+                "activity_id": decision.activity_id,
+                "purpose": decision.purpose,
+                "kind": decision.kind,
+                "depart_ts": decision.depart_sim,
+                "depart": humanize_date(decision.depart_sim),
+                "servie_ts": decision.servi_sim,
+                "retard_s": decision.retard_s,
+            }
+        details["constat"] = constat
+        await self._declencher_hibernation_propre(
+            None, decision.person_id, motif="decision_en_retard", details=details
+        )
+
+    def _evaluer_alarme_depart_en_retard(self, timestamp: int) -> None:
+        """Run classique : `[ALARME]` au premier départ servi en retard, levée après
+        `world.late_departure_alarm_rearm_s` secondes simulées sans nouveau retard.
+
+        Dans une expérience, le constat arrête le run avant d'arriver ici : pas d'alarme."""
+        retards = self._departs_en_retard
+        if retards:
+            self._dernier_retard_sim = float(timestamp)
+        if self.arret_experience_arme:
+            return
+        rearm_s = settings.world.late_departure_alarm_rearm_s
+        transition = late_departure_alarm_transition(
+            self._alarme_retard_active,
+            len(retards),
+            float(timestamp),
+            self._dernier_retard_sim,
+            rearm_s,
+        )
+        if retards and self._alarme_retard_active:
+            self._episode_retards += len(retards)
+            self._episode_retard_max_s = max(
+                self._episode_retard_max_s, max(r.retard_s for r in retards)
+            )
+        if transition == "fire":
+            pire = max(retards, key=lambda r: r.retard_s)
+            self._alarme_retard_active = True
+            self._episode_retards = len(retards)
+            self._episode_retard_max_s = pire.retard_s
+            fire_alarme("depart_en_retard")
+            logger.error(
+                f"[ALARME] Départ servi en retard : person={pire.person_id} "
+                f"activité={pire.activity_id} ({pire.purpose}) départ prévu "
+                f"{humanize_date(pire.depart_sim)} — décision rendue à "
+                f"{humanize_date(pire.servi_sim)} sim, retard ≥ "
+                f"{_duree_en_minutes(pire.retard_s)} simulées ({len(retards)} départ(s) en "
+                f"retard depuis le dernier /sync). Le trajet part après son heure et la suite de "
+                f"la journée de l'agent peut glisser. Vérifier la latence LLM (make error, "
+                f"llm_errors.jsonl). Dans une expérience (EXPERIMENT_STOP_ON_FALLBACK=1), le run "
+                f"se serait arrêté."
+            )
+        elif transition == "release":
+            logger.info(
+                f"[ALARME levée] Aucun départ servi en retard depuis "
+                f"{_duree_en_minutes(int(rearm_s))} simulées — épisode : "
+                f"{self._episode_retards} départ(s) en retard, pire retard "
+                f"{_duree_en_minutes(self._episode_retard_max_s)}."
+            )
+            self._alarme_retard_active = False
+            self._episode_retards = 0
+            self._episode_retard_max_s = 0
+
     async def _declencher_hibernation_propre(
-        self, resume_at: Any, person_id: str, motif: str = "quota_journalier"
+        self,
+        resume_at: Any,
+        person_id: str,
+        motif: str = "quota_journalier",
+        details: dict | None = None,
     ) -> None:
         """Arrêt ordonné du contrôleur plutôt qu'une décision par défaut (077 axe 3, 105).
 
         Garantit qu'aucun repli par défaut (index 0) n'entre dans les résultats : plutôt que de
         choisir à la place du modèle, le run s'arrête.
 
-        Deux motifs, et ils ne se reprennent PAS de la même façon :
+        Trois motifs, et ils ne se reprennent PAS de la même façon :
 
         - `quota_journalier` — le fournisseur annonce l'heure de réouverture ; `resume_at` la
           porte, et le marqueur permet une reprise datée.
@@ -1604,6 +1918,10 @@ class SimulationLoopV1(BaseScenario):
           soit la cause (le 2026-09-23 : saturation amont, 54 × HTTP 503, aucun genre_erreur).
           Aucune heure de réouverture n'existe : `resume_at` vaut None et la reprise se décide à
           la main, sur le taux de 503 observé.
+        - `decision_en_retard` (2026-09-25) — une décision de départ n'est pas revenue à temps
+          malgré la retenue du /sync, ou est revenue après le départ. Même reprise que pour les
+          replis (saturation amont, pas d'heure annoncée) ; `details` dit quel départ, quelle
+          activité et depuis combien de temps.
 
         ⚠ L'arrêt passe par un SIGTERM au processus, et NON par `sys.exit` : cette coroutine est
         servie par l'ASGI, où `SystemExit` se ravale en erreur de requête sans jamais rendre de
@@ -1629,6 +1947,13 @@ class SimulationLoopV1(BaseScenario):
                 f"le modèle ne décide plus. Arrêt ordonné du contrôleur plutôt que de remplir la "
                 f"mesure de choix par défaut. Aucune heure de réouverture : vérifier l'amont "
                 f"avant de reprendre."
+            )
+        elif motif == "decision_en_retard":
+            logger.error(
+                f"[ALARME] [hibernation] Départ en retard évité pour {person_id} : "
+                f"{(details or {}).get('constat', 'constat non fourni')} Arrêt ordonné du "
+                f"contrôleur plutôt que de servir le trajet après son heure. Aucune heure de "
+                f"réouverture : la reprise se fait comme après des replis (saturation amont)."
             )
         else:
             logger.warning(
@@ -1656,8 +1981,10 @@ class SimulationLoopV1(BaseScenario):
                         "person_id": str(person_id),
                         "timestamp": self._current_sim_timestamp,
                         "jour_simule": jours_ecoules(self._current_sim_timestamp) + 1,
+                        **({"detail": details} if details else {}),
                     },
                     indent=2,
+                    ensure_ascii=False,
                 ),
                 encoding="utf-8",
             )
@@ -1936,10 +2263,11 @@ class SimulationLoopV1(BaseScenario):
             f"[sync] START sim_time={humanize_date(timestamp)} "
             f"total_people={len(all_people)} idle={len(currently_idle)} moving={len(currently_moving)} "
             f"planned={n_planned} sched_in_progress={n_sched_in_progress} unscheduled_idle={n_unscheduled_idle} "
-            f"late_since_last_sync={self._late_count}"
+            f"late_since_last_sync={len(self._departs_en_retard)}"
         )
         logger.info(f"[cache] {_format_cache_hit_rates()}")
-        self._late_count = 0
+        self._evaluer_alarme_depart_en_retard(timestamp)
+        self._departs_en_retard = []
 
         # Avancer le timestamp de référence du Worker
         self._current_sim_timestamp = timestamp
@@ -1995,6 +2323,13 @@ class SimulationLoopV1(BaseScenario):
                     sim_time=humanize_date(timestamp),
                     real_elapsed=humanize_duration(real_elapsed),
                 )
+            )
+            # Bilan des départs (2026-09-25) : dit AUSSI quand tout va bien — « 0 en retard »
+            # distingue un run ponctuel d'un compteur qui ne tourne plus.
+            logger.info(
+                f"[depart] bilan au jour {sim_day} : {self._departs_en_retard_total} départ(s) "
+                f"servi(s) en retard depuis le début du run ; {self._retenues_depart} retenue(s) "
+                f"/sync sur départ imminent ({self._retenues_depart_s:.0f} s réelles)"
             )
             self._next_day_log_at += 86400
 
@@ -3215,18 +3550,7 @@ class SimulationLoopV1(BaseScenario):
 
         # scheduled_start_time = departure time from the previous activity toward next_activity.
         # Use it as the trip departure; arrive_by=False (depart at this time).
-        target_24h = (
-            next_activity.scheduled_start_time
-            if next_activity.scheduled_start_time is not None
-            else next_activity.end_time
-        )
-        departure_time = to_timestamp_based_on_day(
-            target_24h_timestamp=target_24h,
-            based_on=timestamp,
-        )
-        planning_late_s = max(0, timestamp - departure_time)
-        if departure_time < timestamp:
-            departure_time += 86400  # activité du lendemain (bouclage J+1)
+        departure_time, planning_late_s = _depart_du_trajet(next_activity, timestamp)
         # Aucun déplacement ne démarre le week-end : un départ samedi/dimanche est
         # reporté au lundi suivant à la même heure. L'itinéraire OTP et le schedule_at côté
         # GAMA découlent de departure_time.

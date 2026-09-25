@@ -10,9 +10,16 @@ Deux familles :
     ``ThroughputEwma`` (débit de complétion lissé), ``time_ewma`` (lissage du
     rythme sim/réel) et ``edf_feasibility`` / ``edf_hold_needed`` (test de
     faisabilité EDF qui décide s'il faut retenir le /sync).
+
+Plus la retenue sur départ imminent (2026-09-25) : ``departures_at_risk`` et
+``hold_while`` retiennent le /sync tant qu'une décision de départ n'est pas rendue,
+``late_departure_alarm_transition`` porte l'alarme des départs servis en retard.
 """
 
+import asyncio
 import math
+import time
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 
 
@@ -258,3 +265,101 @@ def edf_hold_needed(
 ) -> bool:
     """Décision booléenne de rétention du /sync (cf. ``edf_feasibility``)."""
     return edf_feasibility(deadlines, now_sim, throughput_per_s, sim_ratio, margin).hold
+
+
+# =============================================================================
+# Retenue sur départ imminent (2026-09-25)
+# =============================================================================
+#
+# Le 2026-09-24 (bras traité 2026-09-24_17_50, quatre agents), la décision du départ de 17:01
+# de l'agent 286921 est restée en vol pendant ~70 s réelles — un HTTP 503 « high demand » de
+# Google. Aucun des freins ci-dessus ne la voyait : la file EDF ne contient plus une tâche
+# qu'un consommateur a dépilée pour l'exécuter, et le ratio de la pile (1 sur 4) restait sous
+# tous les seuils. GAMA a filé jusqu'à 18:15, le trajet est parti avec 74 min de retard, la
+# journée de l'agent a glissé d'un jour, et cinq trajets manquent face au témoin.
+
+
+@dataclass(frozen=True)
+class PendingDeparture:
+    """Décision de départ demandée et pas encore rendue (en file OU en cours d'exécution).
+
+    key:           identifiant unique de la demande (ordre d'envoi au dispatcher).
+    departure_sim: heure de départ du trajet, en temps SIMULÉ (même calcul que la décision).
+    kind:          "plan" | "refill".
+    requested_sim: temps simulé connu au moment de la demande.
+    requested_wall: instant réel (monotonic) de la demande — sert à dire depuis combien de
+                   temps la décision est attendue.
+    """
+
+    key: int
+    person_id: str
+    activity_id: str | None
+    purpose: str | None
+    departure_sim: float
+    kind: str
+    requested_sim: float
+    requested_wall: float
+
+
+def departures_at_risk(
+    pending: Iterable[PendingDeparture],
+    now_sim: float,
+    lookahead_sim_s: float,
+) -> list[PendingDeparture]:
+    """Décisions en attente dont le départ tombe avant ``now_sim + lookahead_sim_s``.
+
+    Triées par départ croissant : la première est la plus urgente. Un départ déjà dépassé
+    (``departure_sim < now_sim``) est toujours à risque. ``lookahead_sim_s`` <= 0 ne garde
+    que les départs déjà atteints ou dépassés.
+    """
+    horizon = now_sim + max(0.0, lookahead_sim_s)
+    return sorted(
+        (p for p in pending if p.departure_sim <= horizon),
+        key=lambda p: (p.departure_sim, p.key),
+    )
+
+
+async def hold_while(
+    predicate: Callable[[], bool],
+    budget_s: float,
+    poll_s: float,
+    *,
+    clock: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+) -> float:
+    """Attend tant que ``predicate()`` est vrai, au plus ``budget_s`` secondes réelles.
+
+    Même motif que la boucle du mode drainage : ré-échantillonnage toutes les ``poll_s``
+    secondes, sortie dès que la condition tombe. Rend la durée effectivement attendue.
+    ``budget_s`` <= 0 ou condition fausse d'entrée : aucune attente.
+    """
+    start = clock()
+    if budget_s <= 0 or not predicate():
+        return 0.0
+    while predicate():
+        elapsed = clock() - start
+        if elapsed >= budget_s:
+            break
+        await sleep(min(max(poll_s, 0.01), budget_s - elapsed))
+    return clock() - start
+
+
+def late_departure_alarm_transition(
+    active: bool,
+    late_count: int,
+    now_sim: float,
+    last_late_sim: float | None,
+    rearm_sim_s: float,
+) -> str:
+    """Transition de l'alarme ``[ALARME] Départ servi en retard`` (run classique).
+
+    - ``"fire"``    : premier départ servi en retard alors que l'alarme est au repos ;
+    - ``"release"`` : alarme active et aucun retard depuis ``rearm_sim_s`` secondes simulées ;
+    - ``"none"``    : rien à faire (y compris un nouveau retard pendant un épisode en cours,
+                      qui se journalise en WARNING sans nouvelle ERROR).
+    """
+    if late_count > 0:
+        return "none" if active else "fire"
+    if active and last_late_sim is not None and now_sim - last_late_sim >= rearm_sim_s:
+        return "release"
+    return "none"

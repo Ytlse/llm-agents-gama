@@ -1097,13 +1097,14 @@ s'en souvient, et le mode emprunté entre dans la statistique habitude/rupture q
 sur la mémoire mesurent. Écarter ces lignes après coup ne retire pas leurs effets en aval.
 
 **Dans une expérience, le run s'arrête** plutôt que de servir une décision qui n'en est pas une.
-Deux motifs, armés par le même verrou `EXPERIMENT_STOP_ON_FALLBACK` (alias historique :
+Trois motifs, armés par le même verrou `EXPERIMENT_STOP_ON_FALLBACK` (alias historique :
 `EXPERIMENT_HIBERNATE_ON_QUOTA`), que `run_sequential_cohort.py` pose sur **toute** campagne :
 
 | Motif | Déclencheur | Reprise |
 |---|---|---|
 | `quota_journalier` (077) | `error_kind` du fournisseur | datée — `resume_at` porte l'heure de réouverture |
 | `replis_consecutifs` (105) | `settings.agent.replis_consecutifs_max` replis d'affilée (3) | à la main, après vérification de l'amont |
+| `decision_en_retard` (2026-09-25) | une décision de départ encore attendue quand relâcher GAMA lui ferait franchir ce départ, ou rendue après le départ (cf. « Retenue sur départ imminent ») | comme les replis : saturation amont, pas d'heure annoncée |
 
 Le critère du 105 compte les **replis**, pas les motifs : une saturation amont ne renvoie aucun
 `error_kind` (le 2026-09-23 : 54 × `HTTP 503 — high demand`, zéro `RESOURCE_EXHAUSTED`), et un
@@ -1112,6 +1113,11 @@ un 503 isolé est absorbé par les tentatives et ne produit aucun repli — ce q
 régime, pas un incident.
 
 Hors expérience, rien ne change : le verrou n'est pas armé et le run se rabat comme avant.
+
+Le marqueur `en_attente_quota.json` d'un arrêt `decision_en_retard` porte un bloc `detail` :
+`etat` (`en_attente` ou `rendue_en_retard`), `activity_id`, `purpose`, `depart_ts`/`depart`,
+et selon l'état `demandee_ts` + `attente_reelle_s` ou `servie_ts` + `retard_s`, plus une phrase
+`constat` reprise dans l'`[ALARME] [hibernation] Départ en retard évité pour …`.
 
 **L'arrêt ne se déclenche qu'une fois** (front montant, 2026-09-24). Huit consommateurs en repli
 l'appelaient chacun à leur tour et leurs points de reprise concurrents se marchaient dessus
@@ -1148,7 +1154,7 @@ L'événement `ratelimit_reset` est tracé dans `llm_errors.jsonl`.
 
 ### Alarmes de saturation
 
-Trois alarmes (niveau ERROR, préfixe `[ALARME]`, visibles via `make error`) signalent
+Quatre alarmes (niveau ERROR, préfixe `[ALARME]`, visibles via `make error`) signalent
 un pipeline LLM qui ne draine plus :
 
 - **Worker gateway** : quand tous les providers sont saturés/en cooldown et qu'un batch
@@ -1169,6 +1175,30 @@ un pipeline LLM qui ne draine plus :
   elle est aussi poussée vers la console GAMA et se réarme quand le backlog repasse
   sous `drain_release_ratio` (défaut 20 %). Logique pure et testée :
   `backpressure.backlog_alarm_transition()`.
+- **Départ servi en retard** (`simulation_controller.py`, 2026-09-25 — run classique
+  seulement) : `[ALARME] Départ servi en retard : person=… activité=… départ prévu … —
+  décision rendue à … sim, retard ≥ N min`, au premier départ en retard d'un épisode ; les
+  suivants restent en WARNING (`[worker] LATE — …`). Levée en INFO (`[ALARME levée]`, bilan
+  de l'épisode : nombre de départs, pire retard) après `world.late_departure_alarm_rearm_s`
+  (défaut 3 600 s) simulées sans nouveau retard. Logique pure et testée :
+  `backpressure.late_departure_alarm_transition()`. Dans une expérience, le même constat
+  arrête le run (motif `decision_en_retard`) : il n'y a pas d'alarme à lever.
+
+**Ce que compte `late_since_last_sync` (2026-09-25).** Une décision de départ (`plan`,
+`refill`) est en retard quand elle revient **après l'heure de départ du trajet** — celle de
+la colonne « Heure de départ » de `moves.csv` — mesurée contre le temps simulé connu du
+contrôleur à son retour. Ce temps est une borne basse de celui de GAMA : le retard compté ne
+peut que sous-estimer, jamais crier à tort. Avant, le test comparait l'arrivée prévue à la
+**base de planification** (fin de l'activité en cours), toujours antérieure : le compteur
+valait 0 par construction, y compris le 2026-09-24 où un départ de 17:01 est parti à 18:22.
+Le même compteur alimente `controller_deadline_misses_total` et l'un des deux signaux de
+l'alarme backlog.
+
+**Les décisions « à échéance dépassée » comprennent celles en cours d'exécution.** Elles
+sont lues dans un registre des décisions de départ en attente, alimenté par `_dispatch` et
+vidé à la fin de chaque coroutine (succès, échec ou annulation). Avant, elles étaient lues
+dans la file EDF, d'où une décision dépilée par un consommateur — et bloquée sur l'appel au
+modèle — disparaissait.
 
 ### Panne durable — disjoncteur client : on attend le renouvellement
 
@@ -1312,6 +1342,46 @@ suit pas le rythme. La jauge du drainage, `activities_to_compute_count` (trajets
 doivent rester cohérents. Seule exception légitime : deux activités consécutives au même
 endroit (`legs=[]`), où GAMA garde volontairement `is_ready=false` pour éviter un
 deadlock (`Inhabitant.gaml`).
+
+### Retenue sur départ imminent /sync — expériences seulement (2026-09-25)
+
+Aucun des freins précédents ne voit une décision **en cours d'exécution** : la file EDF ne
+contient plus la tâche qu'un consommateur a dépilée, et le ratio de la pile reste faible dans
+une petite population. Le 2026-09-24 (bras traité `2026-09-24_17_50`, quatre agents), la
+décision du départ de 17:01 de l'agent 286921, demandée à 14:30, est restée ~70 s réelles
+sur un HTTP 503 « high demand » de Google ; une décision sur quatre ne freinait presque pas
+GAMA, qui a filé jusqu'à 18:15. Le trajet est parti avec plus d'une heure de retard, le
+retour au domicile a été daté du lendemain, cinq trajets manquent face au témoin.
+
+Dans une **expérience** (verrou `EXPERIMENT_STOP_ON_FALLBACK=1`, posé par
+`run_sequential_cohort.py`), chaque `/sync` consulte le registre des décisions de départ
+en attente (`departures_at_risk()`, `backpressure.py`) :
+
+- **Retenue** : tant qu'une décision attendue porte sur un départ situé avant
+  `now + world.departure_hold_lookahead_s` (défaut **3 600 s simulées**), la réponse est
+  retenue (`hold_while()`), en ré-échantillonnant toutes les `world.drain_poll_interval` s,
+  au plus `cap` secondes (le read timeout HTTP de GAMA). Au pas de 15 min, l'horizon d'une
+  heure donne ~4 retenues avant le départ, soit ~2 min de patience réelle avec `cap=30`.
+- **Relâchement** : la décision revient, la main est rendue aussitôt ; si le budget s'épuise
+  alors que le départ le plus proche est encore au-delà du prochain `/sync`, GAMA avance d'un
+  pas et la retenue reprend au `/sync` suivant.
+- **Arrêt** : si, le budget épuisé, relâcher GAMA lui ferait franchir (d'ici le prochain
+  `/sync`) l'heure d'un départ encore attendu, le run s'arrête (hibernation
+  `decision_en_retard`, cf. ticket 105 ci-dessus). Une décision qui reviendrait malgré tout
+  après son départ arrête elle aussi le run, sans être stockée ni poussée. L'orchestrateur
+  mémoire traite ce motif comme une saturation amont (nouvel essai après `ATTENTE_S`).
+- Une réponse ne dépasse jamais `cap` : le mode drainage et la rétention prédictive qui
+  suivent n'ont que le reste du budget.
+
+Dans un **run classique**, rien de tout cela ne s'arme : GAMA n'est pas retenu, le trajet est
+servi en retard, compté dans `late_since_last_sync` et signalé par l'alarme « Départ servi en
+retard ».
+
+Points de trace : `[depart] /sync retenu …` (INFO, décision la plus urgente : personne,
+activité, départ, heure de la demande), `[depart] décision(s) rendue(s) … après X s` ou
+`[depart] budget de 30s épuisé …` ; bilan journalier `[depart] bilan au jour N : …` (départs
+servis en retard, retenues et leur durée cumulée). Métriques : `controller_departure_hold_seconds`,
+`controller_departure_holds_total{issue=relachee|cap|arret}`, `controller_departures_at_risk`.
 
 ### Backpressure SDK (drainage sur alarme)
 

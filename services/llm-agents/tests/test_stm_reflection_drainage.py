@@ -91,6 +91,10 @@ def _make_loop() -> SimulationLoopV1:
     loop._edf_event = asyncio.Event()
     loop._edf_consumers = []
     loop._inflight_tasks = set()
+    # Registre des décisions de départ en attente (2026-09-25), peuplé par _dispatch.
+    loop._decisions_depart = {}
+    loop._decisions_depart_seq = 0
+    loop._current_sim_timestamp = 0
     loop._stm_reflecting = set()
     return loop
 

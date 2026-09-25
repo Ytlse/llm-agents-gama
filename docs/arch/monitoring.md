@@ -120,9 +120,15 @@ donne la réalisation tirée.
 **Contrôleur** (`services/llm-agents/`) : init/pile/backpressure/drain/stuck, famille EDF
 (ticket 003), composition de la pile (ticket 010 :
 `controller_pending_reflections` = réflexions STM en file EDF ou en vol,
-`controller_overdue_decisions` = décisions plan/refill à échéance sim dépassée —
+`controller_overdue_decisions` = décisions plan/refill en file **ou en cours
+d'exécution** (depuis le 2026-09-25) dont l'heure de départ est dépassée —
 le signal qui distingue une vraie saturation du drainage nocturne nominal ;
 panneau « Composition de la file LLM » du cockpit),
+retenue sur départ imminent (2026-09-25, expériences seulement :
+`controller_departures_at_risk` = décisions de départ attendues dans l'horizon
+`departure_hold_lookahead_s`, `controller_departure_hold_seconds` = durée de la
+dernière retenue, `controller_departure_holds_total{issue}` = `relachee` / `cap` /
+`arret` ; cf. [llm-inference.md](llm-inference.md)),
 `controller_sync_duration_seconds` (latence du battement de cœur
 GAMA↔controller), `controller_event_loop_lag_seconds`,
 `trip_mode_by_purpose_total{mode,purpose}` (mode principal × motif d'activité,

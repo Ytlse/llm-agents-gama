@@ -5,14 +5,20 @@ croissant avec le remplissage de la pile (cf. run du 2026-07-07 où la formule
 Lancement : cd llm-agents && .venv/bin/python -m pytest tests/test_backpressure.py
 """
 
+import asyncio
+
 import pytest
 
 from backpressure import (
+    PendingDeparture,
     ThroughputEwma,
     backlog_alarm_transition,
     compute_backpressure_interval,
+    departures_at_risk,
     edf_feasibility,
     edf_hold_needed,
+    hold_while,
+    late_departure_alarm_transition,
     time_ewma,
     update_drain_mode,
 )
@@ -341,3 +347,133 @@ class TestSeuilSansFrein:
             "si la capacité de la passerelle change, ce test le dit au lieu de laisser "
             "le seuil se désaligner en silence"
         )
+
+
+# ── Retenue sur départ imminent (2026-09-25) ─────────────────────────────────────────────
+
+H = 3600.0
+J0 = 1_774_310_400.0  # 2026-03-24 00:00 UTC — le jour de l'incident
+DEPART_1701 = J0 + 17 * H + 60
+
+
+def _attente(key: int, depart: float, person: str = "286921") -> PendingDeparture:
+    return PendingDeparture(
+        key=key,
+        person_id=person,
+        activity_id=f"act{key}",
+        purpose="home",
+        departure_sim=depart,
+        kind="plan",
+        requested_sim=depart - 2 * H,
+        requested_wall=0.0,
+    )
+
+
+class TestDeparturesAtRisk:
+    """Le /sync est retenu dès qu'un départ en attente tombe dans l'horizon."""
+
+    def test_incident_le_depart_de_17h01_est_a_risque_des_16h45(self):
+        # Au /sync de 16:45 (pas de 15 min), l'horizon d'une heure couvre 17:01.
+        attente = [_attente(1, DEPART_1701)]
+        assert departures_at_risk(attente, J0 + 16 * H + 45 * 60, H) == attente
+
+    def test_depart_lointain_hors_horizon(self):
+        # À 14:30 (heure de la demande), 17:01 est à 2 h 31 : on laisse GAMA avancer.
+        assert departures_at_risk([_attente(1, DEPART_1701)], J0 + 14.5 * H, H) == []
+
+    def test_depart_depasse_toujours_a_risque(self):
+        attente = [_attente(1, DEPART_1701)]
+        assert departures_at_risk(attente, J0 + 18.25 * H, H) == attente
+        assert departures_at_risk(attente, J0 + 18.25 * H, 0.0) == attente
+
+    def test_horizon_nul_ne_garde_que_les_departs_atteints(self):
+        attente = [_attente(1, DEPART_1701)]
+        assert departures_at_risk(attente, DEPART_1701 - 1, 0.0) == []
+        assert departures_at_risk(attente, DEPART_1701, 0.0) == attente
+
+    def test_horizon_negatif_traite_comme_nul(self):
+        attente = [_attente(1, DEPART_1701)]
+        assert departures_at_risk(attente, DEPART_1701 - 1, -H) == []
+
+    def test_tri_par_depart_puis_par_ordre_de_demande(self):
+        a, b, c = _attente(3, J0 + 17 * H), _attente(1, J0 + 17.5 * H), _attente(2, J0 + 17 * H)
+        assert departures_at_risk([a, b, c], J0 + 16.9 * H, H) == [c, a, b]
+
+    def test_aucune_attente_aucun_risque(self):
+        assert departures_at_risk([], J0, H) == []
+
+
+class _Horloge:
+    """Horloge et sommeil factices : le temps n'avance que par ``sleep``."""
+
+    def __init__(self) -> None:
+        self.t = 0.0
+        self.sommeils: list[float] = []
+
+    def clock(self) -> float:
+        return self.t
+
+    async def sleep(self, d: float) -> None:
+        self.sommeils.append(d)
+        self.t += d
+
+
+class TestHoldWhile:
+    """La retenue sort dès que la décision est rendue, et jamais après le budget."""
+
+    def test_sort_des_que_la_condition_tombe(self):
+        h = _Horloge()
+        # La décision revient après ~1,2 s réelle.
+        attendu = asyncio.run(
+            hold_while(lambda: h.t < 1.2, 30.0, 0.5, clock=h.clock, sleep=h.sleep)
+        )
+        assert attendu == pytest.approx(1.5)
+        assert h.sommeils == [0.5, 0.5, 0.5]
+
+    def test_borne_par_le_budget(self):
+        # Le délai de lecture HTTP de GAMA : jamais plus de 30 s par réponse.
+        h = _Horloge()
+        attendu = asyncio.run(
+            hold_while(lambda: True, 30.0, 4.0, clock=h.clock, sleep=h.sleep)
+        )
+        assert attendu == pytest.approx(30.0)
+        assert h.sommeils[-1] == pytest.approx(2.0)  # dernier sommeil tronqué au budget
+
+    def test_condition_fausse_aucune_attente(self):
+        h = _Horloge()
+        assert asyncio.run(
+            hold_while(lambda: False, 30.0, 0.5, clock=h.clock, sleep=h.sleep)
+        ) == 0.0
+        assert h.sommeils == []
+
+    def test_budget_nul_aucune_attente(self):
+        h = _Horloge()
+        assert asyncio.run(
+            hold_while(lambda: True, 0.0, 0.5, clock=h.clock, sleep=h.sleep)
+        ) == 0.0
+        assert h.sommeils == []
+
+    def test_pas_de_sondage_nul_ne_boucle_pas_a_vide(self):
+        h = _Horloge()
+        asyncio.run(hold_while(lambda: h.t < 0.05, 1.0, 0.0, clock=h.clock, sleep=h.sleep))
+        assert all(d >= 0.01 for d in h.sommeils)
+
+
+class TestLateDepartureAlarmTransition:
+    """Front montant : une ERROR par épisode, levée après une heure simulée sans retard."""
+
+    def test_premier_retard_declenche(self):
+        assert late_departure_alarm_transition(False, 1, J0, None, H) == "fire"
+
+    def test_retard_pendant_un_episode_ne_redeclenche_pas(self):
+        assert late_departure_alarm_transition(True, 3, J0, J0 - 60, H) == "none"
+
+    def test_levee_apres_le_delai_de_rearmement(self):
+        assert late_departure_alarm_transition(True, 0, J0 + H, J0, H) == "release"
+
+    def test_pas_de_levee_avant_le_delai(self):
+        assert late_departure_alarm_transition(True, 0, J0 + H - 1, J0, H) == "none"
+
+    def test_au_repos_sans_retard_rien(self):
+        assert late_departure_alarm_transition(False, 0, J0, None, H) == "none"
+        assert late_departure_alarm_transition(False, 0, J0 + 2 * H, J0, H) == "none"
