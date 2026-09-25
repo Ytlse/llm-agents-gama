@@ -20,7 +20,7 @@ import csv
 import json
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 RACINE = Path(__file__).resolve().parents[3]
@@ -296,9 +296,14 @@ def point_de_reprise_stub(workdir: Path, jour: int, *, foyer: dict | None = None
 
 
 def echanges_stub(
-    chemin: Path, *, agent: str, texte: str, categorie: str = "itinary_multi_agent",
+    chemin: Path, *, agent: str, texte: str, exposition: int,
+    categorie: str = "itinary_multi_agent",
 ) -> Path:
     """Un `llm_exchanges.jsonl` portant des prompts de DÉCISION, dans la forme réelle.
+
+    `exposition` est l'instant de l'événement, en secondes simulées UTC. Chaque décision est
+    datée après lui (`sim_ts`, `sim_day`), comme les vrais échanges : le tableau écarte une
+    décision non datée, ou antérieure à l'exposition (2026-09-25).
 
     Le tableau des quatre voies lit ce fichier : il y cherche le texte de l'événement, bloc par
     bloc. Sans lui, il sort « non concluant », ce qui est exact — mais il faut alors des
@@ -325,10 +330,16 @@ def echanges_stub(
     chemin.parent.mkdir(parents=True, exist_ok=True)
     # Indenté, comme la passerelle : écrit sur une ligne, ce stub laissait passer un lecteur
     # ligne à ligne que le premier run réel faisait tomber (2026-09-25).
+    def _echange(rang: int, prompt: str) -> dict:
+        sim_ts = exposition + 3600 * (rang + 1)
+        return {"category": categorie, "sim_ts": sim_ts,
+                "sim_day": datetime.fromtimestamp(sim_ts, tz=timezone.utc).strftime("%Y-%m-%d"),
+                "messages": [{"role": "user", "content": prompt}]}
+
     chemin.write_text(
         "".join(
-            json.dumps({"category": categorie, "messages": p}, ensure_ascii=False, indent=2) + "\n"
-            for p in prompts
+            json.dumps(_echange(rang, p), ensure_ascii=False, indent=2) + "\n"
+            for rang, p in enumerate(prompts)
         ),
         encoding="utf-8",
     )

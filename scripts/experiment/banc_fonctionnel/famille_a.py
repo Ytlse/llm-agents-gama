@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import timedelta
+from datetime import timedelta, timezone
 from pathlib import Path
 
 RACINE = Path(__file__).resolve().parents[3]
@@ -219,13 +219,18 @@ def a9_a10_lanalyse(tmp: Path) -> None:
     grille = RACINE / "docs" / "paper" / "sources" / "actualites" / "grille_signes.yaml"
     articles = sorted({c.article for c in charger_grille(grille).cellules})
 
+    # Daté comme `evenements.jsonl` : le tableau des quatre voies ne retient que les décisions
+    # postérieures à l'exposition, et écarte celles qui ne se placent pas.
+    exposition = stubs.ANCRE.replace(tzinfo=timezone.utc)
     runs = []
     for article in articles:
         run = tmp / "runs" / article
         stubs.moves_stub(run / "moves.csv", evenement=article)
         (run / "evenements.jsonl").write_text(
             json.dumps({"evenement_id": article, "canal": "lu", "moment": "reveil",
-                        "person_id": "expose_0", "texte": "Bed bugs on line A."}) + "\n",
+                        "person_id": "expose_0", "texte": "Bed bugs on line A.",
+                        "timestamp": int(exposition.timestamp()),
+                        "horodatage_simule": exposition.strftime("%Y-%m-%dT%H:%M:%S")}) + "\n",
             encoding="utf-8")
         runs.append(run)
 
@@ -246,7 +251,7 @@ def a9_a10_lanalyse(tmp: Path) -> None:
               "sans prompts, le tableau DIT qu'il ne sait pas dire", muet[:120])
 
     stubs.echanges_stub(runs[0] / "llm_exchanges.jsonl", agent="expose_0",
-                        texte="Bed bugs on line A.")
+                        texte="Bed bugs on line A.", exposition=int(exposition.timestamp()))
     rendu = quatre.rendre(quatre.depouiller(runs[0]))
     _verifier("A9.4", "habitudes" in rendu and "changements" in rendu,
               "avec des prompts, le tableau nomme les quatre voies", rendu[:160])

@@ -10,6 +10,8 @@ import csv
 import json
 import subprocess
 import sys
+from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -22,6 +24,14 @@ from scripts.analysis import tableau_quatre_voies as quatre
 
 
 TEXTE = "The engine made a grinding noise and the car stalled on the expressway."
+
+# Les instants, en secondes simulées UTC comme dans les vrais fichiers : `evenements.jsonl`
+# porte `timestamp`, chaque échange `sim_ts` et `sim_day`. Une décision non datée est écartée
+# du tableau — elle ne se place ni avant ni après l'exposition.
+EXPOSITION = 1774483200            # 2026-03-26T00:00:00, le réveil du jour de lecture
+APRES = EXPOSITION + 21438         # 2026-03-26 05:57:18, le premier départ qui suit
+AVANT = APRES - 86400              # la veille, à la même heure
+DATEE = {"sim_ts": APRES, "sim_day": "2026-03-26"}
 
 
 def _moves(dossier: Path, lignes: list[dict], avec_role: bool = True) -> Path:
@@ -154,6 +164,7 @@ def test_un_run_sans_evenement_le_dit_au_lieu_de_rendre_un_tableau_vide(tmp_path
 def _run_complet(dossier: Path) -> Path:
     (dossier / "evenements.jsonl").write_text(json.dumps({
         "person_id": "899549", "canal": "vecu", "texte": TEXTE, "evenement_id": "c6",
+        "timestamp": EXPOSITION, "horodatage_simule": "2026-03-26T00:00:00",
     }) + "\n", encoding="utf-8")
     # Comme le journal réel : `Référence` porte le nom du run, l'agent est dans `ID Personne`.
     _moves(dossier, [{"Référence": "2026-09-24_17_50", "ID Personne": "899549",
@@ -167,7 +178,7 @@ def test_une_decision_sans_aucune_voie_est_NOMMEE_et_non_lue_comme_un_zero(tmp_p
     """« On ne sait pas le dire » n'est pas « l'événement n'a pesé sur rien »."""
     _run_complet(tmp_path)
     (tmp_path / "llm_exchanges.jsonl").write_text(json.dumps({
-        "category": "itinary_multi_agent",
+        "category": "itinary_multi_agent", **DATEE,
         "messages": "--- agent_id=899549 ---\nMes habitudes\n- rien de notable",
     }) + "\n", encoding="utf-8")
     resultat = quatre.depouiller(tmp_path)
@@ -195,7 +206,7 @@ def test_le_texte_retrouve_dans_un_bloc_est_impute_a_CE_bloc(tmp_path):
         f"Ce qui a changé récemment\n- {TEXTE}\n"
     )
     (tmp_path / "llm_exchanges.jsonl").write_text(json.dumps({
-        "category": "itinary_multi_agent", "messages": prompt,
+        "category": "itinary_multi_agent", **DATEE, "messages": prompt,
     }) + "\n", encoding="utf-8")
     resultat = quatre.depouiller(tmp_path)
     assert resultat["compte"][("vecu", "expose", "changements")]["exact"] == 1
@@ -207,7 +218,7 @@ def test_lappariement_par_mots_saillants_est_marque_comme_indicatif(tmp_path):
     _run_complet(tmp_path)
     reformule = "my car started making a terrible grinding noise on the expressway"
     (tmp_path / "llm_exchanges.jsonl").write_text(json.dumps({
-        "category": "itinary_multi_agent",
+        "category": "itinary_multi_agent", **DATEE,
         "messages": f"--- agent_id=899549 ---\nCe que je sais\n- {reformule}\n",
     }) + "\n", encoding="utf-8")
     resultat = quatre.depouiller(tmp_path)
@@ -247,7 +258,7 @@ def _echanges_passerelle(dossier: Path, objets: list[dict], separateur: str = "\
 def _echanges_de_forme(origine: str) -> list[dict]:
     """`origine` est le nom du run qui a signé l'échange : `lire_echanges` écarte les autres."""
     return [
-        {"origine": origine, "category": "itinary_multi_agent", "task_id": "t1",
+        {"origine": origine, "category": "itinary_multi_agent", "task_id": "t1", **DATEE,
          "messages": [
              {"role": "system", "content": "Select the optimal travel mode."},
              {"role": "user", "content": "--- agent_id=899549 ---\nMes habitudes\n- la voiture\n"
@@ -256,7 +267,7 @@ def _echanges_de_forme(origine: str) -> list[dict]:
          # Une liste de chaînes : indentée, chacune tient seule sur sa ligne et se décode,
          # lue ligne à ligne, en chaîne nue — c'est elle qui faisait tomber `.get()`.
          "response": {"modes_touches": ["walking", "car"]}},
-        {"origine": origine, "category": "stm_reflection", "task_id": "t2",
+        {"origine": origine, "category": "stm_reflection", "task_id": "t2", **DATEE,
          "messages": [{"role": "user", "content": f"--- agent_id=899549 ---\n{TEXTE}"}],
          "response": ["walking"]},
     ]
@@ -311,6 +322,246 @@ def test_le_tableau_se_lance_en_ligne_de_commande_sur_des_echanges_indentes(tmp_
     )
     assert r.returncode == 0, r.stderr
     assert "expose" in r.stdout and "Lu : 2 échanges" in r.stdout
+
+
+# ── Le rappel, la date, le contenu brut — sur la forme du run 2026-09-24_17_50 ───────────
+# Trois défauts relevés le 2026-09-25 sur ce run : la colonne `rappel` comptait toute décision
+# d'un agent à qui un souvenir QUELCONQUE avait été servi (15 sur 15) ; 11 de ces 15 décisions
+# précédaient la lecture ; et le texte d'un article, cherché dans `json.dumps(messages)`, ne
+# pouvait jamais y être retrouvé — sauts de ligne et guillemets y sont échappés.
+LECTEUR = "286920"
+ARTICLE = (
+    "(Translated from French)\nGusts above 80 km/h: Toulouse closes its parks and gardens at "
+    "short notice this Thursday evening\n\n\"A weather alert forecasts violent winds,\" the "
+    "municipality states on its website."
+)
+# L'entrée que la lecture dépose en mémoire (`llm/evenements/injection.py`), de type
+# `conversation` : `llm_agent.py` ne met en forme que les réflexions et les concepts rappelés.
+SOUVENIR_LU = f"[ PRESSE ] This morning I read in the paper: « {ARTICLE} »"
+# Une réflexion qui CITE l'article : lien exact, et elle peut, elle, atteindre le prompt.
+REFLEXION_CITANT = f"This morning the paper said: {ARTICLE} I kept driving."
+
+
+def _jour(ts: int) -> str:
+    return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
+
+
+def _section(depart: int, *, agent: str = LECTEUR, changements: str = "",
+             rappel: tuple[str, ...] = ()) -> str:
+    """La section d'un agent, composée comme `llm_agent.py` la compose : l'en-tête et son heure
+    de départ, les blocs du noyau préfixés par le gabarit, puis les souvenirs rappelés."""
+    heure = datetime.fromtimestamp(depart, tz=timezone.utc).strftime("%H:%M")
+    lignes = [f"--- agent_id={agent} | Destination: work (Toulouse) | Departure: {heure} ---",
+              "**History:**",
+              "- Mes habitudes", "- - work le matin : en voiture, 8 fois sur 8",
+              "- Ce que je sais", "- - Driving to work is fast and reliable.  (6 obs.)"]
+    if changements:
+        lignes += ["- Ce qui a changé récemment", f"- - {changements}"]
+    lignes += [f"- {r}" for r in rappel]
+    return "\n".join(lignes) + "\n\n"
+
+
+def _run_lu(dossier: Path, *, souvenirs=(), traces=(), decisions=(), exposition=True) -> Path:
+    """Un lecteur exposé au réveil du 26 mars.
+
+    `souvenirs` : `(doc_id, memory_type, content, timestamp)`, en mémoire longue ;
+    `traces` : `(sim_ts, [doc_id, …])`, dans `trace_rappel.jsonl` ;
+    `decisions` : `(sim_ts, contenu_user)`, un prompt de décision chacun.
+    """
+    evenement = {"person_id": LECTEUR, "canal": "lu", "moment": "reveil", "texte": ARTICLE,
+                 "evenement_id": "a09_vent_autan"}
+    if exposition:
+        evenement |= {"timestamp": EXPOSITION, "horodatage_simule": "2026-03-26T00:00:00"}
+    (dossier / "evenements.jsonl").write_text(json.dumps(evenement) + "\n", encoding="utf-8")
+    _moves(dossier, [{"Référence": dossier.name, "ID Personne": LECTEUR, "Rôle": "expose"}])
+    shard = dossier / "long_term_memory" / "user_metadata" / "shard_84"
+    shard.mkdir(parents=True)
+    (shard / f"{LECTEUR}.json").write_text(json.dumps({
+        "person_id": LECTEUR,
+        "entries": [{"doc_id": d, "memory_type": t, "content": c, "timestamp": ts,
+                     "person_id": LECTEUR} for d, t, c, ts in souvenirs],
+    }), encoding="utf-8")
+    (dossier / "trace_rappel.jsonl").write_text("".join(
+        json.dumps({"sim_ts": ts, "sim_day": _jour(ts), "person_id": LECTEUR,
+                    "candidats": 20, "concentration": None,
+                    "servis": [{"rang": i, "doc_id": d, "type": "reflection", "vivier": "A",
+                                "score": 0.5} for i, d in enumerate(docs)]}) + "\n"
+        for ts, docs in traces), encoding="utf-8")
+    _echanges_passerelle(dossier, [
+        {"origine": dossier.name, "category": "itinary_multi_agent",
+         **({"sim_ts": ts, "sim_day": _jour(ts)} if ts is not None else {}),
+         "messages": [{"role": "system", "content": "Select the optimal travel mode."},
+                      {"role": "user", "content": contenu}]}
+        for ts, contenu in decisions])
+    return dossier
+
+
+def _ligne(rendu: str, canal: str = "lu") -> list[str]:
+    """Les cellules NON VIDES de la ligne du canal : `[canal, rôle, décisions, …]`."""
+    return next(l for l in rendu.splitlines() if l.startswith(canal)).split()
+
+
+def test_le_rappel_ne_compte_que_le_souvenir_NE_DE_LEVENEMENT(tmp_path):
+    """Un souvenir quelconque servi n'est pas l'événement rappelé. Sur le run 2026-09-24_17_50,
+    la trace sert `286920_19` — une réflexion du 24 mars — et l'ancien tableau en tirait
+    « rappel 15 ». Le souvenir de l'article, `286920_23`, n'est servi nulle part."""
+    _run_lu(tmp_path,
+            souvenirs=[("286920_19", "reflection", "Today went smoothly.", "2026-03-24T19:21:39"),
+                       ("286920_23", "conversation", SOUVENIR_LU, "2026-03-26T00:00:00")],
+            traces=[(APRES, ["286920_19"])],
+            decisions=[(APRES, _section(APRES, rappel=("[Tuesday, March 24] Today went smoothly.",)))])
+    resultat = quatre.depouiller(tmp_path)
+    assert not resultat["compte"].get(("lu", "expose", "rappel"))
+    assert resultat["rappel"][("lu", "expose")]["mesurables_exact"] == 1
+    rendu = quatre.rendre(resultat)
+    # Mesuré et nul : `0`, et non une cellule vide — le souvenir est identifié, la trace existe.
+    assert _ligne(rendu) == ["lu", "expose", "1", "0"]
+    assert "286920_23" in rendu
+
+
+def test_le_souvenir_servi_ET_present_dans_le_prompt_compte_au_rappel_et_a_lui_seul(tmp_path):
+    """Le souvenir rappelé figure APRÈS le dernier bloc nommé. L'ancien découpage le rangeait
+    dans ce bloc — ici « Ce que je sais » — et l'imputait donc à la mauvaise voie."""
+    _run_lu(tmp_path,
+            souvenirs=[("286920_24", "reflection", REFLEXION_CITANT, "2026-03-26T00:00:00")],
+            traces=[(APRES, ["286920_1", "286920_24"])],
+            decisions=[(APRES, _section(APRES, rappel=(f"[Thursday, March 26] {REFLEXION_CITANT}",)))])
+    resultat = quatre.depouiller(tmp_path)
+    assert resultat["compte"][("lu", "expose", "rappel")]["exact"] == 1
+    assert not resultat["compte"].get(("lu", "expose", "connaissances"))
+    assert _ligne(quatre.rendre(resultat)) == ["lu", "expose", "1", "1"]
+
+
+def test_un_souvenir_servi_au_top_K_sans_atteindre_le_prompt_nest_pas_compte(tmp_path):
+    """La trace liste le top-K (dix) ; le prompt n'en reçoit que les trois plus récents, et
+    jamais une entrée `conversation`. Servi n'est pas vu."""
+    _run_lu(tmp_path,
+            souvenirs=[("286920_23", "conversation", SOUVENIR_LU, "2026-03-26T00:00:00")],
+            traces=[(APRES, ["286920_23", "286920_19"])],
+            decisions=[(APRES, _section(APRES, rappel=("[Tuesday, March 24] Today went smoothly.",)))])
+    resultat = quatre.depouiller(tmp_path)
+    assert not resultat["compte"].get(("lu", "expose", "rappel"))
+    assert resultat["rappel"][("lu", "expose")]["hors_prompt"] == 1
+    rendu = quatre.rendre(resultat)
+    assert _ligne(rendu) == ["lu", "expose", "1", "0"]
+    assert "servi au top-K sans atteindre le prompt : 1" in rendu
+
+
+def test_sans_trace_appariee_le_rappel_reste_VIDE_et_non_zero(tmp_path):
+    """Le 30 mars, la décision de 286920 n'a aucune trace de rappel : on ne sait pas ce qui a
+    été servi, et un `0` le prétendrait."""
+    _run_lu(tmp_path,
+            souvenirs=[("286920_23", "conversation", SOUVENIR_LU, "2026-03-26T00:00:00")],
+            traces=[],
+            decisions=[(APRES, _section(APRES))])
+    resultat = quatre.depouiller(tmp_path)
+    assert resultat["rappel"][("lu", "expose")]["sans_trace"] == 1
+    rendu = quatre.rendre(resultat)
+    assert _ligne(rendu) == ["lu", "expose", "1"], "toutes les cellules vides"
+    assert "sans trace de rappel appariée : 1" in rendu
+
+
+def test_sans_souvenir_de_levenement_en_memoire_longue_le_rappel_reste_VIDE(tmp_path):
+    _run_lu(tmp_path,
+            souvenirs=[("286920_19", "reflection", "Today went smoothly.", "2026-03-24T19:21:39")],
+            traces=[(APRES, ["286920_19"])],
+            decisions=[(APRES, _section(APRES))])
+    rendu = quatre.rendre(quatre.depouiller(tmp_path))
+    assert _ligne(rendu) == ["lu", "expose", "1"]
+    assert "aucun souvenir de l'événement" in rendu
+
+
+@pytest.mark.parametrize("servi", [True, False], ids=["servi", "non_servi"])
+def test_un_lien_seulement_INDICATIF_marque_le_rappel_et_ne_rend_jamais_zero(tmp_path, servi):
+    """Le vécu reformulé ne se relie à son souvenir que par les mots saillants. Un rappel trouvé
+    ainsi porte `~` ; un rappel NON trouvé ne prouve rien — un autre souvenir reformulé peut
+    exister que les mots n'attrapent pas — et la cellule reste vide."""
+    reformule = "The municipality translated its storm notice for Toulouse residents."
+    _run_lu(tmp_path,
+            souvenirs=[("286920_24", "reflection", reformule, "2026-03-26T00:00:00")],
+            traces=[(APRES, ["286920_24"] if servi else ["286920_19"])],
+            decisions=[(APRES, _section(APRES, rappel=(f"[Thursday, March 26] {reformule}",)
+                                        if servi else ()))])
+    resultat = quatre.depouiller(tmp_path)
+    assert _ligne(quatre.rendre(resultat)) == (["lu", "expose", "1", "~1"] if servi
+                                              else ["lu", "expose", "1"])
+
+
+def test_les_decisions_ANTERIEURES_a_lexposition_sont_ecartees_et_comptees(tmp_path):
+    """11 des 15 décisions de 286920 précèdent la lecture du 26 mars. Elles ne peuvent pas
+    avoir vu l'article. Une décision prise À l'instant de l'exposition non plus : le réveil
+    précède la lecture."""
+    _run_lu(tmp_path, decisions=[(AVANT, _section(AVANT)), (EXPOSITION, _section(EXPOSITION)),
+                                 (APRES, _section(APRES))])
+    resultat = quatre.depouiller(tmp_path)
+    assert resultat["decisions"][("lu", "expose")] == 1
+    assert resultat["ecartees"]["anterieures"] == 2
+    rendu = quatre.rendre(resultat)
+    assert "3 lue(s), 1 postérieure(s) à l'exposition retenue(s), 2 antérieure(s)" in rendu
+
+
+def test_quand_toutes_les_decisions_precedent_lexposition_le_tableau_le_DIT(tmp_path):
+    _run_lu(tmp_path, decisions=[(AVANT, _section(AVANT))])
+    rendu = quatre.rendre(quatre.depouiller(tmp_path))
+    assert "non concluant" in rendu and "n'a pesé sur rien" in rendu
+    assert "aucune décision postérieure à l'exposition" in rendu
+    assert "1 antérieure(s)" in rendu
+
+
+@pytest.mark.parametrize("manque", ["sim_ts", "timestamp"], ids=["decision", "exposition"])
+def test_une_decision_NON_DATEE_est_ecartee_et_comptee(tmp_path, manque):
+    """Sans instant d'un côté ou de l'autre, la décision ne se place ni avant ni après."""
+    _run_lu(tmp_path, exposition=(manque != "timestamp"),
+            decisions=[(None if manque == "sim_ts" else APRES, _section(APRES))])
+    resultat = quatre.depouiller(tmp_path)
+    assert not resultat["decisions"]
+    assert resultat["ecartees"]["non_datees"] == 1
+    assert "1 non datée(s)" in quatre.rendre(resultat)
+
+
+def test_linstant_dexposition_se_lit_aussi_dans_horodatage_simule(tmp_path):
+    _run_lu(tmp_path, decisions=[(AVANT, _section(AVANT)), (APRES, _section(APRES))])
+    ligne = json.loads((tmp_path / "evenements.jsonl").read_text("utf-8"))
+    del ligne["timestamp"]
+    (tmp_path / "evenements.jsonl").write_text(json.dumps(ligne) + "\n", encoding="utf-8")
+    resultat = quatre.depouiller(tmp_path)
+    assert resultat["decisions"][("lu", "expose")] == 1
+    assert resultat["ecartees"]["anterieures"] == 1
+
+
+def test_un_article_multiligne_se_retrouve_TEL_QUEL_dans_le_contenu_brut(tmp_path):
+    """`json.dumps(messages)` échappe `\\n` et `"` : le début de l'article n'y était jamais
+    retrouvé, et l'appariement exact était structurellement impossible pour la presse."""
+    _run_lu(tmp_path, decisions=[(APRES, _section(APRES, changements=SOUVENIR_LU))])
+    resultat = quatre.depouiller(tmp_path)
+    assert resultat["compte"][("lu", "expose", "changements")] == Counter(exact=1)
+
+
+def test_le_bloc_dun_AUTRE_AGENT_du_meme_lot_nest_pas_impute(tmp_path):
+    """Un prompt de décision groupe plusieurs agents. Les blocs se cherchent dans la section de
+    l'agent, et `agent_id=286920` n'est pas `agent_id=2869201`."""
+    voisin = "2869201"
+    _run_lu(tmp_path, decisions=[
+        (APRES, _section(APRES, agent=voisin, changements=SOUVENIR_LU) + _section(APRES)),
+        (APRES + 60, _section(APRES + 60, agent=voisin, changements=SOUVENIR_LU)),
+    ])
+    resultat = quatre.depouiller(tmp_path)
+    assert resultat["decisions"][("lu", "expose")] == 1
+    assert not resultat["compte"].get(("lu", "expose", "changements"))
+
+
+def test_un_rappel_du_souvenir_SANS_DECISION_LUE_est_signale(tmp_path):
+    """Sur le run c3 (2026-09-24_00_15), le souvenir de la panne n'est servi qu'une fois, le
+    28 mars à 05:42 — et aucun prompt de décision n'est journalisé ce jour-là. Ce rappel ne
+    se compte pas, mais il se dit : sans lui, le tableau contredirait le journal des résultats."""
+    deux_jours_apres = APRES + 2 * 86400
+    _run_lu(tmp_path,
+            souvenirs=[("286920_23", "conversation", SOUVENIR_LU, "2026-03-26T00:00:00")],
+            traces=[(APRES, ["286920_19"]), (deux_jours_apres, ["286920_23"])],
+            decisions=[(APRES, _section(APRES))])
+    resultat = quatre.depouiller(tmp_path)
+    assert resultat["rappels_sans_decision"] == [(LECTEUR, "2026-03-28 05:57", "286920_23")]
+    assert "sans décision lue" in quatre.rendre(resultat)
 
 
 def test_les_deux_scripts_se_lancent_en_ligne_de_commande(tmp_path):

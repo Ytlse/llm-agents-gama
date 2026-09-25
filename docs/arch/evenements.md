@@ -273,11 +273,62 @@ muettes en toutes lettres. Pour le canal `lu`, l'attribution se fait sur `agent_
 prompt : tous les lecteurs d'un même article partagent le même texte, chercher le texte seul ne
 dirait pas qui l'a vu.
 
+**Où se cherche le texte.** Dans le contenu **brut** des messages, bout à bout, blancs réduits
+des deux côtés — jamais dans `json.dumps(messages)`, qui échappe sauts de ligne et guillemets
+et rendait l'appariement exact impossible pour tout article de presse. Un appel de décision
+groupe plusieurs agents (jusqu'à douze) : chaque agent se lit dans **sa** section, de son
+en-tête `--- agent_id=` au suivant, et l'identifiant se compare en entier. Dans la section, un
+bloc s'arrête au bloc suivant ou au premier souvenir rappelé (`- [Thursday, March 19] …`,
+`- [Concept] …`) : sans cette borne, le dernier bloc avalait les souvenirs du rappel.
+
+**Quelles décisions.** Seules celles qui **suivent** l'exposition : `sim_ts` de l'échange
+strictement postérieur au `timestamp` de l'exposition (à défaut, `horodatage_simule` lu en
+UTC). Une décision prise à l'instant même, ou avant, ou qui ne se date pas d'un côté ou de
+l'autre, est écartée et comptée : `Décisions des agents exposés : 15 lue(s), 4 postérieure(s) à
+l'exposition retenue(s), 11 antérieure(s) et 0 non datée(s) écartée(s)`.
+
+**Le rappel.** Il compte une décision si le souvenir **né de l'événement** lui a été servi et
+figure dans ses souvenirs rappelés. Trois conditions, et chacune a coûté un faux positif :
+
+1. *Le souvenir de l'événement*, et non un souvenir quelconque. Il se retrouve dans la mémoire
+   longue de l'agent (`long_term_memory/user_metadata/`) : **exact** quand l'entrée contient le
+   texte — le `lu` dépose `[ PRESSE ] This morning I read in the paper: « … »` tel quel —,
+   **indicatif** (`~`) quand elle est datée du jour de l'exposition ou après et porte deux mots
+   saillants — le vécu, reformulé. Aucun identifiant ne relie l'entrée à l'événement.
+2. *Servi pour cette décision.* La trace (`trace_rappel.jsonl`) est datée de l'heure de départ
+   de l'agent, pas du `sim_ts` du lot : elle s'apparie par l'agent, le jour et l'heure
+   `Departure: HH:MM` de l'en-tête.
+3. *Vu par le modèle.* `servis` liste le top-K (dix) ; le prompt n'en reçoit que les
+   `memoire__episodiques_avec_noyau` plus récents (trois), et ne met en forme que les
+   réflexions et les concepts — une entrée `conversation`, comme celle du `lu`, n'y entre
+   jamais. Le souvenir doit donc aussi figurer dans la zone de rappel du prompt.
+
+La cellule sort `0` — la seule cellule du tableau qui le puisse — quand le rappel est
+**mesuré** : souvenir lié exactement, trace appariée, jamais servi. Sans trace, sans souvenir
+identifié, ou avec un lien seulement indicatif, elle reste vide. Le pied du tableau dit, ligne
+par ligne, combien de décisions étaient mesurables, quel souvenir a été cherché, combien l'ont
+eu au top-K sans le voir, et les rappels du souvenir pour lesquels aucun prompt n'a été
+journalisé (décision servie par le cache).
+
+Sur `2026-09-24_17_50` (article `a09_vent_autan`, lecteur 286920, lu le 26 mars) :
+
+```
+lu      |expose        |        4|              |              |              |             0
+Rappel (lu/expose) : mesurable sur 3 des 4 décision(s) — souvenir(s) de l'événement : 286920_23 (exact, conversation) ; servi au top-K sans atteindre le prompt : 0 ; sans trace de rappel appariée : 1.
+```
+
+⚠ **Ce que le tableau manque encore.** Le 30 et le 31 mars, le concept que la consolidation a
+tiré de l'article — « Toulouse closed its parks and gardens from 6 p.m. due to a yellow storm
+warning and high winds » (`286920_26`) — figure dans « Ce que je sais ». Reformulé, il ne porte
+aucun des six mots saillants retenus : la colonne `connaissances` reste vide, là où la lecture
+des prompts dit 2 décisions sur 4. La cellule est honnête — absence de mesure —, pas complète.
+
 **Ce que le tableau lit.** Les décisions viennent de `llm_exchanges.jsonl`, par
 `lire_echanges()` de `scripts/analysis/memoire/sources.py` : la passerelle y écrit un objet JSON
 **indenté** par échange, et une lecture ligne à ligne ne le décode pas ; seuls comptent les
 échanges signés par ce run (`origine`), le worker écrivant pour tous ses clients. `evenements.jsonl` et
-`trace_rappel.jsonl`, eux, sont de vrais JSONL. Le rôle se lit dans la colonne `ID Personne` de
+`trace_rappel.jsonl`, eux, sont de vrais JSONL ; la mémoire longue se lit par `lire_ltm()` du
+même module. Le rôle se lit dans la colonne `ID Personne` de
 `moves.csv` — `Référence` y porte le nom du run. Sans aucun échange lu, le tableau sort « non
 concluant » et le dit : aucune décision n'a été lue, ce qui n'est pas « aucune décision ne porte
 le texte ». Chaque rendu se termine par ce qu'il a lu : `Lu : 255 échanges, dont 112 décisions`.
