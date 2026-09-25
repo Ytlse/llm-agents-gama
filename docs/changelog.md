@@ -52,6 +52,66 @@ reconstruite pour connaître la nouvelle catégorie `evenement_relais`.
 
 ---
 
+## [2026-09-25] Le banc fonctionnel vérifie qu'une cellule indicative `~` sort vraiment du tableau des quatre voies
+
+Le contrôle A9.5 de la famille A devait prouver que le tableau des quatre voies distingue
+l'appariement exact de l'appariement par mots saillants. Il cherchait un `~` dans le rendu entier,
+et la légende en imprime un à chaque rendu : il passait au vert sans qu'aucune cellule indicative
+ne sorte. Aucune ne sortait d'ailleurs, car le stub des échanges tirait ses « mots saillants »
+d'une règle à lui (mots de plus de quatre lettres), qui ne rend rien sur « Bed bugs on line A. ».
+Le prompt reformulé ne portait donc aucun mot du texte.
+
+Le stub reprend désormais `mots_saillants()` du tableau lui-même et en place deux, le seuil
+d'appariement. Il refuse un texte qui n'en fournit pas autant, au lieu de produire en silence un
+prompt qu'aucun appariement ne peut attraper. A9.5 lit les cellules du dépouillement, et une
+nouvelle vérification A9.6 lit la ligne rendue, colonne par colonne. Le banc passe de 34 à 35
+vérifications.
+
+**Avant :** `lu | expose | 3 | | | 1 |` — `connaissances` vide, A9.5 vert sur la légende
+**Après :** `lu | expose | 3 | | ~1 | 1 |` — A9.5 et A9.6 ne passent que si `connaissances` vaut `~1` et `changements` vaut `1` ; l'ancien stub fait échouer A9.5
+
+---
+
+## [2026-09-25] Le tableau des quatre voies mesure enfin le rappel, et seulement après l'événement
+
+La colonne `rappel` de `tableau_quatre_voies.py` comptait toute décision d'un agent à qui un
+souvenir quelconque avait été servi. Elle ne compte plus que le souvenir **né de l'événement** —
+retrouvé en mémoire longue, tel quel pour la presse, par mots saillants pour le vécu reformulé —
+servi pour **cette** décision et présent dans ses souvenirs rappelés : la trace liste le top-K,
+le modèle n'en voit que les trois plus récents, et jamais une entrée `conversation`. Le tableau
+ne retient plus que les décisions postérieures à l'exposition, et compte celles qu'il écarte. Le
+texte se cherche dans le contenu brut des messages, section par section d'agent, et non plus
+dans leur sérialisation JSON, qui rendait l'article de presse introuvable.
+
+Le rappel est la seule colonne qui puisse sortir `0`, et seulement mesuré : souvenir lié
+exactement, trace appariée, jamais servi. Sans trace ou sans souvenir identifié, la cellule reste
+vide, et le pied du tableau dit pourquoi.
+
+**Avant**, sur `2026-09-24_17_50` :
+
+```
+lu      |expose        |       15|              |              |              |            15
+```
+
+**Après** :
+
+```
+lu      |expose        |        4|              |              |              |             0
+Rappel (lu/expose) : mesurable sur 3 des 4 décision(s) — souvenir(s) de l'événement : 286920_23 (exact, conversation) ; servi au top-K sans atteindre le prompt : 0 ; sans trace de rappel appariée : 1.
+Décisions des agents exposés : 15 lue(s), 4 postérieure(s) à l'exposition retenue(s), 11 antérieure(s) et 0 non datée(s) écartée(s).
+```
+
+Sur le run du § 7.2.1 (`2026-09-21_15_13`), le souvenir de la panne n'est servi à aucune des 140
+décisions mesurables : l'outil confirme « le rappel par similarité n'a jamais ramené le
+souvenir » au lieu de le contredire. Sur le run c3 (`2026-09-24_00_15`), il signale l'unique
+rappel du souvenir, le 28 mars à 05:42, pour lequel aucun prompt de décision n'a été journalisé.
+
+⚠ La colonne `connaissances` reste aveugle au concept que la consolidation tire d'un article :
+reformulé, il ne porte aucun des six mots saillants. Sur `2026-09-24_17_50`, il est dans « Ce que
+je sais » à 2 des 4 décisions, et la cellule reste vide.
+
+---
+
 ## [2026-09-25] Une expérience ne sert plus un trajet en retard : elle attend la décision, ou s'arrête
 
 Le 2026-09-24, dans le bras traité `2026-09-24_17_50` (quatre agents), la décision du départ de

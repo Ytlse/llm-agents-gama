@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import timedelta
+from datetime import timedelta, timezone
 from pathlib import Path
 
 RACINE = Path(__file__).resolve().parents[3]
@@ -219,13 +219,18 @@ def a9_a10_lanalyse(tmp: Path) -> None:
     grille = RACINE / "docs" / "paper" / "sources" / "actualites" / "grille_signes.yaml"
     articles = sorted({c.article for c in charger_grille(grille).cellules})
 
+    # Daté comme `evenements.jsonl` : le tableau des quatre voies ne retient que les décisions
+    # postérieures à l'exposition, et écarte celles qui ne se placent pas.
+    exposition = stubs.ANCRE.replace(tzinfo=timezone.utc)
     runs = []
     for article in articles:
         run = tmp / "runs" / article
         stubs.moves_stub(run / "moves.csv", evenement=article)
         (run / "evenements.jsonl").write_text(
             json.dumps({"evenement_id": article, "canal": "lu", "moment": "reveil",
-                        "person_id": "expose_0", "texte": "Bed bugs on line A."}) + "\n",
+                        "person_id": "expose_0", "texte": "Bed bugs on line A.",
+                        "timestamp": int(exposition.timestamp()),
+                        "horodatage_simule": exposition.strftime("%Y-%m-%dT%H:%M:%S")}) + "\n",
             encoding="utf-8")
         runs.append(run)
 
@@ -246,13 +251,35 @@ def a9_a10_lanalyse(tmp: Path) -> None:
               "sans prompts, le tableau DIT qu'il ne sait pas dire", muet[:120])
 
     stubs.echanges_stub(runs[0] / "llm_exchanges.jsonl", agent="expose_0",
-                        texte="Bed bugs on line A.")
-    rendu = quatre.rendre(quatre.depouiller(runs[0]))
+                        texte="Bed bugs on line A.", exposition=int(exposition.timestamp()))
+    resultat = quatre.depouiller(runs[0])
+    rendu = quatre.rendre(resultat)
     _verifier("A9.4", "habitudes" in rendu and "changements" in rendu,
               "avec des prompts, le tableau nomme les quatre voies", rendu[:160])
-    _verifier("A9.5", "changements" in rendu and "~" in rendu,
-              "la voie exacte et la voie par mots saillants se distinguent dans le rendu",
-              rendu[:300])
+
+    # ⚠ On lit les CELLULES, pas le rendu entier. A9.5 vérifiait `"~" in rendu`, et la légende
+    # (« `~` = appariement par mots saillants… ») l'imprime à chaque rendu : le contrôle restait
+    # vert sans qu'aucune cellule indicative ne sorte — et aucune ne sortait, le stub ne posant
+    # aucun mot saillant dans son prompt reformulé (2026-09-25).
+    compte = resultat["compte"]
+    connaissances = compte[("lu", "expose", "connaissances")]
+    changements = compte[("lu", "expose", "changements")]
+    _verifier("A9.5",
+              connaissances["saillant"] == 1 and connaissances["exact"] == 0
+              and changements["exact"] == 1 and changements["saillant"] == 0,
+              "la voie exacte (« changements ») et la voie par mots saillants "
+              "(« connaissances ») se distinguent dans le dépouillement",
+              f"connaissances={dict(connaissances)}, changements={dict(changements)}")
+
+    # Et le rendu marque la cellule, pas seulement la légende. Colonnes lues par leur nom.
+    tableau = [l.split("|") for l in quatre.rendre(resultat, markdown=True).splitlines()
+               if l.count("|") >= len(quatre.VOIES)]
+    en_tete = [c.strip() for c in tableau[0]]
+    ligne = next((dict(zip(en_tete, (c.strip() for c in l))) for l in tableau[1:]
+                  if [c.strip() for c in l[:2]] == ["lu", "expose"]), {})
+    _verifier("A9.6", ligne.get("connaissances") == "~1" and ligne.get("changements") == "1",
+              "la cellule « connaissances » porte `~1`, la cellule « changements » `1`",
+              str(ligne))
 
     # A10 — le dépouillement de campagne, sur cinq articles.
     rapport = campagne.rendre(campagne.depouiller(

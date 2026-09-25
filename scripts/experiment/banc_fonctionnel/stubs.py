@@ -20,7 +20,7 @@ import csv
 import json
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 RACINE = Path(__file__).resolve().parents[3]
@@ -296,9 +296,14 @@ def point_de_reprise_stub(workdir: Path, jour: int, *, foyer: dict | None = None
 
 
 def echanges_stub(
-    chemin: Path, *, agent: str, texte: str, categorie: str = "itinary_multi_agent",
+    chemin: Path, *, agent: str, texte: str, exposition: int,
+    categorie: str = "itinary_multi_agent",
 ) -> Path:
     """Un `llm_exchanges.jsonl` portant des prompts de DÉCISION, dans la forme réelle.
+
+    `exposition` est l'instant de l'événement, en secondes simulées UTC. Chaque décision est
+    datée après lui (`sim_ts`, `sim_day`), comme les vrais échanges : le tableau écarte une
+    décision non datée, ou antérieure à l'exposition (2026-09-25).
 
     Le tableau des quatre voies lit ce fichier : il y cherche le texte de l'événement, bloc par
     bloc. Sans lui, il sort « non concluant », ce qui est exact — mais il faut alors des
@@ -313,8 +318,22 @@ def echanges_stub(
     ⚠ L'agent se reconnaît à `agent_id=`, que le gabarit de décision pose en tête de chaque
     persona. C'est la seule attribution fiable : tous les lecteurs d'un même article partagent
     le même texte.
+
+    ⚠ Les mots de la reformulation viennent de `mots_saillants()`, IMPORTÉ du tableau. Le stub
+    les tirait de sa propre règle (mots de plus de quatre lettres), qui ne rendait rien sur
+    « Bed bugs on line A. » : le prompt reformulé ne portait aucun mot saillant, aucune cellule
+    `~` ne pouvait sortir, et A9.5 restait vert sur la seule légende (2026-09-25). Il en faut
+    DEUX, le seuil du tableau : un texte qui n'en fournit pas autant est refusé, plutôt que de
+    fabriquer en silence un prompt qu'aucun appariement ne peut attraper.
     """
-    saillants = [m for m in texte.split() if len(m) > 4][:3]
+    from scripts.analysis.tableau_quatre_voies import mots_saillants
+
+    saillants = mots_saillants(texte, combien=2)
+    if len(saillants) < 2:
+        raise ValueError(
+            f"echanges_stub : « {texte} » ne fournit que {len(saillants)} mot(s) saillant(s) "
+            f"({saillants}) ; le tableau en exige deux pour apparier une reformulation."
+        )
     prompts = [
         f"--- agent_id={agent} ---\nMes habitudes\n- souvent la voiture\n"
         f"Ce qui a changé récemment\n- {texte}\n",
@@ -325,10 +344,16 @@ def echanges_stub(
     chemin.parent.mkdir(parents=True, exist_ok=True)
     # Indenté, comme la passerelle : écrit sur une ligne, ce stub laissait passer un lecteur
     # ligne à ligne que le premier run réel faisait tomber (2026-09-25).
+    def _echange(rang: int, prompt: str) -> dict:
+        sim_ts = exposition + 3600 * (rang + 1)
+        return {"category": categorie, "sim_ts": sim_ts,
+                "sim_day": datetime.fromtimestamp(sim_ts, tz=timezone.utc).strftime("%Y-%m-%d"),
+                "messages": [{"role": "user", "content": prompt}]}
+
     chemin.write_text(
         "".join(
-            json.dumps({"category": categorie, "messages": p}, ensure_ascii=False, indent=2) + "\n"
-            for p in prompts
+            json.dumps(_echange(rang, p), ensure_ascii=False, indent=2) + "\n"
+            for rang, p in enumerate(prompts)
         ),
         encoding="utf-8",
     )
