@@ -314,6 +314,34 @@ Quatre gardes contre la boucle : le repère par receveur (jamais deux fois la m�
 `known_beliefs` dans le prompt (c'est là que l'agent reconnaît ce qu'il sait déjà), la
 provenance, et un détecteur de reformulation circulaire qui **alerte sans jamais couper**.
 
+### Le soir, et une fois (2026-09-25)
+
+« Le soir » est une règle et non une façon de parler. Le bloc du foyer n'entre que dans la
+**première consolidation du receveur à partir de `memoire__recit_soir_heure`** (18 h par défaut),
+ou entre minuit et 3 h (la nuit appartient à la veille), et **une seule fois par journée
+simulée**. Une consolidation de jour — il y en a trois par agent et par jour en médiane — ne
+reçoit rien, n'examine rien et ne déplace aucun repère : ce qu'elle aurait entendu attend le
+soir. Un soir sans rien de neuf ne ferme pas la soirée : si un autre membre écrit son bilan à
+21 h, la consolidation suivante du receveur l'entend.
+
+| | Avant | Après |
+|---|---|---|
+| Quand le bloc est servi | à chaque consolidation | à la première consolidation après 18 h, une fois par soir |
+| Forme du récit | une ligne par bilan | **une ligne par membre**, qui cite tous ses bilans depuis la dernière fois, dans l'ordre |
+| Repère de lecture | par receveur, posé à l'heure du receveur | par **receveur et membre**, posé sur le dernier bilan **cité** |
+| Borne | 8 bilans, le reste perdu en silence après l'alarme | 8 membres (`memoire__recit_soir_max`) et 8 bilans par membre (`memoire__recit_soir_max_par_membre`) ; au-delà, les plus anciens sont cités et **le reste attend le soir suivant** |
+| `[ALARME]` de troncature | à chaque troncature | sur front montant, par receveur |
+
+Pourquoi : sur le bras traité `2026-09-24_17_50`, 18 `[ALARME] récit du soir TRONQUÉ`, avec 9 à
+11 bilans disponibles pour une borne de 8. La borne supposait « un bilan par membre et par
+nuit » ; chaque consolidation écrit un bilan, donc trois par jour. Et l'ancien repère, posé à
+l'heure du receveur, avalait un bilan daté d'avant mais arrivé après dans la file EDF.
+
+Le bilan du run (`[foyer] bilan du run`) compte aussi les consolidations de jour sans bloc
+(`hors_soir`) et les secondes consolidations du même soir (`deja_servi_ce_soir`) ; la soirée
+servie est persistée au point de reprise. Un point de reprise d'avant le 2026-09-25 se relit :
+son repère par receveur seul sert de repli.
+
 ### Jouer une expérience de foyers depuis l'onglet 🧠 Expériences Mémoire
 
 L'onglet (ticket 109) et `make experience-memoire-lancer EXP=…` acceptent une **population

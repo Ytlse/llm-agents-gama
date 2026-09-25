@@ -382,9 +382,12 @@ phases** — donc aucune borne dérivée du paramètre dont on mesure l'effet. S
 sortie du contexte. C'est la figure du chapitre 7.
 
 `scripts/analysis/ch7_choc_figures.py` la trace, avec les phases calées sur le choc déclaré et la
-sortie calculée. ⚠ `modal_variation_rate.py`, qui génère les cinq figures automatiques du run,
-code ses quatre phases **en dur sur un choc aux jours 8-9** : ses graphiques sont inutilisables
-tant qu'il n'est pas paramétré.
+sortie calculée. `modal_variation_rate.py`, qui génère les cinq figures automatiques du run, lit ses phases
+dans le run depuis le 2026-09-25 : avant / jour(s) de l'événement / après, **foyer par foyer**
+depuis `evenements.jsonl` et la population, les agents hors de tout foyer exposé à part, et
+« sans événement » pour un bras témoin. Titres et libellé viennent de `evenement.yaml` (ou
+`choc.yaml`). Jusque-là, quatre phases étaient codées en dur sur un choc aux jours 8-9. Il ne
+découpe toujours pas selon la sortie calculée du contexte, que `ch7_choc_figures.py` trace.
 
 ### Arrêt précoce sur l'extinction journalisée
 

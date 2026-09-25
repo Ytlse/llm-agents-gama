@@ -43,6 +43,13 @@ FICHIER_DUREES = "duree_de_vie_par_type.csv"
 # Ticket 100 — un seul fichier pour les deux régimes, vécu et lu. Le nom du ticket 079
 # (`choc_par_jour.csv`) ne décrivait plus que la moitié de ce qu'il porte.
 FICHIER_CHOC = "evenement_par_jour.csv"
+# Analyse du 2026-09-25 — le souvenir de l'événement, jour après jour, pour tout le foyer.
+FICHIER_SOUVENIR = "souvenir_evenement_par_jour.csv"
+# Photographie de la mémoire longue au moment du calcul : HORS de `TABLES`, donc hors de la
+# vérification de continuité — un concept fusionné plus tard en sort, et ce n'est pas un trou.
+FICHIER_DERIVES = "souvenirs_derives.csv"
+COLONNES_DERIVES = ("evenement_id", "person_id", "role", "doc_id", "type_souvenir",
+                    "ecrit_le", "appariement", "mots_retrouves", "enonce")
 
 
 @dataclass(frozen=True)
@@ -95,6 +102,14 @@ TABLES = {
          "minutes_injectees", "incidents_reseau", "correspondances_ratees",
          "souvenir_choc_servi", "decisions_avec_souvenir_choc", "appariement"),
         ("jour_simule", "person_id", "choc_id"),
+    ),
+    "souvenirs": Table(
+        FICHIER_SOUVENIR,
+        ("jour_simule", "date_simulee", "person_id", "evenement_id", "role", "informe",
+         "jours_depuis_j0", "decisions", "prompts", "decisions_sans_prompt",
+         "prompts_avec_souvenir", "souvenir_texte", "souvenir_mots", "via_connaissances",
+         "via_changements", "via_rappel"),
+        ("jour_simule", "person_id", "evenement_id"),
     ),
 }
 
@@ -163,6 +178,8 @@ def _lignes(mesures: Mesures, nom: str) -> list[dict[str, Any]]:
              "etat_lu_dans": l.etat_lu_dans}
             for l in mesures.durees_de_vie
         ]
+    if nom == "souvenirs":
+        return [{c: getattr(l, c) for c in l.__dataclass_fields__} for l in mesures.souvenirs]
     return [
         {"jour_simule": l.jour_simule, "date_simulee": l.date_simulee,
          "person_id": l.person_id, "choc_id": l.choc_id, "canal": l.canal,
@@ -214,10 +231,23 @@ def ecrire(mesures: Mesures, repertoire: Path | str | None = None) -> dict[str, 
     """Écrit les cinq CSV et rend leurs chemins, indexés par nom de table."""
     racine = Path(repertoire) if repertoire else Path(mesures.chemin_run) / REPERTOIRE
     racine.mkdir(parents=True, exist_ok=True)
-    return {
+    chemins = {
         nom: _ecrire_table(racine, table, _lignes(mesures, nom))
         for nom, table in TABLES.items()
     }
+    chemins["souvenirs_derives"] = _ecrire_derives(racine, mesures.souvenirs_derives)
+    return chemins
+
+
+def _ecrire_derives(racine: Path, derives: Sequence[Any]) -> Path:
+    """Réécrit en entier à chaque calcul : c'est une photographie, pas un historique."""
+    chemin = racine / FICHIER_DERIVES
+    with chemin.open("w", newline="", encoding="utf-8") as flux:
+        ecrivain = csv.writer(flux)
+        ecrivain.writerow(COLONNES_DERIVES)
+        for d in derives:
+            ecrivain.writerow([_valeur(getattr(d, c)) for c in COLONNES_DERIVES])
+    return chemin
 
 
 def mesurer_et_ecrire(chemin_run: Path | str,

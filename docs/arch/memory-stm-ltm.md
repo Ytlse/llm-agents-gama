@@ -326,6 +326,16 @@ Le journal distingue les deux voies à chaque cycle :
 [timestamp: …] STM reflection for 312 agents (287 par le seuil de 10 entrées, 25 par le plancher journalier)
 ```
 
+**Ce que le foyer raconte n'entre qu'à la consolidation du soir** (2026-09-25). Les trois voies
+produisent plusieurs consolidations par jour — trois par agent en médiane, sept au plus sur le
+bras `2026-09-24_17_50` — et chacune écrit un bilan (`REFLECTION`). Le bloc « Tonight at home »
+(`llm/foyer.py`, derrière `memoire__partage_foyer_enabled`) n'est servi qu'à la première
+consolidation du receveur à partir de `memoire__recit_soir_heure` (18 h), ou avant 3 h, une fois
+par journée simulée ; il cite, membre par membre, tous les bilans écrits depuis la dernière
+fois. Le plancher de 22 h garantit qu'un receveur dont le tampon n'est pas vide a son soir ;
+sans lui, le récit attend le soir suivant, sans perte. Détail et bornes :
+`docs/arch/evenements.md`, « Le soir, et une fois ».
+
 ### Mémoïsation des appels de réflexion (ticket 012)
 
 Avant l'appel LLM, `reflect_on_short_term_memory` (et `reflect_on_long_term_memory`)
@@ -1201,6 +1211,8 @@ documentation.
 | `stm_reflection_daily_floor_enabled` | true | Plancher journalier de consolidation |
 | `stm_reflection_daily_floor_hour` | 22 | Heure murale simulée du plancher. 22 h laisse la nuit simulée au drainage EDF. |
 | `stm_reflection_min_tpm` | 30 000 | Débit minimal en jetons par minute exigé d'un fournisseur pour recevoir une réflexion. Écarte les instances trop lentes d'une tâche à contexte long. |
+| `memoire__recit_soir_heure` | 18 | Heure simulée à partir de laquelle une consolidation reçoit le récit du foyer (une fois par soir ; avant 3 h compte pour la veille) |
+| `memoire__recit_soir_max` / `memoire__recit_soir_max_par_membre` | 8 / 8 | Membres racontés par soir, et bilans cités par membre ; au-delà, le reste attend le soir suivant |
 | `long_term_reflect_interval` | 24 h | **Hérité, non utilisé** tant que `stm_reflection_min_entries > 0`. Ancien déclenchement temporel de la réflexion, antérieur au seuil volumétrique. |
 
 ### Observation (ticket 077)

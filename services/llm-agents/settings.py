@@ -696,10 +696,21 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     # par nuit ; la borne est là pour qu'un emballement ne passe pas inaperçu dans un prompt
     # dont le ticket 077 a mesuré qu'il stagne déjà vers 2 100 jetons.
     memoire__partage_foyer_max_bloc: int = 12
-    # Borne du récit du soir (Q1). Un bilan par autre membre et par nuit : dans le plus grand
-    # ménage de la cohorte v6 (sept membres), six bilans. La borne ne devrait jamais mordre —
-    # si elle mord, une [ALARME] le dit, parce que cela signale un repère de lecture cassé.
+    # Borne du récit du soir (Q1), en MEMBRES racontés : une ligne par autre membre. Dans le
+    # plus grand ménage de la cohorte v6 (sept membres), six lignes. Un membre au-delà de la
+    # borne n'est pas perdu : il est raconté le soir suivant.
     memoire__recit_soir_max: int = 8
+    # Le récit se fait LE SOIR (analyse du 2026-09-25) : à la première consolidation du
+    # receveur à partir de cette heure simulée, ou avant 3 h (la nuit appartient à la veille),
+    # et une seule fois par journée simulée. Avant ce réglage, le bloc était servi à chaque
+    # consolidation — trois par agent et par jour en médiane — et l'article dit « in the
+    # evening ». Sur le bras traité du 2026-09-24_17_50, 11 journées vécues sur 12 avaient une
+    # consolidation à 18 h ou après ; celle qui n'en a pas reporte son récit au lendemain.
+    memoire__recit_soir_heure: int = 18
+    # Bilans cités par membre et par soir. Chaque consolidation écrit un bilan : un membre en
+    # écrit trois par jour en médiane, et six après un soir manqué. Au-delà, les plus anciens
+    # sont cités et le reste attend le soir suivant, avec une [ALARME] sur front montant.
+    memoire__recit_soir_max_par_membre: int = 8
 
     # ── D7, 2026-09-22 : la gravité est celle de l'agent, seule ─────────────────────────
     # Le plancher `max(estimée, mesurée)` est levé. Rien ne corrige plus un jugement aberrant,

@@ -13,7 +13,8 @@ Quatre familles, et la première conditionne la lecture des autres :
    aucune raison de basculer ensemble, et les agréger masquerait le changement cherché.
 3. **Mémoire** : vivier de rappel, opérations de concept, durée de vie des souvenirs.
 4. **Choc** : exposés, minutes injectées, et si le souvenir du choc est SERVI à la décision — un
-   souvenir écrit mais jamais rappelé ne change rien à un comportement.
+   souvenir écrit mais jamais rappelé ne change rien à un comportement. Le suivi du souvenir
+   dans le foyer, jour après jour, vit dans `souvenir.py` (analyse du 2026-09-25).
 
 FLUX ET ÉTAT, ET POURQUOI LA DISTINCTION COMPTE
 -----------------------------------------------
@@ -240,6 +241,8 @@ class Mesures:
     memoire: list[LigneMemoire] = field(default_factory=list)
     durees_de_vie: list[LigneDureeDeVie] = field(default_factory=list)
     chocs: list[LigneChoc] = field(default_factory=list)
+    souvenirs: list = field(default_factory=list)
+    souvenirs_derives: list = field(default_factory=list)
     trajets_rejoues: int = 0
     rappels_rejoues: int = 0
     operations_tracees: bool = False
@@ -530,36 +533,52 @@ def _etat_memoire(dossier: Path) -> dict[str, list]:
 # ── Choc ──────────────────────────────────────────────────────────────────────────────
 
 
-def chocs(chemin_run: Path, journees: Sequence[Journee]) -> list[LigneChoc]:
-    """Exposés, minutes injectées, et si le souvenir du choc a été SERVI à une décision.
+def chocs(chemin_run: Path, journees: Sequence[Journee],
+          decisions_par_jour: dict[tuple[str, str], int] | None = None) -> list[LigneChoc]:
+    """Exposés et minutes injectées, par jour d'exposition. Voir `chocs_et_souvenirs`."""
+    return chocs_et_souvenirs(chemin_run, journees, decisions_par_jour)[0]
 
-    ⚠ **Rien ne relie un choc au souvenir qu'il produit, et l'appariement par texte ÉCHOUE.**
-    Mesuré le 2026-09-16 sur le run `2026-09-16_15_58` : le vécu injecté — « The engine made a
-    grinding noise and the car stalled twice » — n'est jamais recopié tel quel. Il passe en
-    mémoire courte, puis la réflexion le REFORMULE : « my car started making a terrible grinding
-    noise ». Chercher le texte littéral ne rend donc aucun identifiant, et
-    `scripts/analysis/memoire/choc.py` a le même angle mort.
 
-    Conséquence sur ce que cette fonction écrit : quand aucun souvenir n'a pu être apparié, la
-    colonne vaut **vide**, jamais `faux`. Écrire « non servi » ferait lire « le souvenir du choc
-    n'a jamais pesé sur une décision » là où la vérité est « on ne sait pas le dire » — et c'est
-    précisément la conclusion que le ticket cherche à établir. Un lien explicite posé à la source
-    est nécessaire ; il est signalé, pas bricolé ici.
+def chocs_et_souvenirs(
+    chemin_run: Path, journees: Sequence[Journee],
+    decisions_par_jour: dict[tuple[str, str], int] | None = None,
+) -> tuple[list[LigneChoc], Any]:
+    """Les lignes d'`evenement_par_jour`, et le suivi du souvenir dans le foyer (`souvenir.py`).
+
+    ⚠ **« Servi » se lit dans le prompt, plus dans `trace_rappel`** (2026-09-25). La trace de
+    rappel compte ce que la recherche a remonté, pas ce que le modèle a lu : le noyau n'y figure
+    pas, et quand il est présent seules deux ou trois épisodiques survivent. Et le lien cherché
+    était le texte littéral de l'injection, que la consolidation reformule toujours — le
+    souvenir de l'article a09 n'était donc jamais trouvé, et six prompts qui le portaient
+    donnaient 0.
+
+    Les deux colonnes de souvenir décrivent la JOURNÉE de l'exposition — ce qui garde une ligne
+    d'un jour passé immobile quand le run avance. Ce qui se passe ensuite, jour après jour et
+    pour tout le foyer, est dans `souvenir_evenement_par_jour.csv`.
+
+    `appariement` dit comment le souvenir a été trouvé dans les prompts du jour :
+    `texte` (l'article mot pour mot), `mots` (une reformulation), `aucune trace` (des prompts,
+    aucun ne le porte : 0 mesuré), `sans prompt` (aucun prompt ce jour-là, ou pas de journal
+    d'échanges : on ne sait pas, et la cellule reste vide).
     """
+    from scripts.analysis.mesures import souvenir
+
     # Ticket 100 — `evenements.jsonl` est le nom neuf ; `chocs.jsonl` reste lu pour les runs
     # archivés, et c'est là que vivent les chiffres publiés du § 7.2. On lit le premier qui
     # existe, jamais les deux : dans un run neuf, le second est un lien vers le premier.
-    evenements = _jsonl(Path(chemin_run) / "evenements.jsonl")
-    if not evenements:
-        evenements = _jsonl(Path(chemin_run) / "chocs.jsonl")
+    tous = _jsonl(Path(chemin_run) / "evenements.jsonl")
+    if not tous:
+        tous = _jsonl(Path(chemin_run) / "chocs.jsonl")
     # Ticket 111 : la ligne d'un membre informé (`origine: entendu`) n'est pas une exposition.
     # Ce qu'il a reçu se lit dans `relais_foyer.jsonl` et par le sous-rôle du co-résident.
-    evenements = [e for e in evenements if e.get("origine") != "entendu"]
+    evenements = [e for e in tous if e.get("origine") != "entendu"]
     if not evenements:
-        return []
+        return [], None
     index = {j.date: j for j in journees}
-    docs_du_choc = _docs_du_choc(Path(chemin_run), evenements)
-    servis = _jours_ou_le_choc_est_servi(Path(chemin_run), docs_du_choc)
+    suivi = souvenir.mesurer(
+        Path(chemin_run), tous, journees, decisions_par_jour or {},
+        lambda e: journee_de_l_exposition(e, journees, bavard=False),
+    )
 
     groupes: dict[tuple[str, str, str], list[dict]] = {}
     for evenement in evenements:
@@ -580,8 +599,11 @@ def chocs(chemin_run: Path, journees: Sequence[Journee]) -> list[LigneChoc]:
         indice = index[date].index if date in index else _indice_calendaire(date, journees)
         if indice is None:
             continue
-        appariable = bool(docs_du_choc.get(agent))
-        decisions = servis.get((date, agent), 0) if appariable else None
+        prompts, avec, trouve = suivi.du_jour.get((date, agent, choc_id), (0, 0, ""))
+        if not suivi.journal_present or not prompts:
+            decisions, appariement = None, "sans prompt"
+        else:
+            decisions, appariement = avec, (trouve or "aucune trace")
         lignes.append(LigneChoc(
             jour_simule=indice,
             date_simulee=date,
@@ -597,12 +619,13 @@ def chocs(chemin_run: Path, journees: Sequence[Journee]) -> list[LigneChoc]:
             correspondances_ratees=sum(1 for e in liste if e.get("correspondance_ratee")),
             souvenir_choc_servi=(decisions > 0) if decisions is not None else None,
             decisions_avec_souvenir_choc=decisions,
-            appariement="texte" if appariable else "aucun lien",
+            appariement=appariement,
         ))
-    return lignes
+    return lignes, suivi
 
 
-def journee_de_l_exposition(evenement: dict, journees: Sequence[Journee]) -> str | None:
+def journee_de_l_exposition(evenement: dict, journees: Sequence[Journee],
+                             bavard: bool = True) -> str | None:
     """Journée simulée d'une exposition, selon le moment où l'événement entre.
 
     ⚠ **Un article lu au réveil appartient au jour où il est lu.** Le registre l'injecte au
@@ -622,7 +645,7 @@ def journee_de_l_exposition(evenement: dict, journees: Sequence[Journee]) -> str
     date_lue = journee_du_moment(horodatage[:10])
     jour_run = evenement.get("jour_run")
     indice = _indice_calendaire(date_lue, journees) if date_lue else None
-    if isinstance(jour_run, int) and indice is not None and indice != jour_run:
+    if bavard and isinstance(jour_run, int) and indice is not None and indice != jour_run:
         print(
             f"  ⚠ exposition de {evenement.get('person_id')} datée du {date_lue} (jour {indice} "
             f"des mesures) mais `jour_run: {jour_run}` dans evenements.jsonl — la première "
@@ -640,45 +663,6 @@ def _indice_calendaire(date_iso: str, journees: Sequence[Journee]) -> int | None
         return (date.fromisoformat(date_iso) - origine).days + 1
     except ValueError:
         return None
-
-
-def _docs_du_choc(chemin_run: Path, evenements: Sequence[dict]) -> dict[str, set[str]]:
-    """Agent → identifiants des souvenirs portant le vécu d'un choc."""
-    textes: dict[str, set[str]] = {}
-    for evenement in evenements:
-        vecu = str(evenement.get("vecu") or "").strip()
-        agent = str(evenement.get("person_id") or "")
-        if vecu and agent:
-            textes.setdefault(agent, set()).add(vecu[:60])
-    if not textes:
-        return {}
-    entrees, _ = lire_ltm(chemin_run)
-    docs: dict[str, set[str]] = {}
-    for agent, liste in entrees.items():
-        attendus = textes.get(agent)
-        if not attendus:
-            continue
-        for entree in liste:
-            if entree.doc_id and any(texte in entree.contenu for texte in attendus):
-                docs.setdefault(agent, set()).add(entree.doc_id)
-    return docs
-
-
-def _jours_ou_le_choc_est_servi(chemin_run: Path,
-                                docs: dict[str, set[str]]) -> dict[tuple[str, str], int]:
-    if not docs:
-        return {}
-    servis: Counter = Counter()
-    lignes, _rejeu = rappels_sans_rejeu(_jsonl(Path(chemin_run) / "trace_rappel.jsonl"))
-    for ligne in lignes:
-        agent = str(ligne.get("person_id") or "")
-        attendus = docs.get(agent)
-        journee = journee_du_moment(str(ligne.get("sim_day") or ""))
-        if not (attendus and journee):
-            continue
-        if any((s.get("doc_id") in attendus) for s in (ligne.get("servis") or [])):
-            servis[(journee, agent)] += 1
-    return dict(servis)
 
 
 # ── Assemblage ────────────────────────────────────────────────────────────────────────
@@ -709,6 +693,11 @@ def calculer(chemin_run: Path | str) -> Mesures:
     points = _points_de_reprise(chemin_run)
     lignes_memoire, durees, tracees, rappels_rejoues = memoire(
         chemin_run, journees, agents, points)
+    decisions_par_jour = {
+        cle: sum(1 for t in liste if (t.options_presentees or 0) >= 2)
+        for cle, liste in par_jour.items()
+    }
+    lignes_chocs, suivi = chocs_et_souvenirs(chemin_run, journees, decisions_par_jour)
     return Mesures(
         chemin_run=chemin_run,
         journees=journees,
@@ -716,7 +705,9 @@ def calculer(chemin_run: Path | str) -> Mesures:
         habitudes=habitudes(par_jour, journees),
         memoire=lignes_memoire,
         durees_de_vie=durees,
-        chocs=chocs(chemin_run, journees),
+        chocs=lignes_chocs,
+        souvenirs=suivi.lignes if suivi else [],
+        souvenirs_derives=suivi.derives if suivi else [],
         trajets_rejoues=rejeu,
         rappels_rejoues=rappels_rejoues,
         operations_tracees=tracees,

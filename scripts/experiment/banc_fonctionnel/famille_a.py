@@ -56,16 +56,19 @@ def a2_a4_le_foyer(tmp: Path) -> None:
         foyer.initialiser(population)
         ltm = stubs.MemoireLongueStub()
         a, b = population[0], population[1]  # même foyer 605813
+        # Le soir = 21 h (ANCRE est à 5 h, donc `hours=16`). Le foyer ne parle plus qu'à la
+        # première consolidation après `memoire__recit_soir_heure` (2026-09-25) : l'ancien
+        # `hours=22` tombait à 3 h du matin — la frontière de journée, pas un soir.
 
         # NUIT 1 — A a écrit son bilan, B l'entend.
         ltm.ajouter(stubs.reflexion_stub(
             a.person_id, "Line A was packed again this morning; I gave up and walked.", 1))
-        bloc1 = foyer.bloc_du_soir(ltm, b, stubs.ANCRE + timedelta(days=1, hours=22))
+        bloc1 = foyer.bloc_du_soir(ltm, b, stubs.ANCRE + timedelta(days=1, hours=16))
         _verifier("A4.1", "Line A was packed" in bloc1,
                   "le bilan de A est CITÉ dans le bloc de B", bloc1[:80])
 
         # NUIT 2 — rien de neuf chez A : B ne doit rien réentendre.
-        bloc2 = foyer.bloc_du_soir(ltm, b, stubs.ANCRE + timedelta(days=2, hours=22))
+        bloc2 = foyer.bloc_du_soir(ltm, b, stubs.ANCRE + timedelta(days=2, hours=16))
         _verifier("A4.2", bloc2 == "",
                   "un bilan déjà entendu ne repart pas (G1)", bloc2[:80])
 
@@ -75,7 +78,7 @@ def a2_a4_le_foyer(tmp: Path) -> None:
         ltm.ajouter(stubs.concept_stub(
             a.person_id, "The ring road is hopeless", 3, mode="car",
             observations=9, origine="entendu"))
-        bloc3 = foyer.bloc_du_soir(ltm, b, stubs.ANCRE + timedelta(days=3, hours=22))
+        bloc3 = foyer.bloc_du_soir(ltm, b, stubs.ANCRE + timedelta(days=3, hours=16))
         _verifier("A4.3", "Line A is packed before 9am" in bloc3,
                   "une croyance ancrée et vécue traverse", bloc3[:120])
         _verifier("A4.4", "ring road" not in bloc3,
@@ -87,7 +90,7 @@ def a2_a4_le_foyer(tmp: Path) -> None:
         foyer.reinitialiser()
         foyer.initialiser(population)
         foyer.charger_etat(sauvegarde)
-        bloc4 = foyer.bloc_du_soir(ltm, b, stubs.ANCRE + timedelta(days=4, hours=22))
+        bloc4 = foyer.bloc_du_soir(ltm, b, stubs.ANCRE + timedelta(days=4, hours=16))
         _verifier("A5.1", bloc4 == "",
                   "après une reprise, rien de déjà entendu ne repart", bloc4[:80])
 

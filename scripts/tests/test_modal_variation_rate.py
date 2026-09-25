@@ -20,6 +20,15 @@ from scripts.analysis.modal_variation_rate import (
     compute_activity_summary,
     compute_transition_matrix,
     extract_chosen_route,
+    PHASE_APRES,
+    PHASE_AVANT,
+    PHASE_EVENEMENT,
+    PHASE_HORS,
+    PHASE_SANS,
+    fenetres_du_run,
+    generate_markdown_report,
+    phase_de,
+    _bits,
 )
 
 
@@ -141,7 +150,7 @@ def test_summaries_and_matrix():
         TransitionObservation(
             person_id="1", activite_id="a1", motif="Travail",
             jour_prev=1, jour_curr=2, date_prev="2026-03-16", date_curr="2026-03-17",
-            phase_curr="1. Pré-choc (J1-7)",
+            phase_curr=PHASE_AVANT,
             mode_prev="Voiture Privée", mode_curr="Vélo",
             route_prev="r1", route_curr="r2",
             modal_change=True, route_change=True, day_gap=1, is_consecutive_day=True,
@@ -150,7 +159,7 @@ def test_summaries_and_matrix():
         TransitionObservation(
             person_id="1", activite_id="a1", motif="Travail",
             jour_prev=2, jour_curr=3, date_prev="2026-03-17", date_curr="2026-03-18",
-            phase_curr="1. Pré-choc (J1-7)",
+            phase_curr=PHASE_AVANT,
             mode_prev="Vélo", mode_curr="Vélo",
             route_prev="r2", route_curr="r2",
             modal_change=False, route_change=False, day_gap=1, is_consecutive_day=True,
@@ -170,3 +179,94 @@ def test_summaries_and_matrix():
     mat = compute_transition_matrix(dummy_trans)
     assert mat.loc["Vélo", "Vélo"] == 1.0
     assert mat.loc["Voiture Privée", "Vélo"] == 1.0
+
+
+
+# ── Les phases viennent du run (analyse du 2026-09-25) ────────────────────────────────
+# Le bras traité 2026-09-24_17_50 — article a09 lu au jour 11 par le foyer 133048 — sortait
+# sous le titre « Choc d'avarie moteur J8-9 », découpé en quatre phases figées sur un autre
+# protocole, avec une section 2 dont les chiffres venaient d'un run ancien.
+import json
+
+
+def _run_lu(tmp_path, *, evenement=True):
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "population_3.json").write_text(json.dumps([
+        {"person_id": "1", "household": {"id": "h1"}},
+        {"person_id": "2", "household": {"id": "h1"}},
+        {"person_id": "3", "household": {"id": "h2"}},
+    ]), encoding="utf-8")
+    if evenement:
+        (run / "evenements.jsonl").write_text(json.dumps({
+            "person_id": "1", "horodatage_simule": "2026-03-26T00:00:00", "choc_id": "a09",
+            "evenement_id": "a09", "canal": "lu", "moment": "reveil", "jour_run": 11,
+            "vecu": "Parks closed.",
+        }) + "\n", encoding="utf-8")
+        (run / "evenement.yaml").write_text(
+            "evenement: a09_vent_autan\nlibelle: Autan gales, parks closed\n", encoding="utf-8")
+    return run
+
+
+def test_les_phases_sont_celles_du_foyer_expose(tmp_path):
+    cal = fenetres_du_run(_run_lu(tmp_path))
+    # L'article est lu au réveil du 26 : la frontière de 3 h ne le recule pas au 25.
+    assert phase_de("1", "2026-03-25", cal) == PHASE_AVANT
+    assert phase_de("1", "2026-03-26", cal) == PHASE_EVENEMENT
+    assert phase_de("1", "2026-03-27", cal) == PHASE_APRES
+    # Le co-résident partage la fenêtre du lecteur ; l'autre foyer est à part.
+    assert phase_de("2", "2026-03-27", cal) == PHASE_APRES
+    assert cal["fenetres"]["2"].role == "co_resident"
+    assert phase_de("3", "2026-03-27", cal) == PHASE_HORS
+    assert cal["libelle"] == "a09_vent_autan — Autan gales, parks closed"
+
+
+def test_un_bras_temoin_est_sans_evenement(tmp_path):
+    cal = fenetres_du_run(_run_lu(tmp_path, evenement=False))
+    assert phase_de("1", "2026-03-26", cal) == PHASE_SANS
+
+
+def test_le_rapport_ne_porte_plus_de_chiffres_ecrits_davance(tmp_path):
+    cal = fenetres_du_run(_run_lu(tmp_path))
+    activite = pd.DataFrame([{
+        "motif": "Travail", "transitions_total": 12, "taux_variation_global": 0.25,
+        "stabilite_globale": 0.75, "taux_variation_itineraire": 0.3,
+        "taux_var_avant": 0.2, "taux_var_apres": None, "rigidite_relative": "Modérée",
+    }])
+    entropie = pd.DataFrame([{
+        "persona_id": "1", "exposition": "foyer exposé", "trajets_total": 20,
+        "modes_distincts": 1, "entropie_modale_bits": -0.0, "equitabilite_pielou": -0.0,
+        "entropie_avant": 0.0, "entropie_evenement": None, "entropie_apres": None,
+    }])
+    texte = generate_markdown_report(pd.DataFrame(), activite, entropie, tmp_path, None,
+                                     cal).read_text(encoding="utf-8")
+    for fige in ("J8-9", "Choc C6", "35.7%", "stabilité 100%", "incident moteur"):
+        assert fige not in texte
+    assert "a09_vent_autan — Autan gales, parks closed" in texte
+    assert "foyer h1 : 2026-03-26" in texte
+    assert "`Travail` — 75.0%" in texte
+    assert "-0.000" not in texte
+
+
+def test_zero_bit_negatif_s_ecrit_zero():
+    assert _bits(-0.0) == "0.000"
+    assert _bits(None) == "—"
+
+
+def test_les_tables_vont_dans_le_run_analyse_et_pas_dans_current(tmp_path, monkeypatch):
+    run = _run_lu(tmp_path)
+    colonnes = ["ID Personne", "ID Activité", "Heure de départ", "Mode de transport Choisi",
+                "Motifs de déplacement", "Méthode de sélection", "Options (descriptif)",
+                "Index retenu"]
+    lignes = [",".join(colonnes)]
+    for jour, mode in ((24, "Marche"), (25, "Vélo"), (26, "Marche"), (27, "Vélo")):
+        lignes.append(f"1,a1,2026-03-{jour} 08:00:00,{mode},work,LLM,,")
+    (run / "moves.csv").write_text("\n".join(lignes) + "\n", encoding="utf-8")
+    from scripts.analysis import modal_variation_rate as mvr
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["mvr", str(run / "moves.csv"), "-o",
+                                      str(run / "reports"), "--no-plots"])
+    mvr.main()
+    assert (run / "mesures" / "taux_variation_par_phase.csv").is_file()
+    assert not (tmp_path / "experiments").exists()

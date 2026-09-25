@@ -61,7 +61,7 @@ modeste : une population retouchée à la main cesse de se réclamer d'un critè
 
 ## 3. Ce qui est mesuré, et où ça s'écrit
 
-`make mesures RUN=<run>` écrit cinq CSV dans `<run>/mesures/`. Pendant un run, le contrôleur les
+`make mesures RUN=<run>` écrit sept CSV dans `<run>/mesures/`. Pendant un run, le contrôleur les
 réécrit **à chaque point du jour**, à 3 h simulées.
 
 | Fichier | Clé | Ce qu'il porte |
@@ -70,7 +70,9 @@ réécrit **à chaque point du jour**, à 3 h simulées.
 | `habitudes_par_activite.csv` | jour, agent, **activité** | mode, mode de la veille, reprise, mode habituel, conformité |
 | `memoire_par_jour.csv` | jour, agent | vivier de rappel, souvenirs servis, **opérations de concept**, entrées |
 | `duree_de_vie_par_type.csv` | jour, agent, type | durée de vie médiane, en jours |
-| `evenement_par_jour.csv` | jour, agent, événement | **canal** (`vecu` \| `lu`), expositions, minutes injectées, souvenir servi |
+| `evenement_par_jour.csv` | jour, agent, événement | **canal** (`vecu` \| `lu`), expositions, minutes injectées, souvenir servi **le jour de l'exposition** |
+| `souvenir_evenement_par_jour.csv` | jour, agent, événement | pour **tout le foyer** exposé, de J0 à la fin : prompts, décisions sans prompt, prompts qui portent l'événement, **par quelle voie** |
+| `souvenirs_derives.csv` | — (photographie) | les documents de la mémoire longue qui portent l'événement, avec les mots retrouvés |
 
 L'habitude est mesurée **par activité** : le trajet domicile-travail et le trajet de loisir n'ont
 aucune raison de basculer ensemble, et les agréger masquerait le changement cherché. Deux mesures,
@@ -88,13 +90,60 @@ observations de cette activité) voit une dérive lente.
 > champ — écrire `vecu` là où rien n'a été mesuré en ferait une mesure. Jusqu'au 2026-09-25,
 > elle était vide **partout** : l'en-tête la portait, la ligne ne l'écrivait pas.
 >
-> ⚠ **`souvenir_choc_servi` et `decisions_avec_souvenir_choc` ne disent pas encore ce que
-> leur nom annonce.** Elles cherchent le texte brut de l'événement dans la mémoire longue, ne
-> comptent que les décisions du jour d'exposition, et ne regardent que l'exposé. Sur
-> `2026-09-24_17_50`, elles valent 0 alors que six décisions ultérieures du foyer portent
-> l'article ou une croyance qui en dérive. La refonte attend les runs de la prochaine campagne ;
-> d'ici là, ne pas les citer.
+> **« Servi » se lit dans le prompt, depuis le 2026-09-25.** Avant, `souvenir_choc_servi` et
+> `decisions_avec_souvenir_choc` cherchaient le texte brut de l'événement dans la mémoire longue
+> (la consolidation le reformule toujours), lisaient « servi » dans `trace_rappel` (qui ne voit
+> pas le noyau, et garde plus d'épisodiques que le prompt) et ne regardaient que le jour
+> d'exposition. Sur `2026-09-24_17_50`, elles valaient 0 alors que six prompts du foyer portaient
+> l'article. Elles se lisent désormais ainsi :
 >
+> - `appariement` = `texte` (l'article mot pour mot dans la section History d'un prompt du
+>   jour), `mots` (une reformulation), `aucune trace` (des prompts, aucun ne le porte : **0
+>   mesuré**), `sans prompt` (aucun prompt ce jour-là, ou pas de `llm_exchanges.jsonl` : cellule
+>   **vide**) ;
+> - elles ne couvrent **que la journée de l'exposition**, pour qu'une ligne d'un jour passé ne
+>   bouge plus quand le run avance. La suite est dans `souvenir_evenement_par_jour.csv`.
+>
+> Une chose change donc pour les runs archivés du 079 : la colonne `appariement` y passait
+> `aucun lien` avec des cellules vides ; elle y dit maintenant ce que les prompts montrent.
+
+### Le souvenir de l'événement, jour après jour
+
+`souvenir_evenement_par_jour.csv` suit chaque membre du foyer exposé — le lecteur (`expose`) et
+ses co-résidents (`co_resident`, `informe` = 1 s'il a reçu le relais du ticket 111) — de la
+journée de lecture (J0, `jours_depuis_j0` = 0) à la fin du run, une ligne par journée vécue.
+
+**Le détecteur.** L'événement est reconnu dans chaque entrée de la section `**History:**` d'un
+prompt de décision, de deux façons : l'extrait littéral de l'article (espaces normalisés), ou au
+moins **trois racines distinctes** parmi ses mots distinctifs
+(`llm.evenements.temoin.mots_distinctifs`), dont on a retiré :
+
+- tout mot que le foyer avait **écrit en mémoire avant l'instant de la lecture** — sans quoi
+  « storm » ou « warning » suffiraient à faire d'une journée de pluie un souvenir de l'article ;
+- les noms de jours et de mois : le gabarit date chaque épisodique (« [Thursday, March 26] ») ;
+- la mention de traduction.
+
+Pluriel et singulier comptent pour une racine (« park » = « parks »). Le seuil est **3**, plus
+strict que les 2 du témoin de consolidation, parce qu'on balaie des jours entiers de mémoire :
+au seuil 2, un « shopping trip » à la station Compans (homonyme du jardin Compans-Caffarelli)
+qui « remained » pluvieux passait pour l'article. Mesuré sur la paire du 2026-09-24 : au bras
+traité, les six prompts attendus et eux seuls ; au témoin (`2026-09-24_23_06`), **0 prompt sur
+128** reconnu avec la signature du bras traité.
+
+**Les voies.** `via_connaissances` (« Ce que je sais », un concept), `via_changements` (« Ce qui
+a changé récemment » — un choc, ou la **ligne garantie** du ticket 111, cinq jours de trajet, qui
+n'est donc pas un souvenir spontané), `via_rappel` (une épisodique rappelée). Un prompt peut
+compter sur plusieurs voies ; `prompts_avec_souvenir` le compte une fois.
+
+**Ce qui n'a pas de prompt.** Une décision tirée du cache n'en a pas : `decisions_sans_prompt`
+= trajets décidés (deux options ou plus) moins prompts du jour. Un jour sans prompt ne se lit
+pas comme un jour sans souvenir. Les prompts sont datés par `sim_day` et l'heure de départ :
+une décision prise le samedi pour un départ du lundi tombe le samedi.
+
+**`souvenirs_derives.csv`** est une photographie de la mémoire longue au moment du calcul — un
+concept fusionné plus tard en sort. Elle est réécrite en entier et **n'entre pas** dans la
+vérification de continuité.
+
 > La lecture accepte les deux sources : `evenements.jsonl` d'abord, `chocs.jsonl` ensuite. Les
 > runs déjà archivés — ceux qui portent les chiffres publiés du § 7.2 — restent dépouillables
 > sans être touchés.
@@ -222,11 +271,11 @@ un run de vingt jours personne ne la verrait plus.
 
 ## 8. Ce que ces mesures ne disent pas
 
-**Si le souvenir d'un choc a pesé sur une décision.** Rien ne relie un choc au souvenir qu'il
-produit : le vécu injecté — « The engine made a grinding noise and the car stalled twice » — n'est
-jamais recopié tel quel, la réflexion le reformule. L'appariement par texte ne rend aucun
-identifiant, et `scripts/analysis/memoire/choc.py` a le même angle mort. La colonne vaut donc
-**vide** et jamais « non servi ». Un lien explicite doit être posé à la source.
+**Si le souvenir d'un événement a pesé sur une décision.** Les mesures disent qu'il était
+**dans le prompt** — ce que le modèle a lu — pas qu'il a compté dans la réponse. Le détecteur est
+lexical : une reformulation qui ne garde aucun mot distinctif de l'article lui échappe, et il
+n'y a toujours aucun lien explicite, posé à la source, entre un événement et les souvenirs qu'il
+produit. `scripts/analysis/memoire/choc.py` garde l'ancien angle mort (appariement littéral).
 
 **Comment la mémoire a grandi pendant les journées rejouées d'une reprise.** Les points de reprise
 de ces journées sont écrasés avec l'état gelé. La parade — un état écrit une fois n'est jamais

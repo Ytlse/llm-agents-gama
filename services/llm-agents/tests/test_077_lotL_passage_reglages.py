@@ -47,6 +47,9 @@ REGLAGES = {
     "MEMOIRE__PARTAGE_FOYER_OBSERVATIONS_MIN": "memoire__partage_foyer_observations_min",
     "MEMOIRE__PARTAGE_FOYER_MAX_BLOC": "memoire__partage_foyer_max_bloc",
     "MEMOIRE__RECIT_SOIR_MAX": "memoire__recit_soir_max",
+    # Analyse du 2026-09-25 — le récit se fait le soir, une fois.
+    "MEMOIRE__RECIT_SOIR_HEURE": "memoire__recit_soir_heure",
+    "MEMOIRE__RECIT_SOIR_MAX_PAR_MEMBRE": "memoire__recit_soir_max_par_membre",
     "MEMOIRE__ECART_JUGEMENT_ALARME": "memoire__ecart_jugement_alarme",
 }
 

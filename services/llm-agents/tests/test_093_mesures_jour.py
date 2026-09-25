@@ -75,6 +75,25 @@ def _souvenir(doc_id, type_souvenir, force, contenu="peu importe"):
             "content": contenu, "timestamp": "2026-03-16T05:00:00"}
 
 
+def _echanges(racine: Path, echanges) -> None:
+    """`llm_exchanges.jsonl` : des objets JSON indentés concaténés, comme le worker les écrit."""
+    (racine / "llm_exchanges.jsonl").write_text(
+        "\n\n".join(json.dumps(e, indent=2) for e in echanges), encoding="utf-8")
+
+
+def _prompt(agent, jour, depart, historique):
+    """Un prompt de décision au format du gabarit `itinary_multi_agent`."""
+    lignes = [f"--- agent_id={agent} | Destination: work (somewhere) | Departure: {depart} ---",
+              "**Trip options** (2 options, indices 0 to 1):",
+              "- [0] foot: Estimated duration: 14 minutes.",
+              "- [1] car: Estimated duration: 3 minutes.", ""]
+    if historique:
+        lignes += ["**History:**", *(f"- {h}" for h in historique), ""]
+    lignes += ["", "Reply with the final JSON object containing the recommendations."]
+    return {"category": "itinary_multi_agent", "sim_day": jour,
+            "messages": [{"role": "user", "content": "\n".join(lignes)}]}
+
+
 def _ligne(mesures, agent, jour, famille="choix_modal"):
     return next(l for l in getattr(mesures, famille)
                 if l.person_id == agent and l.jour_simule == jour)
@@ -368,38 +387,35 @@ class TestChoc:
         assert (ligne.expositions, ligne.minutes_injectees) == (2, 15.0)
         assert ligne.incidents_reseau == 2
 
-    def test_E2_E3_le_souvenir_du_choc_apparie_est_suivi_jusqu_au_rappel(self, tmp_path):
-        vecu = "Le moteur a fait un bruit de ferraille et la voiture a calé deux fois."
-        run = _run(
-            tmp_path, [_t("1", "2026-03-16", "08:00:00", "Voiture Privée")],
-            chocs=[self._choc("1", "2026-03-16T08:05:00", vecu=vecu)],
-            rappels=[{"sim_ts": 1773637200, "sim_day": "2026-03-16", "person_id": "1",
-                      "candidats": 5, "servis": [{"doc_id": "1_7"}]}],
-            points={2: ("2026-03-17T03:00:00", {"1": [_souvenir("1_7", "reflection", 9.0, vecu)]})},
-        )
-        # La mémoire vivante du run porte aussi le souvenir : c'est là que l'appariement lit.
-        racine = run / "long_term_memory" / "user_metadata" / "shard_0"
-        racine.mkdir(parents=True, exist_ok=True)
-        (racine / "1.json").write_text(json.dumps(
-            {"person_id": "1", "entries": [_souvenir("1_7", "reflection", 9.0, vecu)]}),
-            encoding="utf-8")
+    def test_E2_E3_un_souvenir_dans_le_prompt_du_jour_est_compte(self, tmp_path):
+        """« Servi » se lit dans la section History du prompt — ce que le modèle a lu."""
+        vecu = "The engine made a grinding noise and the car stalled twice near the ring road."
+        run = _run(tmp_path, [_t("1", "2026-03-16", "08:00:00", "Voiture Privée")],
+                   chocs=[self._choc("1", "2026-03-16T08:05:00", vecu=vecu)])
+        _echanges(run, [_prompt("1", "2026-03-16", "17:30", [
+            "[Monday, March 16] My engine was grinding and it stalled on the ring road."])])
         ligne = calculer(run).chocs[0]
-        assert ligne.appariement == "texte"
+        assert ligne.appariement == "mots"
         assert ligne.souvenir_choc_servi is True
         assert ligne.decisions_avec_souvenir_choc == 1
 
-    def test_E4_sans_appariement_la_colonne_est_VIDE_et_non_fausse(self, tmp_path):
-        """Le vécu n'est jamais recopié tel quel : la réflexion le reformule.
-
-        Écrire « non servi » ferait lire « le souvenir du choc n'a jamais pesé » là où la vérité
-        est « on ne sait pas le dire ». C'est exactement la conclusion que le ticket cherche.
-        """
+    def test_E4_sans_prompt_la_colonne_est_VIDE_et_non_fausse(self, tmp_path):
+        """Pas de journal d'échanges : on ne sait pas, et « non servi » serait un mensonge."""
         run = _run(tmp_path, [_t("1", "2026-03-16", "08:00:00", "Voiture Privée")],
                    chocs=[self._choc("1", "2026-03-16T08:05:00")])
         ligne = calculer(run).chocs[0]
-        assert ligne.appariement == "aucun lien"
+        assert ligne.appariement == "sans prompt"
         assert ligne.souvenir_choc_servi is None
         assert ligne.decisions_avec_souvenir_choc is None
+
+    def test_E4bis_des_prompts_sans_trace_valent_zero_mesure(self, tmp_path):
+        run = _run(tmp_path, [_t("1", "2026-03-16", "08:00:00", "Voiture Privée")],
+                   chocs=[self._choc("1", "2026-03-16T08:05:00",
+                                     vecu="The engine made a grinding noise and stalled.")])
+        _echanges(run, [_prompt("1", "2026-03-16", "17:30", ["[Monday, March 16] Calm day."])])
+        ligne = calculer(run).chocs[0]
+        assert (ligne.appariement, ligne.decisions_avec_souvenir_choc) == ("aucune trace", 0)
+        assert ligne.souvenir_choc_servi is False
 
     def test_E5_aucun_choc_declare_aucune_ligne(self, tmp_path):
         run = _run(tmp_path, [_t("1", "2026-03-16", "08:00:00", "Marche")])
@@ -467,6 +483,8 @@ class TestEcriture:
         for nom, chemin in chemins.items():
             with chemin.open(newline="", encoding="utf-8") as flux:
                 lignes = list(csv.DictReader(flux))
+            if nom not in TABLES:
+                continue  # `souvenirs_derives` : une photographie, sans clé de jour
             cles = [tuple(l[c] for c in TABLES[nom].cle) for l in lignes]
             assert len(cles) == len(set(cles)), nom
 
@@ -662,3 +680,125 @@ class TestLesDeuxReperesTemporels:
             code = "\n".join(l for l in source.splitlines()
                              if not l.strip().startswith(("#", "⚠", "|")))
             assert "Jour relatif au choc" not in code, module.__name__
+
+
+# ── S — Le souvenir de l'événement, jour après jour (analyse du 2026-09-25) ──────────────
+# Le bras traité 2026-09-24_17_50 : six prompts portaient l'article a09 les jours suivants, et
+# `evenement_par_jour.csv` disait 0 — lien littéral cherché dans la mémoire, trace de rappel
+# au lieu du prompt, et le jour même seulement.
+
+ARTICLE = ("(Translated from French)\nGusts above 80 km/h: Toulouse closes its parks and "
+           "gardens this Thursday evening under a yellow storm warning.")
+
+
+class TestSouvenir:
+    def _lecture(self, agent="1", horodatage="2026-03-17T00:00:00"):
+        return {"person_id": agent, "horodatage_simule": horodatage, "choc_id": "a09",
+                "evenement_id": "a09", "canal": "lu", "moment": "reveil", "jour_run": 2,
+                "retard_injecte_s": 0, "vecu": ARTICLE}
+
+    def _run(self, tmp_path, prompts, *, ltm=None, foyer=("1",), trajets=None):
+        trajets = trajets or [
+            _t(a, f"2026-03-{j}", "08:00:00", "Voiture Privée", activite=f"act-{j}")
+            for a in foyer for j in (16, 17, 18, 19)
+        ]
+        run = _run(tmp_path, trajets, chocs=[self._lecture()])
+        (run / "population_4.json").write_text(json.dumps([
+            {"person_id": a, "household": {"id": "h1"}} for a in foyer
+        ]), encoding="utf-8")
+        _echanges(run, prompts)
+        racine = run / "long_term_memory" / "user_metadata" / "shard_0"
+        racine.mkdir(parents=True, exist_ok=True)
+        for agent, entrees in (ltm or {}).items():
+            (racine / f"{agent}.json").write_text(
+                json.dumps({"person_id": agent, "entries": entrees}), encoding="utf-8")
+        return run
+
+    def _du(self, mesures, agent, date):
+        return next(l for l in mesures.souvenirs
+                    if l.person_id == agent and l.date_simulee == date)
+
+    def test_S1_une_reformulation_servie_deux_jours_apres_est_comptee(self, tmp_path):
+        run = self._run(tmp_path, [
+            _prompt("1", "2026-03-19", "08:00", [
+                "Ce que je sais",
+                "- Toulouse closed its parks and gardens because of a yellow storm warning.  (0 obs.)",
+            ]),
+        ])
+        ligne = self._du(calculer(run), "1", "2026-03-19")
+        assert (ligne.role, ligne.jours_depuis_j0) == ("expose", 2)
+        assert (ligne.prompts_avec_souvenir, ligne.souvenir_mots) == (1, 1)
+        assert (ligne.via_connaissances, ligne.via_changements, ligne.via_rappel) == (1, 0, 0)
+
+    def test_S2_le_co_resident_est_suivi_aussi(self, tmp_path):
+        run = self._run(tmp_path, [
+            _prompt("2", "2026-03-18", "17:00", [
+                "[Tuesday, March 17] Dad said the parks and gardens close tonight: storm warning."]),
+        ], foyer=("1", "2"))
+        ligne = self._du(calculer(run), "2", "2026-03-18")
+        assert ligne.role == "co_resident"
+        assert (ligne.prompts_avec_souvenir, ligne.via_rappel) == (1, 1)
+
+    def test_S3_les_mots_que_le_foyer_ecrivait_deja_ne_font_pas_un_souvenir(self, tmp_path):
+        """« yellow storm warning » écrit AVANT la lecture n'est plus la trace de l'article."""
+        avant = {"doc_id": "1_1", "memory_type": "reflection", "force": 1.0,
+                 "content": "A yellow storm warning with gusts, so the parks were empty.",
+                 "timestamp": "2026-03-16T20:00:00"}
+        run = self._run(tmp_path, [
+            _prompt("1", "2026-03-19", "08:00", [
+                "[Wednesday, March 18] Another yellow storm warning, gusts again near the parks."]),
+        ], ltm={"1": [avant]})
+        assert self._du(calculer(run), "1", "2026-03-19").prompts_avec_souvenir == 0
+
+    def test_S4_la_date_d_une_episodique_ne_compte_pas(self, tmp_path):
+        """Le gabarit date chaque épisodique ; l'article dit « this Thursday »."""
+        run = self._run(tmp_path, [
+            _prompt("1", "2026-03-19", "08:00", [
+                "[Thursday, March 19] The drive closely matched my plan; the gardens looked nice."]),
+        ])
+        assert self._du(calculer(run), "1", "2026-03-19").prompts_avec_souvenir == 0
+
+    def test_S5_l_article_dans_la_ligne_garantie_se_lit_comme_texte_par_les_changements(
+            self, tmp_path):
+        run = self._run(tmp_path, [
+            _prompt("1", "2026-03-17", "08:00", [
+                "Ce qui a changé récemment",
+                # Une seule entrée, sur deux lignes : le gabarit ne préfixe que la première.
+                "- [ PRESSE ] This morning I read in the paper: « (Translated from French)\n"
+                "Gusts above 80 km/h: Toulouse closes its parks and gardens this Thursday "
+                "evening under a yellow storm warning. »",
+            ]),
+        ])
+        mesures = calculer(run)
+        ligne = self._du(mesures, "1", "2026-03-17")
+        assert (ligne.souvenir_texte, ligne.via_changements) == (1, 1)
+        choc = mesures.chocs[0]
+        assert (choc.appariement, choc.decisions_avec_souvenir_choc) == ("texte", 1)
+
+    def test_S6_une_decision_sans_prompt_se_montre(self, tmp_path):
+        """Une décision tirée du cache n'a pas de prompt : ni avec, ni sans souvenir."""
+        trajets = [_t("1", "2026-03-18", "08:00:00", "Marche", activite="a"),
+                   _t("1", "2026-03-18", "17:00:00", "Marche", activite="b"),
+                   _t("1", "2026-03-16", "08:00:00", "Marche", activite="c")]
+        run = self._run(tmp_path, [_prompt("1", "2026-03-18", "08:00", ["Calm."])],
+                        trajets=trajets)
+        ligne = self._du(calculer(run), "1", "2026-03-18")
+        assert (ligne.decisions, ligne.prompts, ligne.decisions_sans_prompt) == (2, 1, 1)
+
+    def test_S7_les_deux_fichiers_sont_ecrits(self, tmp_path):
+        concept = {"doc_id": "1_9", "memory_type": "concept", "force": 1.0,
+                   "content": json.dumps(["Parks and gardens closed under a yellow storm warning",
+                                          "", "", "", ""]),
+                   "timestamp": "2026-03-17T20:00:00"}
+        run = self._run(tmp_path, [], ltm={"1": [concept]})
+        chemins = ecrire(calculer(run), tmp_path / "sortie")
+        assert chemins["souvenirs"].name == "souvenir_evenement_par_jour.csv"
+        with chemins["souvenirs_derives"].open(encoding="utf-8") as f:
+            derives = list(csv.DictReader(f))
+        assert [(d["doc_id"], d["appariement"]) for d in derives] == [("1_9", "mots")]
+
+    def test_S8_un_prompt_rejoue_ne_compte_qu_une_fois(self, tmp_path):
+        bloc = _prompt("1", "2026-03-19", "08:00", [
+            "Ce que je sais", "- Parks and gardens closed under a yellow storm warning.  (0 obs.)"])
+        run = self._run(tmp_path, [bloc, bloc])
+        assert self._du(calculer(run), "1", "2026-03-19").prompts == 1

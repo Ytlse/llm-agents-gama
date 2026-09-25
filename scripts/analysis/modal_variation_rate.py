@@ -5,11 +5,14 @@ Outil d'analyse formelle mesurant :
 1. Le taux de changement modal au jour le jour pour une même activité :
    P(Mode_d != Mode_{d-1} | Activité, Persona)
 2. La stabilité modale : pourcentage et durée des séquences consécutives sans changement.
-3. La décomposition par phase comportementale :
-   - Pré-choc (Jours 1-7)
-   - Péri-choc (Jours 8-9)
-   - Post-choc immédiat (Jours 10-14)
-   - Post-choc tardif / rétablissement (Jours 15-21+)
+3. La décomposition par phase, LUE DANS LE RUN (analyse du 2026-09-25) :
+   - Avant l'événement, Jour(s) de l'événement, Après l'événement — par foyer exposé, depuis
+     `evenements.jsonl` (ou `chocs.jsonl`) et la population du run : un article tiré au jour 11
+     pour un foyer et au jour 9 pour un autre donne à chacun SA fenêtre ;
+   - Hors foyer exposé — les agents qu'aucune exposition n'a touchés, ni eux ni leur foyer ;
+   - Sans événement — un run qui n'en déclare aucun (un bras témoin).
+   Jusqu'au 2026-09-25, quatre phases étaient figées sur un choc aux jours 8-9 : le titre et les
+   phases d'un article lu au jour 11 décrivaient un autre protocole.
 4. L'entropie modale et d'itinéraire de Shannon (diversification du bouquet par persona).
 5. La distinction diagnostique entre décisions réelles du LLM et replis par défaut (LLM Error).
 
@@ -37,6 +40,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+# Lancé en script (`python scripts/analysis/modal_variation_rate.py`, comme le fait
+# `run_sequential_cohort.py`), le dépôt n'est pas sur le chemin : sans cette ligne, la palette
+# officielle ci-dessous retombait EN SILENCE sur sa copie locale, et le calendrier du run
+# (`scripts.analysis.mesures.calendrier`) ne se chargeait pas du tout.
+_RACINE_DEPOT = Path(__file__).resolve().parents[2]
+if str(_RACINE_DEPOT) not in sys.path:
+    sys.path.insert(0, str(_RACINE_DEPOT))
+
 # Tentative d'import de la palette officielle du projet
 try:
     from scripts.dashboard.palette import MODE_COLORS as _PALETTE_MODES, NEUTRAL as _PALETTE_NEUTRAL
@@ -53,12 +64,22 @@ except ImportError:
     }
     COULEUR_NEUTRE = "#6E6D69"
 
+# Les phases, dans l'ordre des tableaux. Leurs BORNES ne sont pas ici : elles se lisent dans le
+# run, foyer par foyer (`scripts/analysis/mesures/calendrier.py`).
+PHASE_AVANT = "1. Avant l'événement"
+PHASE_EVENEMENT = "2. Jour(s) de l'événement"
+PHASE_APRES = "3. Après l'événement"
+PHASE_HORS = "Hors foyer exposé"
+PHASE_SANS = "Sans événement"
+PHASES = (PHASE_AVANT, PHASE_EVENEMENT, PHASE_APRES, PHASE_HORS, PHASE_SANS)
+
 # Palette des phases temporelles (cohérente, sobre, accessible)
 PALETTE_PHASES = {
-    "1. Pré-choc (J1-7)": "#0B7A9B",          # Cyan soutenu
-    "2. Péri-choc (J8-9)": "#CE3B4B",         # Rouge alerte
-    "3. Post-choc immédiat (J10-14)": "#B5259B", # Magenta transition
-    "4. Post-choc tardif (J15-21+)": "#178A3F",  # Vert stabilisation
+    PHASE_AVANT: "#0B7A9B",      # Cyan soutenu
+    PHASE_EVENEMENT: "#CE3B4B",  # Rouge alerte
+    PHASE_APRES: "#178A3F",      # Vert
+    PHASE_HORS: "#6E6D69",       # Neutre
+    PHASE_SANS: "#6E6D69",
 }
 
 # Heure frontière de la journée simulée (tampons vides à 3h, cohérent avec calcul.py)
@@ -114,8 +135,37 @@ def extract_chosen_route(row: pd.Series) -> str:
     return mode_choisi
 
 
-def load_and_preprocess_moves(csv_path: Path) -> pd.DataFrame:
-    """Charge moves.csv, extrait les journées vécues et assigne les phases."""
+def fenetres_du_run(run_dir: Path) -> Dict[str, Any]:
+    """person_id → `calendrier.Fenetre`, et un booléen : le run porte-t-il un événement ?"""
+    from scripts.analysis.mesures import calendrier
+    from scripts.analysis.mesures.calcul import journee_de_l_exposition
+
+    lignes = [e for e in calendrier.lire_evenements(run_dir) if e.get("origine") != "entendu"]
+    fen = calendrier.fenetres(run_dir, lambda e: journee_de_l_exposition(e, [], bavard=False))
+    return {"fenetres": fen, "a_un_evenement": bool(lignes),
+            "libelle": calendrier.libelle(run_dir)}
+
+
+def phase_de(person_id: str, journee: str, calendrier_run: Dict[str, Any]) -> str:
+    """La phase d'un trajet, dans la fenêtre de SON foyer."""
+    if not calendrier_run.get("a_un_evenement"):
+        return PHASE_SANS
+    fenetre = calendrier_run["fenetres"].get(str(person_id))
+    if fenetre is None:
+        return PHASE_HORS
+    if journee < fenetre.premier_jour:
+        return PHASE_AVANT
+    if journee <= fenetre.dernier_jour:
+        return PHASE_EVENEMENT
+    return PHASE_APRES
+
+
+def load_and_preprocess_moves(csv_path: Path,
+                              calendrier_run: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
+    """Charge moves.csv, extrait les journées vécues et assigne les phases.
+
+    `calendrier_run` vient de `fenetres_du_run` ; par défaut, celui du répertoire de moves.csv.
+    """
     if not csv_path.is_file():
         raise FileNotFoundError(f"Le fichier moves.csv est introuvable : {csv_path}")
 
@@ -135,18 +185,17 @@ def load_and_preprocess_moves(csv_path: Path) -> pd.DataFrame:
     df["journee_date"] = depart_shift.dt.strftime("%Y-%m-%d")
     df["jour_simule"] = (depart_shift.dt.floor("D") - ancre_journee).dt.days + 1
 
-    # Découpage formel des 4 phases de l'expérience
-    def assign_phase(jour: int) -> str:
-        if jour <= 7:
-            return "1. Pré-choc (J1-7)"
-        elif jour <= 9:
-            return "2. Péri-choc (J8-9)"
-        elif jour <= 14:
-            return "3. Post-choc immédiat (J10-14)"
-        else:
-            return "4. Post-choc tardif (J15-21+)"
-
-    df["phase"] = df["jour_simule"].apply(assign_phase)
+    if calendrier_run is None:
+        calendrier_run = fenetres_du_run(csv_path.parent)
+    df["phase"] = [
+        phase_de(str(pid), str(jour), calendrier_run)
+        for pid, jour in zip(df["ID Personne"], df["journee_date"])
+    ]
+    if calendrier_run.get("a_un_evenement") and not calendrier_run["fenetres"]:
+        logger.error(
+            "[ALARME] le run déclare des expositions mais aucune n'a pu être datée ni rattachée "
+            "à un agent : toutes les phases valent « %s », et les comparaisons avant/après "
+            "sont vides.", PHASE_HORS)
     df["chosen_route"] = df.apply(extract_chosen_route, axis=1)
 
     # Normalisation des motifs
@@ -227,15 +276,9 @@ def compute_phase_summary(transitions: List[TransitionObservation]) -> pd.DataFr
         return pd.DataFrame()
 
     tdf = pd.DataFrame([asdict(t) for t in transitions])
-    phases_order = [
-        "1. Pré-choc (J1-7)",
-        "2. Péri-choc (J8-9)",
-        "3. Post-choc immédiat (J10-14)",
-        "4. Post-choc tardif (J15-21+)",
-    ]
 
     records = []
-    for ph in phases_order:
+    for ph in PHASES:
         sub = tdf[tdf["phase_curr"] == ph]
         n_trans = len(sub)
         if n_trans == 0:
@@ -284,9 +327,9 @@ def compute_activity_summary(transitions: List[TransitionObservation]) -> pd.Dat
         stab_modal = 1.0 - var_modal
         var_route = grp["route_change"].mean()
 
-        # Pré-choc vs Post-choc
-        pre = grp[grp["phase_curr"] == "1. Pré-choc (J1-7)"]
-        post = grp[grp["phase_curr"].isin(["3. Post-choc immédiat (J10-14)", "4. Post-choc tardif (J15-21+)"])]
+        # Avant vs après, dans la fenêtre de chaque foyer exposé
+        pre = grp[grp["phase_curr"] == PHASE_AVANT]
+        post = grp[grp["phase_curr"] == PHASE_APRES]
 
         var_pre = pre["modal_change"].mean() if len(pre) > 0 else np.nan
         var_post = post["modal_change"].mean() if len(post) > 0 else np.nan
@@ -297,8 +340,8 @@ def compute_activity_summary(transitions: List[TransitionObservation]) -> pd.Dat
             "taux_variation_global": round(var_modal, 4),
             "stabilite_globale": round(stab_modal, 4),
             "taux_variation_itineraire": round(var_route, 4),
-            "taux_var_pre_choc": round(var_pre, 4) if not np.isnan(var_pre) else None,
-            "taux_var_post_choc": round(var_post, 4) if not np.isnan(var_post) else None,
+            "taux_var_avant": round(var_pre, 4) if not np.isnan(var_pre) else None,
+            "taux_var_apres": round(var_post, 4) if not np.isnan(var_post) else None,
             "rigidite_relative": "Très Rigide" if var_modal < 0.10 else ("Modérée" if var_modal < 0.30 else "Flexible"),
         })
 
@@ -308,13 +351,20 @@ def compute_activity_summary(transitions: List[TransitionObservation]) -> pd.Dat
 
 # ── Entropie modale et diversification ─────────────────────────────────────────
 
+def _arrondi(valeur: Optional[float], chiffres: int = 4) -> Optional[float]:
+    """Arrondi sans « -0.0 » : l'entropie d'un seul mode vaut -0.0 en flottant."""
+    if valeur is None:
+        return None
+    return round(valeur, chiffres) + 0.0
+
+
 def compute_entropy(series: pd.Series) -> float:
     """Calcule l'entropie de Shannon en bits : H = - sum(p * log2(p))."""
     if len(series) == 0:
         return 0.0
     counts = series.value_counts()
     probs = counts / len(series)
-    return float(-np.sum(probs * np.log2(probs)))
+    return float(-np.sum(probs * np.log2(probs))) + 0.0
 
 
 def compute_persona_entropy(df: pd.DataFrame) -> pd.DataFrame:
@@ -331,11 +381,14 @@ def compute_persona_entropy(df: pd.DataFrame) -> pd.DataFrame:
         modes_distincts = grp["Mode de transport Choisi"].nunique()
         routes_distinctes = grp["chosen_route"].nunique()
 
-        # Entropies par phase
+        # Entropies par phase. ⚠ Une phase sans trajet vaut VIDE, jamais 0 : zéro bit est un
+        # verrouillage monomodal mesuré, et le lire à la place d'une absence de données
+        # inventerait un effondrement de la diversification.
         h_phases = {}
-        for ph in ["1. Pré-choc (J1-7)", "2. Péri-choc (J8-9)", "3. Post-choc immédiat (J10-14)", "4. Post-choc tardif (J15-21+)"]:
+        for ph in (PHASE_AVANT, PHASE_EVENEMENT, PHASE_APRES):
             sub = grp[grp["phase"] == ph]
-            h_phases[ph] = compute_entropy(sub["Mode de transport Choisi"]) if len(sub) > 0 else 0.0
+            h_phases[ph] = compute_entropy(sub["Mode de transport Choisi"]) if len(sub) > 0 else None
+        phases_agent = sorted(set(grp["phase"]))
 
         records.append({
             "persona_id": str(pid),
@@ -345,10 +398,11 @@ def compute_persona_entropy(df: pd.DataFrame) -> pd.DataFrame:
             "equitabilite_pielou": round(h_norm, 4),
             "routes_distinctes": routes_distinctes,
             "entropie_itineraire_bits": round(h_route, 4),
-            "entropie_pre_choc": round(h_phases["1. Pré-choc (J1-7)"], 4),
-            "entropie_peri_choc": round(h_phases["2. Péri-choc (J8-9)"], 4),
-            "entropie_post_immed": round(h_phases["3. Post-choc immédiat (J10-14)"], 4),
-            "entropie_post_tardif": round(h_phases["4. Post-choc tardif (J15-21+)"], 4),
+            "exposition": (PHASE_HORS if PHASE_HORS in phases_agent
+                           else PHASE_SANS if PHASE_SANS in phases_agent else "foyer exposé"),
+            "entropie_avant": _arrondi(h_phases[PHASE_AVANT]),
+            "entropie_evenement": _arrondi(h_phases[PHASE_EVENEMENT]),
+            "entropie_apres": _arrondi(h_phases[PHASE_APRES]),
         })
 
     return pd.DataFrame(records).sort_values("entropie_modale_bits", ascending=False)
@@ -359,8 +413,12 @@ def compute_persona_entropy(df: pd.DataFrame) -> pd.DataFrame:
 def compute_transition_matrix(transitions: List[TransitionObservation], phase_filter: Optional[str] = None) -> pd.DataFrame:
     """Calcule la matrice stochastique P(Mode_t | Mode_{t-1})."""
     tdf = pd.DataFrame([asdict(t) for t in transitions])
+    if tdf.empty:
+        return pd.DataFrame()
     if phase_filter:
         tdf = tdf[tdf["phase_curr"] == phase_filter]
+    if tdf.empty:
+        return pd.DataFrame()
 
     all_modes = sorted(list(set(tdf["mode_prev"].unique()).union(set(tdf["mode_curr"].unique()))))
     matrix = pd.crosstab(
@@ -387,7 +445,8 @@ def setup_plot_style() -> None:
     })
 
 
-def plot_phases_variation(phase_summary: pd.DataFrame, output_dir: Path, formats: List[str]) -> None:
+def plot_phases_variation(phase_summary: pd.DataFrame, output_dir: Path, formats: List[str],
+                          titre_evenement: str = "aucun événement déclaré") -> None:
     """Graphique 1 : Taux de variation modal et d'itinéraire par phase."""
     setup_plot_style()
     fig, ax = plt.subplots(figsize=(10, 5.5), dpi=300)
@@ -403,7 +462,7 @@ def plot_phases_variation(phase_summary: pd.DataFrame, output_dir: Path, formats
                   label="Variation itinéraire : P(Route_d ≠ Route_{d-1})", color="#0B7A9B", edgecolor="none")
 
     ax.set_ylabel("Taux de variation (%)", fontsize=11, fontweight="bold", color="#333333")
-    ax.set_title("Évolution du taux de variation des choix de déplacement par phase\n(Choc d'avarie moteur J8-9)",
+    ax.set_title(f"Évolution du taux de variation des choix de déplacement par phase\n({titre_evenement})",
                  fontsize=13, fontweight="bold", pad=14, color="#111111")
     ax.set_xticks(x)
     ax.set_xticklabels(labels, fontsize=10)
@@ -476,22 +535,27 @@ def plot_activity_rigidity(activity_summary: pd.DataFrame, output_dir: Path, for
 def plot_persona_entropy_collapse(entropy_df: pd.DataFrame, output_dir: Path, formats: List[str]) -> None:
     """Graphique 3 : Entropie modale (bits) par persona avant vs après choc."""
     setup_plot_style()
-    df_sorted = entropy_df.sort_values("entropie_pre_choc", ascending=True)
+    df_sorted = entropy_df[entropy_df["exposition"] == "foyer exposé"].copy()
+    if df_sorted.empty:
+        logger.info("Figure 3 non produite : aucun agent d'un foyer exposé, pas d'avant/après.")
+        return
+    df_sorted = df_sorted.fillna({"entropie_avant": 0.0, "entropie_apres": 0.0})
+    df_sorted = df_sorted.sort_values("entropie_avant", ascending=True)
 
     fig, ax = plt.subplots(figsize=(11, 6.5), dpi=300)
     y = np.arange(len(df_sorted))
     bar_height = 0.35
 
-    bars_pre = ax.barh(y - bar_height / 2, df_sorted["entropie_pre_choc"], height=bar_height,
-                       color="#0B7A9B", label="Pré-choc (J1-7)")
-    bars_post = ax.barh(y + bar_height / 2, df_sorted["entropie_post_tardif"], height=bar_height,
-                        color="#7C4DDB", label="Post-choc tardif (J15-21+)")
+    bars_pre = ax.barh(y - bar_height / 2, df_sorted["entropie_avant"], height=bar_height,
+                       color="#0B7A9B", label=PHASE_AVANT)
+    bars_post = ax.barh(y + bar_height / 2, df_sorted["entropie_apres"], height=bar_height,
+                        color="#7C4DDB", label=PHASE_APRES)
 
     ax.set_yticks(y)
-    labels = [f"Persona {pid} {'(Choc C6)' if pid == '899549' else ''}" for pid in df_sorted["persona_id"]]
+    labels = [f"Persona {pid}" for pid in df_sorted["persona_id"]]
     ax.set_yticklabels(labels, fontsize=10, fontweight="bold")
     ax.set_xlabel("Entropie de Shannon H (bits) — Diversification du bouquet modal", fontsize=11, fontweight="bold")
-    ax.set_title("Effondrement de la diversification modale (Entropie de Shannon)\nPré-choc vs Rétablissement tardif",
+    ax.set_title("Diversification modale (entropie de Shannon), foyers exposés\nAvant vs après l'événement",
                  fontsize=13, fontweight="bold", pad=12)
 
     for i, (rect_pre, rect_post) in enumerate(zip(bars_pre, bars_post)):
@@ -514,7 +578,7 @@ def plot_persona_entropy_collapse(entropy_df: pd.DataFrame, output_dir: Path, fo
 
 def plot_transition_matrices_heatmap(m_pre: pd.DataFrame, m_post: pd.DataFrame,
                                     output_dir: Path, formats: List[str]) -> None:
-    """Graphique 4 : Matrices de transition modale Pré-choc vs Post-choc."""
+    """Graphique 4 : Matrices de transition modale avant vs après l'événement."""
     setup_plot_style()
     fig, axes = plt.subplots(1, 2, figsize=(13, 5.5), dpi=300)
 
@@ -522,7 +586,7 @@ def plot_transition_matrices_heatmap(m_pre: pd.DataFrame, m_post: pd.DataFrame,
     m_pre_sq = m_pre.reindex(index=all_modes, columns=all_modes, fill_value=0.0)
     m_post_sq = m_post.reindex(index=all_modes, columns=all_modes, fill_value=0.0)
 
-    for ax, mat, title in zip(axes, [m_pre_sq, m_post_sq], ["Pré-choc (Jours 1-7)", "Post-choc (Jours 10-21+)"]):
+    for ax, mat, title in zip(axes, [m_pre_sq, m_post_sq], [PHASE_AVANT, PHASE_APRES]):
         cax = ax.imshow(mat.values * 100, cmap="Blues", vmin=0, vmax=100)
         ax.set_title(f"Matrice de transition P(Mode_d | Mode_{{d-1}})\n{title}", fontsize=11, fontweight="bold", pad=10)
         ax.set_xticks(range(len(all_modes)))
@@ -549,6 +613,20 @@ def plot_transition_matrices_heatmap(m_pre: pd.DataFrame, m_post: pd.DataFrame,
 
 def plot_daily_selection_and_transitions(df: pd.DataFrame, transitions: List[TransitionObservation],
                                         output_dir: Path, formats: List[str]) -> None:
+    """Graphique 5 : Série temporelle journalière - Taux de variation et méthodes de décision.
+
+    Le fond grisé couvre les jours où un foyer au moins était dans sa fenêtre d'événement —
+    calculé depuis les phases des trajets, jamais posé à la main.
+    """
+    _plot_daily(df, transitions, output_dir, formats)
+
+
+def _jours_de_l_evenement(df: pd.DataFrame) -> List[int]:
+    return sorted({int(j) for j in df.loc[df["phase"] == PHASE_EVENEMENT, "jour_simule"]})
+
+
+def _plot_daily(df: pd.DataFrame, transitions: List[TransitionObservation],
+                output_dir: Path, formats: List[str]) -> None:
     """Graphique 5 : Série temporelle journalière - Taux de variation et méthodes de décision."""
     setup_plot_style()
     tdf = pd.DataFrame([asdict(t) for t in transitions])
@@ -558,12 +636,11 @@ def plot_daily_selection_and_transitions(df: pd.DataFrame, transitions: List[Tra
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 7.5), sharex=True, dpi=300)
 
-    # Zones de fond pour les phases
+    # Zones de fond : les jours d'événement, lus dans le run
     for ax in [ax1, ax2]:
-        ax.axvspan(0.5, 7.5, color="#0B7A9B", alpha=0.08, label="Pré-choc")
-        ax.axvspan(7.5, 9.5, color="#CE3B4B", alpha=0.15, label="Péri-choc (J8-9)")
-        ax.axvspan(9.5, 14.5, color="#B5259B", alpha=0.08, label="Post-choc immédiat")
-        ax.axvspan(14.5, 22.5, color="#178A3F", alpha=0.08, label="Post-choc tardif")
+        for rang, jour in enumerate(_jours_de_l_evenement(df)):
+            ax.axvspan(jour - 0.5, jour + 0.5, color=PALETTE_PHASES[PHASE_EVENEMENT], alpha=0.15,
+                       label=PHASE_EVENEMENT if rang == 0 else None)
 
     # Trace 1 : Taux de variation modal
     ax1.plot(daily_var["jour_curr"], daily_var["mean"] * 100, marker="o", color="#CE3B4B",
@@ -594,7 +671,7 @@ def plot_daily_selection_and_transitions(df: pd.DataFrame, transitions: List[Tra
     ax2.set_xlabel("Jour simulé", fontsize=11, fontweight="bold")
     ax2.set_ylabel("Part des décisions (%)", fontsize=10, fontweight="bold")
     ax2.set_ylim(0, 100)
-    ax2.set_xlim(0.5, 22.5)
+    ax2.set_xlim(0.5, float(df["jour_simule"].max()) + 0.5)
     ax2.legend(loc="upper right", frameon=True, facecolor="white", fontsize=9)
 
     fig.tight_layout()
@@ -608,11 +685,45 @@ def plot_daily_selection_and_transitions(df: pd.DataFrame, transitions: List[Tra
 
 # ── Génération du rapport Markdown ─────────────────────────────────────────────
 
+def _pct(valeur: Any) -> str:
+    return "N/A" if valeur is None or (isinstance(valeur, float) and np.isnan(valeur)) \
+        else f"{float(valeur) * 100:.1f}%"
+
+
+def _bits(valeur: Any) -> str:
+    """Trois décimales, jamais « -0.000 », et « — » pour une phase sans trajet."""
+    if valeur is None or (isinstance(valeur, float) and np.isnan(valeur)):
+        return "—"
+    return f"{float(valeur) + 0.0:.3f}".replace("-0.000", "0.000")
+
+
+def _fenetres_en_clair(calendrier_run: Dict[str, Any]) -> List[str]:
+    """Une ligne par foyer exposé : qui, quand — tel que le run l'a écrit."""
+    par_foyer: Dict[Tuple[str, str, str, str], List[str]] = {}
+    for pid, f in sorted(calendrier_run.get("fenetres", {}).items()):
+        cle = (f.evenement_id, f.household_id or f"(sans foyer) {pid}", f.premier_jour,
+               f.dernier_jour)
+        par_foyer.setdefault(cle, []).append(f"{pid} ({f.role})")
+    lignes = []
+    for (ev, foyer, debut, fin), membres in sorted(par_foyer.items(), key=lambda kv: kv[0][2]):
+        quand = debut if debut == fin else f"du {debut} au {fin}"
+        lignes.append(f"- `{ev}`, foyer {foyer} : {quand} — {', '.join(membres)}")
+    return lignes
+
+
 def generate_markdown_report(phase_df: pd.DataFrame, activity_df: pd.DataFrame,
                              entropy_df: pd.DataFrame, output_dir: Path,
-                             df: Optional[pd.DataFrame] = None) -> Path:
-    """Génère un rapport d'analyse comportementale exhaustif et chiffré."""
+                             df: Optional[pd.DataFrame] = None,
+                             calendrier_run: Optional[Dict[str, Any]] = None) -> Path:
+    """Génère le rapport. Chaque phrase chiffrée est CALCULÉE ; aucune n'est écrite d'avance.
+
+    Jusqu'au 2026-09-25, la section 2 affirmait « `Etude` (stabilité 100 %) » et « `Achats`
+    (variation 35.7 %, 70 % en pré-choc) » quel que soit le run : des chiffres d'un run ancien,
+    recopiés dans tous les rapports qui ont suivi.
+    """
     report_path = output_dir / "rapport_stabilite_variation.md"
+    calendrier_run = calendrier_run or {}
+    titre = calendrier_run.get("libelle")
 
     md = []
     md.append("# Rapport d'Analyse Comportementale : Stabilité Modale et Taux de Variation")
@@ -621,8 +732,17 @@ def generate_markdown_report(phase_df: pd.DataFrame, activity_df: pd.DataFrame,
     md.append("")
     md.append("## 1. Synthèse Exécutive")
     md.append("")
-    md.append("Ce rapport fournit les métriques formelles de stabilité comportementale et de dynamique de transition modale "
-              "sur les choix d'itinéraires avant, pendant et après choc (incident moteur J8-9).")
+    if calendrier_run.get("a_un_evenement"):
+        md.append(f"Événement du run : **{titre or 'non déclaré dans evenement.yaml / choc.yaml'}**. "
+                  "Les phases sont lues foyer par foyer dans `evenements.jsonl` et la population "
+                  "du run ; les agents qu'aucune exposition n'a touchés, ni eux ni leur foyer, "
+                  f"sont rangés à part (« {PHASE_HORS} »).")
+        md.append("")
+        md.extend(_fenetres_en_clair(calendrier_run) or [
+            "- ⚠ Aucune exposition n'a pu être datée ni rattachée à un agent."])
+    else:
+        md.append(f"Aucun événement dans ce run (bras témoin) : toutes les transitions sont en "
+                  f"« {PHASE_SANS} ».")
     md.append("")
     md.append("### Chiffres clés par phase :")
     md.append("")
@@ -636,47 +756,46 @@ def generate_markdown_report(phase_df: pd.DataFrame, activity_df: pd.DataFrame,
     md.append("")
     md.append("## 2. Rigidité vs Flexibilité par Activité (Motif)")
     md.append("")
-    md.append("L'analyse des transitions modales pour une même activité montre une disparité structurelle majeure "
-              "entre motifs obligatoires (navette domicile-travail, études) et motifs non-contraints (loisirs, achats) :")
-    md.append("")
-    md.append("| Motif | Transitions | Stabilité Globale | Taux Variation Pré-choc | Taux Variation Post-choc | Diagnostic |")
+    md.append("| Motif | Transitions | Stabilité Globale | Taux Variation Avant | Taux Variation Après | Diagnostic |")
     md.append("|---|:---:|:---:|:---:|:---:|:---:|")
     for _, r in activity_df.iterrows():
-        v_pre = f"{r['taux_var_pre_choc']*100:.1f}%" if r['taux_var_pre_choc'] is not None else "N/A"
-        v_post = f"{r['taux_var_post_choc']*100:.1f}%" if r['taux_var_post_choc'] is not None else "N/A"
         md.append(f"| **{r['motif']}** | {r['transitions_total']} | **{r['stabilite_globale']*100:.1f}%** | "
-                  f"{v_pre} | {v_post} | `{r['rigidite_relative']}` |")
+                  f"{_pct(r['taux_var_avant'])} | {_pct(r['taux_var_apres'])} | `{r['rigidite_relative']}` |")
     md.append("")
-    md.append("- **Activités rigides** : `Etude` (stabilité 100%, 0% de variation) et `Travail` (stabilité 91.7%, 8.3% de variation globale). "
-              "Ces déplacements présentent des contraintes d'horaires et de destination sévères, réduisant drastiquement l'arbitrage modal.")
-    md.append("- **Activités flexibles** : `Achats` (variation globale 35.7%, 70% en pré-choc) et `Loisirs` (variation globale 32.3%, 90% en pré-choc). "
-              "Ces activités constituent le lieu privilégié de l'exploration multimodale et de la sensibilité aux conditions contextuelles.")
+    if not activity_df.empty:
+        rigide = activity_df.iloc[0]
+        souple = activity_df.iloc[-1]
+        md.append(f"- **La plus stable** : `{rigide['motif']}` — {rigide['stabilite_globale']*100:.1f}% "
+                  f"de transitions sans changement de mode, sur {rigide['transitions_total']}.")
+        if souple["motif"] != rigide["motif"]:
+            md.append(f"- **La plus variable** : `{souple['motif']}` — {souple['taux_variation_global']*100:.1f}% "
+                      f"de changements de mode, sur {souple['transitions_total']}.")
+        peu = activity_df[activity_df["transitions_total"] < 10]
+        if not peu.empty:
+            md.append(f"- ⚠ Moins de 10 transitions pour {', '.join(f'`{m}`' for m in peu['motif'])} : "
+                      "ces taux ne se comparent pas entre eux.")
     md.append("")
     md.append("---")
     md.append("")
     md.append("## 3. Analyse de l'Entropie Modale et Bouquet d'Itinéraires")
     md.append("")
-    md.append("L'entropie de Shannon $H(Persona) = - \\sum p_m \\log_2(p_m)$ quantifie l'équitabilité et la diversification "
-              "du bouquet de choix. Une valeur nulle traduit un verrouillage monomodal absolu ; une valeur élevée traduit un comportement multimodale équilibré.")
+    md.append("L'entropie de Shannon $H(Persona) = - \\sum p_m \\log_2(p_m)$ quantifie la diversification "
+              "du bouquet de choix : 0 bit traduit un seul mode ; « — » signale une phase sans trajet.")
     md.append("")
-    md.append("| Persona | Trajets | Modes Distincts | Entropie H (bits) | Équitabilité Pielou | Entropie Pré-choc | Entropie Post-tardif | Statut |")
-    md.append("|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|")
+    md.append("| Persona | Exposition | Trajets | Modes Distincts | Entropie H (bits) | Équitabilité Pielou | Entropie Avant | Entropie Après | Statut après |")
+    md.append("|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|")
     for _, r in entropy_df.iterrows():
-        choc_tag = " *(Choc C6)*" if r['persona_id'] == '899549' else ""
-        md.append(f"| **{r['persona_id']}{choc_tag}** | {r['trajets_total']} | {r['modes_distincts']} | "
-                  f"**{r['entropie_modale_bits']:.3f}** | {r['equitabilite_pielou']:.3f} | "
-                  f"{r['entropie_pre_choc']:.3f} | {r['entropie_post_tardif']:.3f} | "
-                  f"{'Verrouillé (0 bit)' if r['entropie_post_tardif'] == 0 else 'Multimodal'} |")
+        apres = r.get("entropie_apres")
+        statut = ("—" if apres is None or (isinstance(apres, float) and np.isnan(apres))
+                  else "Un seul mode (0 bit)" if float(apres) == 0 else "Multimodal")
+        md.append(f"| **{r['persona_id']}** | {r['exposition']} | {r['trajets_total']} | {r['modes_distincts']} | "
+                  f"**{_bits(r['entropie_modale_bits'])}** | {_bits(r['equitabilite_pielou'])} | "
+                  f"{_bits(r.get('entropie_avant'))} | {_bits(apres)} | {statut} |")
     md.append("")
     md.append("---")
     md.append("")
-    md.append("## 4. Diagnostic Méthodologique et Décomposition des Décisions")
+    md.append("## 4. Décomposition des Décisions")
     md.append("")
-    md.append("### Q1 : Quelles activités sont les plus rigides vs flexibles ?")
-    md.append("- **Les navettes obligatoires (Travail/Étude)** présentent la plus forte invariance modale.")
-    md.append("- **Les loisirs et achats** constituent le foyer principal de flexibilité et d'exploration multimodale.")
-    md.append("")
-    md.append("### Q2 : Décomposition des modes de décision et fiabilité de l'infrastructure")
 
     if df is not None and not df.empty:
         total_decisions = len(df)
@@ -693,7 +812,7 @@ def generate_markdown_report(phase_df: pd.DataFrame, activity_df: pd.DataFrame,
             md.append("  > [!NOTE]\n"
                       f"  > **Avertissement méthodologique :** {error_count} choix ont été forcés par repli technique automatique "
                       "(ex. quota d'API épuisé, indisponibilité de passerelle). "
-                      "Ces replis ne reflètent pas un arbitrage cognitif autonome de l'agent et doivent être dissociés de l'effet choc.")
+                      "Ces replis ne reflètent pas un arbitrage de l'agent et doivent être dissociés de l'effet de l'événement.")
         else:
             md.append("- **Replis techniques d'urgence :** 0 (100% des décisions ont été délibérées ou contraintes par l'offre physique)")
 
@@ -703,10 +822,6 @@ def generate_markdown_report(phase_df: pd.DataFrame, activity_df: pd.DataFrame,
             md.append(f"- **Autres méthodes de sélection :** {other_count} ({other_count / total_decisions * 100:.1f}%)")
     else:
         md.append("- Aucune donnée de décision détaillée disponible pour décomposer les méthodes de sélection.")
-
-    md.append("")
-    md.append("### Q3 : Évolution des taux de transition et persistance")
-    md.append("- L'analyse des matrices de transition et des indicateurs d'entropie ci-dessus permet de quantifier l'amplitude de l'exploration modale et d'objectiver la formation éventuelle de nouvelles habitudes.")
     md.append("")
 
     report_path.write_text("\n".join(md), encoding="utf-8")
@@ -733,8 +848,10 @@ def main() -> None:
     )
     parser.add_argument(
         "--mesures-dir",
-        default="experiments/current/mesures",
-        help="Dossier de sortie des tables CSV complémentaires (défaut : experiments/current/mesures)"
+        default=None,
+        help="Dossier de sortie des tables CSV complémentaires (défaut : <dossier de moves.csv>/mesures). "
+             "⚠ Jusqu'au 2026-09-25 le défaut était experiments/current/mesures : l'analyse d'un run "
+             "archivé écrivait dans le run EN COURS."
     )
     parser.add_argument(
         "--format",
@@ -751,10 +868,13 @@ def main() -> None:
     args = parser.parse_args()
 
     csv_path = Path(args.moves_path).resolve()
-    mesures_dir = Path(args.mesures_dir).resolve()
+    mesures_dir = (Path(args.mesures_dir) if args.mesures_dir else csv_path.parent / "mesures").resolve()
 
-    # 1. Chargement et préparation
-    df = load_and_preprocess_moves(csv_path)
+    # 1. Chargement et préparation — les phases viennent du run lui-même
+    calendrier_run = fenetres_du_run(csv_path.parent)
+    df = load_and_preprocess_moves(csv_path, calendrier_run)
+    titre_evenement = calendrier_run.get("libelle") or (
+        "événement non déclaré" if calendrier_run.get("a_un_evenement") else "aucun événement déclaré")
 
     # Détermination de l'identifiant d'expérience pour le rangement
     if args.output_dir:
@@ -780,8 +900,8 @@ def main() -> None:
     entropy_summary = compute_persona_entropy(df)
 
     # 4. Matrices de transition
-    m_pre = compute_transition_matrix(transitions_act, phase_filter="1. Pré-choc (J1-7)")
-    m_post = compute_transition_matrix(transitions_act, phase_filter="4. Post-choc tardif (J15-21+)")
+    m_pre = compute_transition_matrix(transitions_act, phase_filter=PHASE_AVANT)
+    m_post = compute_transition_matrix(transitions_act, phase_filter=PHASE_APRES)
 
     # 5. Export des tableaux de données
     csv_phase_out = out_dir / "taux_variation_par_phase.csv"
@@ -805,14 +925,19 @@ def main() -> None:
     # 6. Graphiques
     if not args.no_plots:
         logger.info("Génération des figures conformes à la charte graphique...")
-        plot_phases_variation(phase_summary, out_dir, formats)
+        plot_phases_variation(phase_summary, out_dir, formats, titre_evenement)
         plot_activity_rigidity(activity_summary, out_dir, formats)
         plot_persona_entropy_collapse(entropy_summary, out_dir, formats)
-        plot_transition_matrices_heatmap(m_pre, m_post, out_dir, formats)
+        if m_pre.empty or m_post.empty:
+            logger.info("Figure 4 non produite : pas de transition %s ou %s.",
+                        "avant" if m_pre.empty else "", "après" if m_post.empty else "")
+        else:
+            plot_transition_matrices_heatmap(m_pre, m_post, out_dir, formats)
         plot_daily_selection_and_transitions(df, transitions_act, out_dir, formats)
 
     # 7. Rapport Markdown
-    report_file = generate_markdown_report(phase_summary, activity_summary, entropy_summary, out_dir, df=df)
+    report_file = generate_markdown_report(phase_summary, activity_summary, entropy_summary, out_dir,
+                                           df=df, calendrier_run=calendrier_run)
 
     print("\n" + "=" * 70)
     print("ANALYSE DU TAUX DE VARIATION ET DE STABILITÉ COMPORTEMENTALE TERMINÉE")

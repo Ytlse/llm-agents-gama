@@ -218,6 +218,10 @@ class BlocPrompt:
     options: tuple[Option, ...]
     a_historique: bool
     taille_historique: int
+    # Le texte de la section `**History:**`, tel que le modèle l'a lu. C'est lui — et non la
+    # trace de rappel, plus large que ce que le prompt contient quand le noyau est présent —
+    # qui dit si un souvenir a été SERVI à une décision (`scripts/analysis/mesures/souvenir.py`).
+    historique: str = ""
 
 
 @dataclass(frozen=True)
@@ -518,7 +522,8 @@ def _blocs_du_prompt(texte: str, jour: str) -> list[BlocPrompt]:
                                  description=o["desc"], etapes=tuple(o["etapes"]))
                           for o in courant["options"]),
             a_historique=courant["historique"] > 0,
-            taille_historique=courant["historique"]))
+            taille_historique=courant["historique"],
+            historique="\n".join(courant["lignes_historique"]).strip()))
 
     for ligne in texte.splitlines():
         entete = _ENTETE_BLOC.match(ligne)
@@ -527,12 +532,25 @@ def _blocs_du_prompt(texte: str, jour: str) -> list[BlocPrompt]:
             heure, _, minute = entete.group("depart").partition(":")
             courant = {"agent": entete.group("agent"), "motif": entete.group("motif"),
                        "depart": int(heure) * 60 + int(minute),
-                       "options": [], "historique": 0}
+                       "options": [], "historique": 0, "lignes_historique": [],
+                       "dans_historique": False}
             continue
         if courant is None:
             continue
         if ligne.startswith("**History:**"):
             courant["historique"] = max(1, len(ligne) - len("**History:**"))
+            courant["dans_historique"] = True
+            reste = ligne[len("**History:**"):].strip()
+            if reste:
+                courant["lignes_historique"].append(reste)
+            continue
+        if courant["dans_historique"]:
+            # La section court jusqu'au bloc suivant ou jusqu'à la consigne de réponse, qui
+            # clôt le prompt : rien de ce qui la suit n'est de la mémoire.
+            if ligne.startswith("Reply with"):
+                courant["dans_historique"] = False
+            else:
+                courant["lignes_historique"].append(ligne)
             continue
         etape = _LIGNE_ETAPE.match(ligne)
         if etape and courant["options"]:

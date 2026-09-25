@@ -1,3 +1,53 @@
+## [2026-09-25] On voit enfin quand le souvenir d'un article revient dans une décision, et le foyer se parle le soir
+
+Suite du dépouillement du bras traité a09 `2026-09-24_17_50` : les trois points laissés en
+suspens le matin même.
+
+**Le souvenir d'un événement se lit dans les prompts, pour tout le foyer et tous les jours
+suivants.** Les colonnes « souvenir servi » cherchaient le texte brut de l'article dans la
+mémoire, que la consolidation reformule toujours, et seulement le jour de la lecture. Elles
+cherchent maintenant l'article dans la section History de chaque prompt de décision, mot pour mot
+ou reformulé (au moins trois racines distinctes de l'article que le foyer n'avait jamais écrites
+avant de le lire). Une nouvelle table, `souvenir_evenement_par_jour.csv`, suit le lecteur et ses
+co-résidents de J0 à la fin du run et dit par où le souvenir est entré : un concept (« Ce que je
+sais »), la ligne garantie ou un choc (« Ce qui a changé récemment »), une épisodique rappelée.
+`souvenirs_derives.csv` liste les documents de mémoire qui portent l'article.
+
+**Avant :** `evenement_par_jour.csv` → `souvenir_choc_servi = 0`, `appariement = texte`, et rien
+sur les jours suivants.
+**Après :** six prompts retrouvés — Denis (286923) le 27 mars à 12 h 40, 14 h 21 et 17 h 36 par
+un concept, Arthur (286920) les 30 et 31 mars par un concept, 286921 le 30 mars à 13 h 38 par
+une épisodique — et 0 prompt sur 128 au témoin `2026-09-24_23_06`. La ligne du 26 mars dit
+`aucune trace` : ce jour-là, aucun des prompts d'Arthur ne portait l'article.
+
+**Le rapport automatique décrit l'événement du run, pas un choc d'il y a trois semaines.**
+`rapport_stabilite_variation.md` et ses figures découpaient tout run en quatre phases figées sur
+« choc d'avarie moteur J8-9 », et la section 2 recopiait des chiffres d'un run ancien (« Études,
+stabilité 100 % »). Les phases sont désormais lues dans le run, foyer par foyer : avant, jour(s)
+de l'événement, après ; les agents hors de tout foyer exposé à part ; « sans événement » pour un
+bras témoin. Titre et libellé viennent de la déclaration, les phrases chiffrées sont calculées,
+et une phase sans trajet s'écrit « — » au lieu de 0 bit. Les tables complémentaires vont dans le
+`mesures/` du run analysé : elles allaient dans celui du run en cours.
+
+**Avant :** fig. 1 « (Choc d'avarie moteur J8-9) », 4 phases J1-7 / J8-9 / J10-14 / J15-21+.
+**Après :** fig. 1 « (a09_vent_autan — Autan gales, parks closed) », avant 87 transitions /
+jour de l'événement 12 / après 34, fond de la fig. 5 sur le seul jour 11.
+
+**Le foyer se raconte sa journée le soir, une fois.** Le récit était servi à chaque consolidation,
+trois par jour en médiane, et un receveur qui consolidait peu trouvait 9 à 11 bilans pour une
+borne de 8 : 18 alarmes « récit du soir TRONQUÉ » sur le run. Il n'entre plus qu'à la première
+consolidation après 18 h (`memoire__recit_soir_heure`), une ligne par membre qui cite tous ses
+bilans depuis la dernière fois. Au-delà de 8 bilans par membre, les plus anciens sont cités et
+le reste attend le lendemain ; l'alarme ne se lève plus qu'à l'entrée dans cet état. Le repère
+suit désormais le dernier bilan cité, ce qui ne perd plus un bilan arrivé en retard dans la file.
+
+**Avant :** bloc « Tonight at home » à 8 h, 12 h et 22 h ; au-delà de 8 bilans, le reste perdu.
+**Après :** un bloc par soir, rien perdu ; le bilan du run compte les consolidations de jour
+sans bloc. Les runs de foyer à venir changent donc de prompt de réflexion : ils ne se comparent
+pas à ceux d'avant sur ce point.
+
+---
+
 ## [2026-09-25] Un article lu est daté du jour où on le lit, et la fenêtre de parution ne crie plus au loup
 
 Deux sorties du bras traité a09 `2026-09-24_17_50` décrivaient mal ce qui s'était passé.

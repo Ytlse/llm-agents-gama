@@ -489,3 +489,129 @@ def test_le_bilan_du_foyer_alarme_si_le_compte_ne_tombe_pas_juste():
     source = (RACINE / "llm" / "foyer.py").read_text("utf-8")
     assert "le compte ne tombe pas juste" in source
     assert "quittent la boucle sans être comptés" in source
+
+
+# ── Le récit se fait LE SOIR, une fois (analyse du 2026-09-25) ───────────────────────────
+# Sur le bras traité du 2026-09-24_17_50, 18 [ALARME] « récit du soir TRONQUÉ » : le bloc était
+# servi à CHAQUE consolidation (trois par agent et par jour en médiane, sept au plus), chaque
+# consolidation écrit un bilan, et un receveur qui consolidait rarement en trouvait 9 à 11 chez
+# les autres. La borne ne mordait pas faute d'un repère cassé, mais parce que « un bilan par
+# membre et par nuit » était faux. L'article dit « in the evening » : le code le dit aussi.
+SOIR = datetime(2026, 3, 16, 20, 0)
+
+
+def test_le_foyer_ne_parle_pas_en_journee_et_rien_nest_perdu():
+    _indexer(CONSTANCE, JACQUES)
+    ltm = FausseLTM()
+    ltm.ajouter("49", _reflexion("49", "Morning rush on line A.", SOIR - timedelta(hours=11)))
+    midi = SOIR - timedelta(hours=7, minutes=20)
+    assert foyer.bloc_du_soir(ltm, CONSTANCE, midi) == ""
+    assert foyer.compteurs()["hors_soir"] == 1
+    assert foyer.compteurs().get("receveurs", 0) == 0, "une consolidation de jour n'examine rien"
+    bloc = foyer.bloc_du_soir(ltm, CONSTANCE, SOIR)
+    assert "Morning rush on line A." in bloc, "ce qui n'est pas raconté à midi l'est le soir"
+
+
+def test_un_seul_recit_par_soir_le_reste_attend_le_lendemain():
+    _indexer(CONSTANCE, JACQUES)
+    ltm = FausseLTM()
+    ltm.ajouter("49", _reflexion("49", "First.", SOIR - timedelta(hours=2)))
+    assert "First." in foyer.bloc_du_soir(ltm, CONSTANCE, SOIR)
+    ltm.ajouter("49", _reflexion("49", "Second.", SOIR + timedelta(hours=1)))
+    assert foyer.bloc_du_soir(ltm, CONSTANCE, SOIR + timedelta(hours=2)) == ""
+    # 01:30 appartient encore à la journée simulée de la veille (frontière à 3 h).
+    assert foyer.bloc_du_soir(ltm, CONSTANCE, SOIR + timedelta(hours=5, minutes=30)) == ""
+    assert foyer.compteurs()["deja_servi_ce_soir"] == 2
+    lendemain = foyer.bloc_du_soir(ltm, CONSTANCE, SOIR + timedelta(days=1))
+    assert "Second." in lendemain and "First." not in lendemain
+
+
+def test_un_soir_sans_rien_a_dire_ne_ferme_pas_la_soiree():
+    """Rien de neuf à 18 h ne prive pas le receveur de ce que l'autre racontera à 21 h."""
+    _indexer(CONSTANCE, JACQUES)
+    ltm = FausseLTM()
+    assert foyer.bloc_du_soir(ltm, CONSTANCE, SOIR - timedelta(hours=2)) == ""
+    ltm.ajouter("49", _reflexion("49", "Late news.", SOIR + timedelta(hours=1)))
+    assert "Late news." in foyer.bloc_du_soir(ltm, CONSTANCE, SOIR + timedelta(hours=2))
+
+
+def test_une_ligne_par_membre_qui_cite_tous_ses_bilans():
+    _indexer(CONSTANCE, JACQUES)
+    ltm = FausseLTM()
+    for i, h in enumerate((8, 13, 19)):
+        ltm.ajouter("49", _reflexion("49", f"Bilan {i}.", SOIR.replace(hour=h)))
+    lignes = foyer.recit_du_soir(ltm, "12", SOIR + timedelta(hours=1))
+    assert len(lignes) == 1
+    assert all(f"Bilan {i}." in lignes[0] for i in range(3))
+    assert lignes[0].index("Bilan 0.") < lignes[0].index("Bilan 2."), "dans l'ordre du jour"
+
+
+def test_le_repere_suit_le_dernier_bilan_cite_pas_lheure_du_receveur():
+    """Un bilan écrit APRÈS le passage du receveur mais daté d'avant n'est plus perdu.
+
+    La file EDF ne sert pas les consolidations dans l'ordre simulé : l'ancien repère, posé à
+    l'heure du receveur, avalait tout bilan d'un autre membre daté d'avant cette heure et
+    arrivé ensuite.
+    """
+    _indexer(CONSTANCE, JACQUES)
+    ltm = FausseLTM()
+    ltm.ajouter("49", _reflexion("49", "Early.", SOIR))
+    assert foyer.recit_du_soir(ltm, "12", SOIR + timedelta(hours=2))
+    ltm.ajouter("49", _reflexion("49", "Arrived late in the queue.", SOIR + timedelta(hours=1)))
+    suite = foyer.recit_du_soir(ltm, "12", SOIR + timedelta(days=1))
+    assert suite and "Arrived late in the queue." in suite[0]
+
+
+def test_la_troncature_reporte_au_lendemain_et_salarme_sur_front_montant():
+    from loguru import logger as _logger
+
+    _indexer(CONSTANCE, JACQUES)
+    settings.agent.memoire__recit_soir_max_par_membre = 2
+    messages, jeton = _capturer("ERROR")
+    try:
+        ltm = FausseLTM()
+        for i in range(6):
+            ltm.ajouter("49", _reflexion("49", f"Day {i}.", SOIR + timedelta(days=i)))
+        vus = []
+        for soir in range(3):
+            lignes = foyer.recit_du_soir(ltm, "12", SOIR + timedelta(days=9 + soir))
+            assert len(lignes) == 1
+            vus += [f"Day {i}." for i in range(6) if f"Day {i}." in lignes[0]]
+        assert vus == [f"Day {i}." for i in range(6)], "les plus anciens d'abord, rien de perdu"
+    finally:
+        _logger.remove(jeton)
+        settings.agent.memoire__recit_soir_max_par_membre = 8
+    alarmes = [m for m in messages if "[ALARME]" in m and "TRONQUÉ" in m]
+    assert len(alarmes) == 1, "deux soirs tronqués de suite ne font qu'une alarme"
+    assert foyer.compteurs()["troncatures"] == 4 + 2
+
+
+def test_un_repere_de_lancienne_forme_se_relit_encore():
+    """Un point de reprise écrit avant le 2026-09-25 porte un repère par receveur seul."""
+    _indexer(CONSTANCE, JACQUES)
+    ltm = FausseLTM()
+    ltm.ajouter("49", _reflexion("49", "Already heard.", SOIR))
+    ltm.ajouter("49", _reflexion("49", "New one.", SOIR + timedelta(days=1)))
+    foyer.charger_etat({"lu_jusqu_a": {"12": (SOIR + timedelta(hours=1)).isoformat()}})
+    lignes = foyer.recit_du_soir(ltm, "12", SOIR + timedelta(days=1, hours=1))
+    assert lignes and "New one." in lignes[0] and "Already heard." not in lignes[0]
+
+
+def test_la_soiree_servie_survit_a_une_reprise():
+    _indexer(CONSTANCE, JACQUES)
+    ltm = FausseLTM()
+    ltm.ajouter("49", _reflexion("49", "A day.", SOIR - timedelta(hours=1)))
+    assert foyer.bloc_du_soir(ltm, CONSTANCE, SOIR)
+    sauvegarde = foyer.etat_pour_reprise()
+    foyer.reinitialiser()
+    _indexer(CONSTANCE, JACQUES)
+    foyer.charger_etat(sauvegarde)
+    ltm.ajouter("49", _reflexion("49", "Another.", SOIR + timedelta(hours=1)))
+    assert foyer.bloc_du_soir(ltm, CONSTANCE, SOIR + timedelta(hours=2)) == ""
+
+
+def test_les_reglages_du_soir_ont_leurs_defauts():
+    from settings import AgentConfig
+
+    assert AgentConfig().memoire__recit_soir_heure == 18
+    assert AgentConfig().memoire__recit_soir_max_par_membre == 8
