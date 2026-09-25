@@ -259,16 +259,17 @@ fin des `erreurs.jsonl` des exécutions en cours, remplacé à chaque nouvelle e
 type, message, personne). Elle dit d'un coup d'œil ce qui coince — quota, passerelle saturée —
 sans historique ni dépliage.
 
-Trois blocs, dans cet ordre : **ce qui tourne d'après le disque** (mêmes exécutions
-et mêmes jeux que la tuile de la vue d'ensemble), **les exécutions arrêtées**, puis **les
-cibles `make` lancées depuis cette session**. Les volets qui relisent le disque battent
+Quatre blocs, dans cet ordre : **ce qui tourne d'après le disque** (mêmes exécutions
+et mêmes jeux que la tuile de la vue d'ensemble), **les exécutions terminées avec succès**
+(avec date et heure de fin, purgeables via « 🧹 Vider la liste » ou « 🧹 Purger l'historique »),
+**les exécutions arrêtées**, puis **les cibles `make` lancées depuis cette session**. Les volets qui relisent le disque battent
 toutes les **15 s** (`app.py`, constante `BATTEMENT`) : la cadence doit rester plus longue
 que le travail d'un battement, sinon le tableau de bord ne cesse jamais de calculer — voir
 « Le coût d'un battement » plus bas.
 L'ordre dit la primauté : le registre de jobs ne connaît que cette session, le disque
 connaît tout le reste.
 
-Dans les deux blocs d'exécutions du volet, chaque ligne est **préfixée du fournisseur** —
+Dans les blocs d'exécutions du volet, chaque ligne est **préfixée du fournisseur** —
 `🧪 antigravity / exp_agy-gemini-38-f_… / 2026-09-09_13_05_09`, `🪫 cerebras / exp_gemma-4-31b_…`
 — avec la même dérivation que la colonne du registre. Un décideur sans LLM n'a pas de préfixe :
 « — / » ferait croire à une information manquante. La tuile compacte de la vue d'ensemble le
@@ -706,6 +707,52 @@ réapparaît d'elle-même tant qu'elle écrit. L'effacement définitif du dossie
 (`supprimer_experience`) n'est plus branché à l'IHM : un clic y détruisait des heures de calcul sans
 retour possible. Le tableau de bord lit et écrit des fichiers et n'importe pas la pile du
 contrôleur ; une exécution dont le dossier a disparu reste listée « archive manquante ».
+
+### Espaces de travail : ne voir que le chantier en cours (spec `espaces-de-travail-experiences`)
+
+Le registre affichait les quatre-vingts lignes du dépôt sans distinction. Quand un chantier
+n'en concerne qu'une trentaine, le reste est du bruit permanent : il allonge le tableau, dilue
+les filtres et oblige à relire les noms pour retrouver la ligne qui compte. Le seul découpage
+existant, le statut, dit si une expérience est utilisable, pas à quel travail elle appartient.
+
+Un **menu déroulant en tête du registre** choisit l'espace actif. « Toutes les expériences »
+y figure toujours en premier et ne filtre rien : c'est le défaut, et le registre s'y comporte
+exactement comme avant. Un espace nommé restreint le tableau, ses compteurs, son panneau de
+statuts et la liste « s'inspirer d'une expérience existante » à ses seules entrées.
+
+**Un espace est une vue, jamais un rangement.** Changer d'espace ne déplace, ne renomme et ne
+supprime aucune expérience ; une expérience citée par aucun espace reste visible sous « Toutes
+les expériences », et une même expérience peut appartenir à plusieurs espaces.
+
+Les espaces se déclarent dans `scripts/dashboard/espaces_experiences.yaml`, versionné et relu
+en diff — il n'y a pas de bouton « nouvel espace », et c'est délibéré. Chaque entrée porte le
+nom de l'expérience, une **étiquette de phase** et un drapeau `optionnel`. L'étiquette est
+nécessaire parce que le nom d'une expérience se calcule depuis ses paramètres (spec
+`nommage-canonique-experiences`) : il est son identité de dossier et sa clé de dédoublonnage,
+et un segment décoratif y produirait deux noms pour un même jeu de paramètres. Le rattachement
+d'une expérience à son lot passe donc par la vue, pas par le nom. La colonne `phase` n'apparaît
+que sous un espace actif.
+
+**Le fichier échoue ouvert.** Absent, tronqué, de type inattendu, ou portant une entrée sans
+nom : le module journalise et rend ce qu'il peut, jusqu'à la liste vide, et le registre s'ouvre
+sur « Toutes les expériences ». Un fichier de confort qui rendrait le tableau de bord
+inaccessible serait pire que son absence. Même règle pour l'espace actif retenu d'une session à
+l'autre (`experiments/.dashboard/espace_actif.txt`, ignoré par git) : illisible ou désignant un
+espace disparu du fichier, il retombe sur « Toutes les expériences » et le dit une fois.
+
+**Un nom cité sans dossier sur le disque n'est pas une erreur.** L'espace se remplit avant les
+expériences — c'est l'usage prévu : écrire le plan d'un ticket, puis déclarer les expériences au
+fil des phases. Un dépli les compte et les nomme. Le jour où un dossier disparaît, c'est là
+qu'on le verra.
+
+**Ce qui tourne n'est jamais filtré.** Les activités en cours, les reprises et la file d'attente
+ignorent l'espace actif : une exécution qui se perdrait de vue en changeant de menu serait un
+piège, pas une vue.
+
+L'espace livré, **« papier version courte »**, porte les trente-trois expériences du ticket 103 :
+les quatre phases du carré Jev × Gemini hors échantillon, les trois runs Gemini différés marqués
+optionnels, et les quatorze mesures c1 déjà acquises sans lesquelles les nouvelles ne se lisent
+pas — une mesure sur la cohorte c2 ne se compare pas à une bande calculée sur c1.
 
 ### La fiche des conditions, et les marqueurs ⏳ / 📅 (spec `fiche-conditions-experience`)
 

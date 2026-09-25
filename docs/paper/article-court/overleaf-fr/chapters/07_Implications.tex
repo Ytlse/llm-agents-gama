@@ -1,0 +1,36 @@
+% =====================================================================
+% chapters/07_Implications.tex — rendu LaTeX de ../traductions/07_implications.en_brut.txt (23 septembre 2026)
+% Section 7 de la VERSION FRANÇAISE de l'article court, la dernière. \input depuis main.tex, après 06_Non_tabulated.tex.
+% Ce fichier DÉFINIT \label{sec:implications}.
+% Il RÉFÉRENCE sec:mechanism (Section 6.2), sec:individual (Section 5.4) et sec:nontabulated (Section 6).
+% Citation : chopra2024limits.
+% Rendu mot pour mot de la traduction fournie par l'auteur.
+% =====================================================================
+
+\section{Implications, limites, conclusion}
+\label{sec:implications}
+
+La journée ordinaire et l'événement analysé nous éclairent sur la conception d'un agent de mobilité et sur ce que nous ne pouvons pas affirmer.
+
+\subsection{Ce que ces résultats révèlent sur l'architecture}
+\label{sec:architecture-implication}
+
+Avec les modèles utilisés, le coût d'une journée simulée détermine les limites de la réflexion. Une journée de semaine, pour plus de 1\,000 personas, sollicite le modèle de langage 2\,108 fois et consomme 3 millions de jetons, avec la mémoire désactivée. L'activation de la mémoire ajoute environ 2,5 millions de jetons. À l'échelle des 453 communes couvrant l'enquête, une journée simulée nécessiterait 2,9 millions de requêtes, pour un coût de 2,6 à 4,2 milliards de jetons. Une réponse publiée concernant ce coût interroge le modèle une fois par archétype comportemental plutôt qu'une fois par agent \citep{chopra2024limits}. Huit millions d'agents y fonctionnent avec une centaine d'archétypes, les agents ayant les mêmes attributs partageant une même réponse. Cette économie nous est inaccessible ici, car un événement non tabulé correspond précisément à ce qu'aucun attribut n'enregistre.
+
+Nos mesures suggèrent une division du travail par régime plutôt qu'un décideur unique partout. Nous proposons cette solution comme implémentation possible, bien qu'elle ne soit pas encore mise en œuvre dans notre système. Une étape déterministe supprimerait les options qu'une personne ne peut pas choisir, faute de permis, d'un véhicule stationné ailleurs ou d'un itinéraire. Un modèle tabulaire contiendrait alors le régime nominal. Un classificateur typé évaluerait la gravité de l'événement, une tâche actuellement assurée par le modèle de langage. Il indiquerait également si le cas a quitté ce régime (Section~\ref{sec:mechanism}) et choisirait l'itinéraire le cas échéant. Le modèle de langage recevrait ce qu'aucune variable ne contient et l'écrirait en mémoire.
+
+La deuxième étape impose un choix que nos mesures ne permettent pas de trancher. Un modèle tabulaire contient les deux échelles, bien qu'il n'existe pas avant l'enquête qui lui correspond. Le classificateur typé n'a pas besoin d'une telle enquête pour fonctionner et correspond toujours à la bande tabulaire au niveau agrégé. Une enquête est essentielle pour le calibrer, et sans elle, son réalisme repose sur des pondérations établies ailleurs plutôt que sur une analyse du territoire. Ces pondérations proviennent d'un corpus global, et rien n'y est adapté aux habitudes, aux spécificités ou à la culture d'un lieu. De plus, pour les trajets individuels, le modèle se situe en dessous du seuil minimal de fonctionnement en voiture (Section~\ref{sec:individual}). Une architecture le plaçant au niveau nominal permettrait d'obtenir une fidélité globale à moindre coût, mais au détriment de la fidélité individuelle. Un décideur qui prend en compte le contexte, n'a besoin d'aucune enquête locale, conserve la valeur globale et dépasse ce seuil minimal n'existe pas dans nos mesures. Cet article laisse le problème ouvert. Nous n'estimons pas la part des trajets que chaque étape effectuerait.
+
+\subsection{Limites}
+\label{sec:limitations}
+
+Quatre limites encadrent la portée de ces mesures. Les références tabulaires sont basées sur 39\,203 trajets d'enquête pour lesquels les agents n'ont effectué aucune lecture ; aucun résultat ne compare donc ici deux décideurs disposant d'informations égales. La portée de ce modèle est plus restreinte. Un décideur qui se base uniquement sur les 21 variables ne peut réagir à un événement qu'aucune d'entre elles ne relate, quelle que soit sa précision. Nous montrons qu'un agent réagit à un tel événement. Nous ne montrons pas qu'il prend une meilleure décision. L'incident de la section~\ref{sec:nontabulated} permet de garder la voiture utilisable, alors qu'une véritable panne de moteur l'immobiliserait. Notre convention de recherche interdit la transmission des microdonnées de l'enquête ; par conséquent, la réestimation de nos références tabulaires nécessite l'obtention de l'enquête dans les mêmes conditions. La référence elle-même constitue la quatrième limite. L'enquête décrit un jour de semaine hors vacances scolaires, recueilli à partir des souvenirs des répondants concernant la veille, pour les résidents âgés de cinq ans et plus. Rien ici ne s'applique donc aux week-ends, aux périodes de vacances ou aux déplacements non déclarés par les répondants.
+
+\subsection{Conclusion}
+\label{sec:conclusion}
+
+Nous nous sommes interrogés sur l'apport de la délibération verbalisée à la simulation urbaine et sur sa place au sein d'un agent de mobilité. Peut-il interpréter des signaux absents des colonnes de l'enquête, concernant le contexte ou le vécu d'une personne ? Elle ne mérite pas cette place au quotidien.
+
+Ce quotidien est celui que décrit l'enquête certifiée de 2023 sur les déplacements des ménages à Toulouse, telle que rapportée par ses répondants. Un agent génératif calibré atteint les modèles tabulaires ajustés à partir de cette enquête sans les parcourir. Un classificateur dactylographié qui n'écrit aucun texte atteint le même résultat, pour un cinquantième du coût. Aucun de ces résultats ne justifie des milliards de jetons, ni la latence qu'ils imposent, même avec des prix en baisse qui réduisent les deux côtés de ce ratio. La délibération justifie son coût sur ce que l'enquête ne tabule pas, et c'est une architecture hybride qui la confine à cela. Un événement qu'aucune variable ne porte entre dans la mémoire de l'agent et influence ses choix au fil du temps, puis disparaît. Nous montrons par quel canal, dans un cas suivi de bout en bout, au sein d'une population calibrée à partir de cette enquête.
+
+Deux questions restent en suspens. Nous poursuivons la recherche du décideur manquant, celui qui pourrait détenir les deux échelles sans enquête locale. La campagne de presse, qui utilise le même canal que l'agent pour diffuser des informations qu'il ne fait que lire, n'a pas repris.

@@ -21,6 +21,7 @@ def compute_backpressure_interval(
     population_size: int,
     k: float,
     cap: float,
+    sans_frein: int = 0,
 ) -> float:
     """Délai minimal (secondes) entre deux réponses /sync, fonction du remplissage de la pile.
 
@@ -33,13 +34,32 @@ def compute_backpressure_interval(
     Avec k=3.7 et cap=30 : ~0s sous 30% de backlog, ~2.3s à 50%, ~19s à 89%,
     30s à 100%.
 
+    ⚠ SEUIL PLANCHER, AJOUTÉ LE 2026-09-22 — sans lui, un run à UN agent freinait 30 s à
+    CHAQUE décision. Le ratio étant relatif à la population, une seule activité en attente sur
+    une population de 1 donne 1/1 = 1, donc le frein maximal. Mesuré sur la campagne c3 : 8 s
+    par pas de simulation et ~12 min par jour simulé, soit un run à un agent PLUS LENT qu'un
+    run à vingt (5 s par pas). Le garde-fou calibré pour mille agents étranglait les petits.
+
+    Ce que le plancher énonce est l'invariant réel : tant que le nombre d'activités en attente
+    tient dans la capacité SIMULTANÉE de la passerelle, rien ne fait la queue, donc rien n'a
+    besoin d'être freiné. En dessous de `sans_frein`, toutes les requêtes sont en vol en même
+    temps ; la pile ne grossit pas. Au-dessus, la formule reprend telle quelle.
+
+    Effet mesuré : 1/1 passe de 30,00 s à 0 s, 6/20 de 4,93 s à 0 s, et les régimes qui
+    comptaient vraiment ne bougent pas — 300/1000 reste à 4,93 s, 900/1000 à 25,61 s.
+
     Args:
         in_progress_count: activités en attente de calcul (en vol + idle sans plan).
         population_size:   nombre total d'agents simulés.
         k:                 exposant de convexité (>1 — plus grand = frein plus tardif et abrupt).
         cap:               plafond en secondes (doit rester sous le read timeout HTTP de GAMA).
+        sans_frein:        en deçà de ce nombre d'activités en attente, aucun frein. Vaut la
+                           capacité simultanée de la passerelle (`world.worker_concurrency`).
+                           0 rétablit le comportement d'avant le 2026-09-22.
     """
     if population_size <= 0 or in_progress_count <= 0 or cap <= 0:
+        return 0.0
+    if in_progress_count <= sans_frein:
         return 0.0
     ratio = min(1.0, in_progress_count / population_size)
     return cap * ratio ** k

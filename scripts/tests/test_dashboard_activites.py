@@ -62,6 +62,15 @@ class FauxSt:
     def toast(self, *_a, **_k):
         pass
 
+    def expander(self, *a, **k):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        pass
+
     @property
     def tout(self) -> str:
         return "\n".join(self.textes + self.legendes + [t for _, t in self.barres])
@@ -141,6 +150,8 @@ def plateforme(tmp_path, monkeypatch):
     # Colonnes et filtres du tableau survivent maintenant à la fermeture de la page : sans
     # cette redirection, les tests liraient la vue de l'utilisateur et écriraient dans la sienne.
     monkeypatch.setattr(experiences, "ETAT_VUE_REGISTRE", tmp_path / "vue" / "tableau.yaml")
+    monkeypatch.setattr(experiences, "ETAT_ESPACE_ACTIF", tmp_path / "espace_actif.txt")
+    monkeypatch.setattr(experiences, "ETAT_TERMINEES_PURGEES", tmp_path / "terminees_purgees.json")
     return tmp_path
 
 
@@ -1292,3 +1303,119 @@ class TestCoutDunBattement:
         casse = plateforme / "casse.yaml"
         casse.write_text("{ ceci n'est pas: du yaml: du tout", encoding="utf-8")
         assert experiences._yaml(casse) == {}
+
+
+# ── Exécutions terminées avec succès : log, date/heure et purge ───────────────
+
+def _terminee(nom_exp: str, execution: str, etat: dict | None = None, *,
+              cree_le: str = "2026-09-24T08:00:00+00:00",
+              maj: str = "2026-09-24T08:30:15+00:00",
+              decisions: int = 3154, attendus: int = 3161) -> Path:
+    exp_yaml = experiences.DOSSIER / nom_exp / "experience.yaml"
+    if not exp_yaml.is_file():
+        _ecrire(exp_yaml, {"nom": nom_exp, "decideur": {}})
+    dossier = experiences.DOSSIER / nom_exp / "executions" / execution
+    base_etat = {"etat": "terminee", "maj": maj, "decisions_archivees": decisions}
+    if etat:
+        base_etat.update(etat)
+    _ecrire(dossier / "etat.json", base_etat)
+    _ecrire(dossier / "execution.yaml", {"version": "execution1", "cree_le": cree_le, "experience": {"nom": nom_exp}})
+    _ecrire(dossier / "compteurs.json", {"couverture": {"decides": decisions, "attendus": attendus, "taux": decisions / attendus}})
+    return dossier
+
+
+def test_terminees_liste_executions_avec_date_et_heure(plateforme, monkeypatch, tmp_path):
+    """Les exécutions terminées avec succès sont listées avec date et heure de fin."""
+    fichier_purge = tmp_path / "terminees_purgees.json"
+    monkeypatch.setattr(experiences, "ETAT_TERMINEES_PURGEES", fichier_purge)
+    experiences.purger_terminees()
+
+    _terminee("exp_terminee", "20260924-080000", maj="2026-09-24T08:30:15+00:00", decisions=3154, attendus=3161)
+    _arretee("exp_en_pause", "20260924-081000", {"etat": "en_pause", "raison": "pause"})
+
+    lignes = experiences.terminees()
+    assert len(lignes) == 1
+    e = lignes[0]
+    assert e["experience"] == "exp_terminee"
+    assert e["execution"] == "20260924-080000"
+    assert "24/09/2026" in e["date_heure_texte"]
+    assert "30:15" in e["date_heure_texte"]
+    assert e["decisions"] == 3154
+    assert e["couverture"] is not None
+
+
+def test_purger_terminees_retire_les_terminees_de_l_affichage(plateforme, monkeypatch, tmp_path):
+    """La purge enregistre les clés et retire les exécutions terminées de l'affichage."""
+    fichier_purge = tmp_path / "terminees_purgees.json"
+    monkeypatch.setattr(experiences, "ETAT_TERMINEES_PURGEES", fichier_purge)
+    experiences.purger_terminees()
+
+    _terminee("exp1", "20260924-080000", maj="2026-09-24T08:30:00+00:00")
+    _terminee("exp2", "20260924-081000", maj="2026-09-24T08:40:00+00:00")
+
+    assert len(experiences.terminees()) == 2
+    purges = experiences.purger_terminees()
+    assert purges == 2
+    assert len(experiences.terminees()) == 0
+
+    # Idempotent
+    assert experiences.purger_terminees() == 0
+
+    # Une nouvelle exécution terminée après coup apparaît bien
+    _terminee("exp3", "20260924-090000", maj="2026-09-24T09:15:00+00:00")
+    lignes = experiences.terminees()
+    assert len(lignes) == 1
+    assert lignes[0]["experience"] == "exp3"
+
+
+def test_rendre_terminees_affichage_et_bouton_vider(plateforme, monkeypatch, tmp_path):
+    """rendre_terminees affiche les exécutions terminées avec date/heure et le bouton de purge."""
+    fichier_purge = tmp_path / "terminees_purgees.json"
+    monkeypatch.setattr(experiences, "ETAT_TERMINEES_PURGEES", fichier_purge)
+    experiences.purger_terminees()
+
+    st = FauxSt()
+    experiences.rendre_terminees(st, [])
+    assert "Aucune exécution terminée récente" in st.tout
+
+    _terminee("exp1", "20260924-080000", maj="2026-09-24T08:30:00+00:00", decisions=100, attendus=100)
+    lignes = experiences.terminees()
+    st2 = FauxSt()
+    st2.expander = lambda *a, **k: st2
+    st2.__enter__ = lambda *a: st2
+    st2.__exit__ = lambda *a: None
+    experiences.rendre_terminees(st2, lignes)
+
+    assert "✅" in st2.tout
+    assert "exp1" in st2.tout
+    assert "terminée avec succès le" in st2.tout
+    assert "100 décisions archivées" in st2.tout
+    assert any("Vider la liste" in b for b in st2.boutons)
+
+
+def test_formater_date_heure():
+    """Vérifie le formattage des dates et heures locales."""
+    assert "16/09/2026" in experiences.formater_date_heure("2026-09-16T13:36:44+00:00")
+    assert experiences.formater_date_heure(None) == "date inconnue"
+    assert experiences.formater_date_heure("") == "date inconnue"
+
+
+def test_render_activites_ordre_des_blocs(plateforme, monkeypatch):
+    """Vérifie que le bloc des exécutions terminées apparaît bien avant les exécutions arrêtées."""
+    from scripts.dashboard import app
+
+    st = FauxSt()
+    st.divider = lambda: None
+    monkeypatch.setattr(app, "st", st)
+    monkeypatch.setattr(app, "render_activites_disque", lambda: st.markdown("BLOC_EN_COURS"))
+    monkeypatch.setattr(app, "render_derniere_erreur_llm", lambda: None)
+    monkeypatch.setattr(app, "render_terminees_disque", lambda: st.markdown("BLOC_TERMINEES"))
+    monkeypatch.setattr(app, "render_reprenables_disque", lambda: st.markdown("BLOC_ARRETEES"))
+    monkeypatch.setattr(app, "render_jobs_live", lambda: st.markdown("BLOC_JOBS"))
+
+    app.render_activites()
+    textes = st.textes
+    idx_terminees = next(i for i, t in enumerate(textes) if "BLOC_TERMINEES" in t or "terminées" in t)
+    idx_arretees = next(i for i, t in enumerate(textes) if "BLOC_ARRETEES" in t or "arrêtées" in t)
+    assert idx_terminees < idx_arretees, "Le bloc des terminées doit être placé avant les arrêtées"
+

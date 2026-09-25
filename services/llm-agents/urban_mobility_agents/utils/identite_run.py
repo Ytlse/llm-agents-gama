@@ -73,6 +73,12 @@ LIBELLES = {
     "changements_max": "lignes du bloc « ce qui a changé récemment »",
     "reflexion_stm_min_entrees": "plancher d'entrées avant réflexion",
     "meteo_par_agent": "météo tirée par agent",
+    # Ticket 100, lot 4 — deux bras dont l'un laisse le vécu d'un habitant atteindre son
+    # co-résident et l'autre non n'écrivent pas la même mémoire.
+    "partage_foyer": "partage de la mémoire dans le foyer",
+    # 2026-09-24 — les tâches en vol bornent la taille des micro-lots : deux bras qui ne
+    # fusionnent pas autant d'agents par prompt ne posent pas les mêmes questions au modèle.
+    "taches_en_vol": "tâches de planification en vol",
     # ── Filiation (ticket 095, lot D) ──
     # Un enfant hérite de la MÉMOIRE de son parent : de quel parent, et ce qu'il s'autorise à
     # faire varier, appartiennent à son identité. Repris sous un autre parent, il n'est plus le
@@ -102,8 +108,19 @@ def _empreinte_du_choc(reglages: Any) -> str:
     """
     import hashlib
 
-    cfg = getattr(reglages, "chocs", None)
-    if cfg is None or not getattr(cfg, "enabled", False):
+    # DEUX CLÉS PENDANT UNE VERSION, et l'ordre est celui de `_declaration_demandee()` :
+    # `evenements` (ticket 100) d'abord, `chocs` (ticket 079) ensuite. Cette fonction ne lisait
+    # QUE la seconde. Le 2026-09-22, la campagne c3 a écrit la clé neuve dans `config.yaml` — ce
+    # qui est la forme canonique — et l'identité du bras TRAITÉ a enregistré « aucun » : le même
+    # mot que son témoin. Deux expériences différentes passaient pour une, ce que le docstring
+    # ci-dessus donne précisément pour la chose à ne pas faire.
+    cfg = None
+    for cle in ("evenements", "chocs"):
+        bloc = getattr(reglages, cle, None)
+        if bloc is not None and getattr(bloc, "enabled", False) and getattr(bloc, "fichier", None):
+            cfg = bloc
+            break
+    if cfg is None:
         return "aucun"
     chemin = getattr(cfg, "fichier", None)
     if not chemin:
@@ -212,6 +229,8 @@ def composer(
             getattr(reglages.agent, "stm_reflection_min_entries", 10)
         ),
         "meteo_par_agent": bool(getattr(reglages.agent, "weather_per_agent_dates", True)),
+        "partage_foyer": bool(getattr(reglages.agent, "memoire__partage_foyer_enabled", False)),
+        "taches_en_vol": int(getattr(getattr(reglages, "world", None), "worker_concurrency", 8)),
         # ── Filiation (lot D) ──
         "run_parent": str(run_parent or ""),
         "champs_libres": sorted(champs_libres or ()),

@@ -20,7 +20,8 @@ _MOTIF_LOT = re.compile(r"^batch_[0-9a-f]+_(\d+)$")
 
 
 def compute_batch_key(request: LLMRequest) -> str:
-    """Clé de batch : MD5(catégorie + paramètres + provider forcé + min_tpm + instances admises).
+    """Clé de batch : MD5(catégorie + paramètres + provider forcé + min_tpm + instances admises
+    + origine).
 
     ⚠ **Toute contrainte de routage doit entrer ici** (ticket 084). Un lot est servi par UNE
     instance : deux requêtes aux restrictions différentes fusionnées dans le même lot feraient
@@ -29,6 +30,10 @@ def compute_batch_key(request: LLMRequest) -> str:
 
     Les instances admises entrent TRIÉES et dédupliquées : c'est un ensemble, pas une séquence,
     et deux déclarations du même ensemble dans un ordre différent doivent partager leur lot.
+
+    L'origine y entre aussi : un lot ne porte qu'UNE origine dans le journal des échanges, et
+    fusionner deux clients l'attribuerait tout entier au premier. `None` (client qui ne la pose
+    pas) garde la clé historique des lots sans origine.
     """
     params_str = json.dumps(request.parameters, sort_keys=True)
     admises = (
@@ -38,7 +43,7 @@ def compute_batch_key(request: LLMRequest) -> str:
     )
     hash_str = hashlib.md5(
         f"{request.category}:{params_str}:{request.force_provider}:"
-        f"{request.min_tpm_required}:{admises}".encode()
+        f"{request.min_tpm_required}:{admises}:{request.origine}".encode()
     ).hexdigest()
     return f"{request.category}:{hash_str}"
 

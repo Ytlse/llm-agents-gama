@@ -594,6 +594,7 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
         category=base_req.category,
         sim_ts=sim_ts,
         telemetry=settings.telemetry,
+        origine=base_req.origine,
     )
 
     # 7. Télémétrie métriques

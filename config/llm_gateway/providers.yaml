@@ -300,11 +300,12 @@ providers:
   groq_openai_120_key1:
     adapter:           groq
     rpm_limit:         30
+    tpm_limit:         8000
     # TEMPORAIRE A SUPPRIMER (debug ticket 077 : éviter le verrou 60s artificiel de tpm_limit=8000 face au reset sub-seconde de Groq)
     # tpm_limit:         8000
     rpd_limit:         1000   # quota requêtes/jour (en-têtes x-ratelimit)
     # TEMPORAIRE A SUPPRIMER (debug ticket 077 : borner batch_max_agents à 2 sans verrouiller le TPM à 60s)
-    max_tokens_per_request: 6000
+    max_tokens_per_request: 8000  # = TPM free tier (requête unique au-delà → HTTP 413)
     # TEMPORAIRE A SUPPRIMER (debug ticket 077 : pas de tpd_limit local pour Groq dont la fenêtre est glissante)
     # tpd_limit:         200000
     base_url:          https://api.groq.com/openai/v1
@@ -317,8 +318,9 @@ providers:
   groq_openai_20_key1:
     adapter:           groq
     rpm_limit:         30
+    tpm_limit:         8000
     rpd_limit:         1000
-    max_tokens_per_request: 6000
+    max_tokens_per_request: 8000  # = TPM free tier (requête unique au-delà → HTTP 413)
     base_url:          https://api.groq.com/openai/v1
     default_model:     openai/gpt-oss-20b
     max_output_tokens: 65536
@@ -528,11 +530,12 @@ providers:
   groq_qwen_qwen3_8_27b_key1:
     adapter:            groq
     rpm_limit:          30
+    tpm_limit:          8000
     # TEMPORAIRE A SUPPRIMER (debug ticket 077 : éviter le verrou 60s artificiel de tpm_limit=8000 face au reset sub-seconde de Groq)
     # tpm_limit:          8000
     rpd_limit:          1000  # quota requêtes/jour (free tier)
     # TEMPORAIRE A SUPPRIMER (debug ticket 077 : borner batch_max_agents à 2 sans verrouiller le TPM à 60s)
-    max_tokens_per_request: 6000
+    max_tokens_per_request: 8000  # = TPM free tier (requête unique au-delà → HTTP 413)
     base_url:           https://api.groq.com/openai/v1
     default_model:      qwen/qwen3.8-27b
     weight:             0.18  # min(30, 8000/3000)/15

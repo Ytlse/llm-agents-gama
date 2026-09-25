@@ -1,3 +1,1059 @@
+## [2026-09-24] Les chocs se jouent depuis la plateforme, et s'enchaînent la nuit
+
+Les six chocs déclarés passent désormais le chargeur de la simulation avec une cadence explicite.
+Trois d'entre eux (c1 bouchon sur la rocade, c2 crevaison, c6 voiture suspecte) sont déclarés dans
+l'onglet 🧠 Expériences Mémoire sur le persona 861500, avec les réglages de la campagne c3 publiée
+(gemini-3.1 pour la décision, gemini-3.5 pour la mémoire courte et les enquêtes, 42 jours). Une seule
+commande les enchaîne sans surveillance.
+
+**Cadence des chocs.** c1, c2, c4 et c5 n'en déclaraient pas : la valeur par défaut `trajet`
+aurait injecté le même récit, et le même retard, à chaque trajet du mode visé dans la journée.
+
+**Avant :** c1 au jour 12 — soixante minutes de retard sur chacun des huit trajets en voiture de 861500
+**Après :** `cadence: jour` — une application par jour, comme c3 et c6, dans `config/evenements/` comme dans les copies de `config/chocs/`
+
+**Essai à blanc.** `DRY_RUN=1` ne modifie plus l'expérience qu'il vérifie.
+
+**Avant :** l'essai écrivait `etat.json` et un faux `moves.csv` dans les dossiers des bras ; le c6
+s'affichait « Terminée » après 50 ms, et une vraie relance aurait sauté les deux bras
+**Après :** état inchangé, traces synthétiques sous `essai_a_blanc/` ; le c6 est revenu « En attente »
+
+**Enchaîner la nuit.** `make experience-memoire-nuit` joue en arrière-plan, une par une, toutes les
+expériences déclarées non terminées (ou `EXP="a b c"` dans cet ordre). Un bras suspendu par une
+saturation du fournisseur (HTTP 503) est relancé toutes les 30 min, six fois au plus sans jour simulé
+gagné ; un quota épuisé fait passer à la suivante. Le journal `experiments/enchainement_nuit_<date>.log`
+se termine par un bilan : terminées, suspendues à relancer, en échec.
+
+**Limite connue.** Les jours 13 et 14 tombent un week-end, sans aucun départ
+(`NO_WEEKEND_DEPARTURES`) : c1, c2 et c3 ne s'appliquent qu'au jour 12. Ce jour-là, 861500 ne prend ni le train ni la
+marche : c4 et c5 attendent un persona qui emprunte ces modes, et ne sont pas déclarés.
+
+---
+
+## [2026-09-24] L'article court parle de modèles d'apprentissage automatique sur données structurées
+
+Les sections anglaises de l'article court ne disent plus « tabular models ». Le terme se lisait
+comme un format de tableau et pas comme une famille de méthodes. Le lecteur rencontre
+maintenant « machine learning models on structured data » partout où il désignait les modèles
+estimés sur l'enquête : le logit multinomial, LightGBM, la régression logistique à noyau et la
+forêt aléatoire. Les formes dérivées suivent le même terme : « tabular references »,
+« tabular methods », « tabular band » et « tabular prediction ». Au § 4.4, qui définit les
+références, la phrase dit maintenant « Four reference models, all machine learning models on
+structured data », si bien que « those four references » garde son sens plus loin.
+Vingt-trois reprises dans le corps de sept sections (résumé, 1, 2, 3, 4, 5, 7). Le § 6 et les
+annexes n'employaient pas le terme.
+
+**Avant :** « Existing multi-agent simulations of multimodal urban mobility rely on tabular
+models estimated from household travel surveys, or on explicit rules defined by domain
+experts. »
+**Après :** « Existing multi-agent simulations of multimodal urban mobility rely on machine
+learning models on structured data from household travel surveys, or on explicit rules defined
+by experts. »
+
+Le terme compte quatre mots de plus. Quatre phrases dépassaient ainsi les vingt-six mots et ont
+été resserrées sans perte de sens, par exemple « an equal-input comparison bench » au § 1.3 et
+« survey trips the agents never read » au § 7.2. Quand le terme revient dans la phrase qui suit,
+il est repris par « such a model » ou « two such models » (§ 4.2, § 5.4). La première phrase du
+résumé, texte de l'auteur, passe à 28 mots : elle n'a pas été restructurée.
+
+Seuls les masters anglais sont repris, et leurs dates d'en-tête sont à jour. Les `.tex`, le
+rendu français et les légendes des figures (« Tabular methods fitted on the survey »,
+« tabular band ») portent encore l'ancien terme. Les commentaires de source et les
+comptes-rendus de section n'ont pas été touchés.
+
+---
+
+## [2026-09-24] Le résumé GAMA Days ne dit plus comment l'agent répartit sa décision
+
+Le tuteur a repris la source LaTeX des GAMA Days ; le français et l'anglais courant s'alignent
+dessus. Le § 2 perd sa fin : le résumé nomme les itinéraires offerts à l'agent sans plus dire
+qu'il y répartit toute sa décision. L'anglais écrit « Large Language Models » avec des
+majuscules, comme les mots-clés. Hors du corps, la figure d'architecture passe après le
+matériel additionnel et reçoit une légende, et le lien du dépôt est étiqueté. Le corps passe
+de 497 à 490 mots.
+
+**Avant :** « … à partir du profil de l'agent et des itinéraires réellement offerts, en
+répartissant 100 % de la décision sur celles-ci. »
+**Après :** « … à partir du profil de l'agent et des itinéraires réellement offerts. »
+
+**À savoir.** `scripts/paper/compter_mots_latex.py` rend 516 mots, pas 490 : il lit aussi les
+deux phrases de travail que le tuteur a laissées en commentaire (`%`) dans l'environnement
+`abstract`, que le PDF ne montre pas. Le chiffre qui vaut est 490. Le point figure parmi les
+détails à remonter au tuteur, dans le fichier français.
+
+---
+
+## [2026-09-24] Les tests ne laissent plus de dossier fantôme dans les expériences mémoire
+
+Lancer `scripts/tests` pouvait créer dans le vrai `data/experiences_memoire/` un dossier vide
+au nom illisible, `exp_mem_presse_magicmock-name-mock.selectbox-…`, qui apparaissait ensuite
+dans le registre de l'onglet 🧠. Un test rendait l'onglet avec un faux Streamlit dont chaque
+bouton passe pour cliqué : l'expérience était « enregistrée », le dossier créé, puis
+l'écriture du YAML échouait et le laissait vide. Désormais, pendant les tests, le dossier des
+expériences mémoire et l'état du formulaire (`experiments/.dashboard/formulaire_memoire.yaml`)
+sont détournés vers un dossier temporaire. Un test de non-régression rend l'onglet avec tous
+les boutons cliqués et vérifie que rien n'arrive dans les vraies données.
+
+**Avant :** chaque lancement fautif ajoutait un dossier `exp_mem_…_magicmock-…` au registre
+des expériences mémoire, à supprimer à la main.
+**Après :** les tests n'écrivent plus ni dans `data/experiences_memoire/` ni dans l'état du
+formulaire ; les expériences réelles et les réglages en cours restent intacts.
+
+---
+
+## [2026-09-24] Le matériel supplémentaire de l'article court se compile à part
+
+Le projet LaTeX de l'article court a maintenant une seconde racine, `supplementary.tex`, qui
+compile les annexes en un PDF séparé, à glisser dans le ZIP du matériel supplémentaire. Ce
+PDF reprend la classe AAMAS du papier sur une colonne, pour que les longues lignes des prompts
+restent lisibles. Il ne contient encore que l'annexe D : les trois prompts, quatre liens vers le
+dépôt anonyme, et le trajet de Raymond sous les trois décideurs. Le papier lui-même reçoit trois
+passages du § 4 : la note du dépôt anonyme, la phrase corrigée sur le prompt du classifieur et
+le renvoi à l'annexe D. L'adresse du dépôt n'est écrite qu'à un endroit, `repository.tex`, où
+`TBD` se remplace d'un coup avant la soumission.
+
+**Avant :** pas de fichier d'annexes ; le PDF imprimait encore la puce météo attribuée à tort
+au prompt du classifieur.
+**Après :** `supplementary.tex` compile l'annexe D ; `main.tex` imprime la phrase corrigée, le
+renvoi et l'adresse du dépôt en note de bas de page.
+
+Le vérificateur de forme ignore désormais aussi les blocs `Verbatim` de fvextra, comme il
+ignorait déjà `verbatim` : les prompts cités ne sont pas de la prose de l'article.
+
+---
+
+## [2026-09-24] Changer d'événement entre deux lancements ne fait plus échouer le bras
+
+`make run` démarrait un contrôleur neuf, remarquait ensuite que `config.yaml` avait changé et le
+recréait aussitôt. Les deux contrôleurs tombaient dans la même minute, donc dans le même
+répertoire de run, et le second gardait l'identité posée par le premier. La cohorte, qui
+n'accepte qu'une identité écrite après le démarrage du contrôleur en place, arrêtait le bras
+au bout de 180 s. Le changement de configuration est désormais détecté avant le démarrage, et
+un seul contrôleur part.
+
+**Avant :** première expérience après un changement d'événement (ou le témoin, qui pose
+`CHOC=0`) → « aucune identité de run POSTÉRIEURE au démarrage du contrôleur », bras en échec
+(code 4), sans un seul appel au modèle.
+**Après :** un seul démarrage du contrôleur par lancement ; la cohorte trouve son identité.
+
+---
+
+## [2026-09-24] Article court : une phrase peut compter vingt-six mots
+
+La consigne de forme R1 admet désormais une phrase de 26 mots. Le vérificateur de forme,
+la consigne elle-même et la règle 13 de l'agent `article-writer` portent le même seuil.
+
+**Avant :** `verifier_forme.py` signalait toute phrase de plus de 25 mots, dont la phrase de
+tête du § 5.2.
+**Après :** le signalement commence à 27 mots, et le § 5 ne porte plus de constat R1.
+
+---
+
+## [2026-09-24] Une expérience coupée par le quota se reprend, et les lots Gemini se remplissent
+
+Le run de mise au point Groq du 24 septembre avait l'air terminé, alors qu'il s'était arrêté sur
+le garde-fou du ticket 105. Il en ressort sept corrections, et la nouvelle expérience presse se
+prépare sur les deux Gemini.
+
+- **Un bras arrêté par le quota ou par des replis est suspendu, pas réussi.** Le témoin n'est
+  pas lancé sur un quota épuisé. L'onglet 🧠 affiche « ⏸ Suspendue ». Relancer l'expérience
+  reprend le run arrêté par son nom, et un bras déjà abouti n'est jamais rejoué.
+- **Les replis se lisent comme tels.** Une décision servie par l'index 0 porte
+  `Origine de la décision = repli` dans `moves.csv`, au lieu de `direct`. L'arrêt ne se
+  déclenche plus qu'une fois : avant, huit déclenchements concurrents faisaient écraser les
+  points de reprise les uns par les autres.
+- **Chaque run ne lit plus que ses propres échanges LLM.** Chaque requête porte le nom du run
+  qui l'a émise. `make report`, `make capacity` et le rapport mémoire écartent les échanges
+  d'un autre client servis par le même worker.
+- **Plus de fausse alarme « cache OSMnx hors volume »** sur le sous-dossier d'une population.
+- **Répartition Gemini par défaut** : décision, auto-réflexion, enquêtes et jugement sur
+  `gemini-3.1-flash-lite`, réflexion du soir seule sur `gemini-3.5-flash-lite` (49 % des
+  requêtes). C'est le défaut de la cohorte et du formulaire, qui proposait jusqu'ici
+  `gemini-3.8-flash`, limité à 20 requêtes par jour.
+- **Micro-batching** :
+  - l'orchestrateur laisse autant de tâches en vol que d'agents ;
+  - les enquêtes interrogent tous les personas d'un mode ensemble ;
+  - la valeur entre dans l'identité du run (`taches_en_vol`).
+- **Seuls les adultes lisent l'article.** Dans une famille de quatre, le lecteur est tiré
+  parmi les deux parents.
+- **Population de mise au point `population_4_foyer_133048`** : un foyer de quatre, deux
+  parents cyclistes qui ont d'autres modes à portée, deux enfants. Quand la déclaration de
+  l'article vise une autre population, les foyers exposés sont pris au manifeste. Le contrôle
+  d'injections compte un lecteur par foyer.
+
+**Avant :** un bras coupé à J4 sur quota → état « terminée », témoin lancé sur un quota vide,
+relance refusée (`CONTINUE_RUN sans REPRISE`) ; lots plafonnés à 8 agents ; enquêtes à un agent
+par requête.
+**Après :** bras « suspendu », témoin en attente, relance = reprise du même run ; lots jusqu'à
+la taille de la population ; enquêtes groupées par mode.
+
+⚠ Redémarrer `api`, `worker` et `controller` pour que l'origine des échanges et les tâches en
+vol prennent effet.
+
+---
+
+## [2026-09-24] L'article court sépare la cohorte de calibration de la cohorte scellée
+
+Le § 4.4 dit maintenant pourquoi le classifieur typé a son propre prompt expert : chaque modèle
+a ses propres biais, donc le réglage d'un prompt expert diffère d'un modèle à l'autre. L'auteur
+l'a constaté dans ses propres expériences, et la phrase ne cite aucun chiffre, par choix.
+
+Le même paragraphe nomme les deux cohortes selon leur rôle. La cohorte scellée du § 4.1
+(`population_1000_AAMAS_v6`) sert à la mesure seule. La seconde (`population_1000_AAMAS_v6_c2`),
+qui ne partage aucun persona avec elle, devient la cohorte de calibration, sur laquelle les
+prompts se règlent. « Première » et « seconde » cohortes disparaissent du paragraphe.
+
+**Avant :** « The classifier has its own expert prompt, tuned on the first cohort. […] Every
+crossing of models and prompts is therefore measured on a second cohort, which shares no persona
+with the first. »
+**Après :** « Since each model has its own biases, the tuning of an expert prompt differs from
+one model to the next. The classifier has its own expert prompt, tuned on a calibration cohort
+that shares no persona with the sealed cohort. […] Every crossing of models and prompts is
+therefore measured on the sealed cohort alone. »
+
+Le prompt actuel du classifieur a été réglé le 21 septembre sur la cohorte scellée, avant que
+la cohorte de calibration existe. Le paragraphe décrit donc le protocole visé. Le reste de
+l'article suit : le score en échantillon du classifieur quitte le tableau 1 et le § 5.1, et le
+§ 5.3 attend un score pris sur la cohorte scellée, comparé à la bande de cette même cohorte.
+Dans l'annexe D, le trajet de Raymond se situe dans la cohorte scellée, et la phrase qui
+déclarait la colonne du classifieur « in sample » disparaît. Le ticket 103 et le plan de
+l'article portent la décision en tête.
+
+**Avant :** tableau 1, « Expert prompt, typed classifier (in sample) | 3.65 | 6.58 | 10.48 |
+0.05 » ; § 5.3, « Its composite on the second cohort is [c2, …] ».
+**Après :** « Expert prompt, typed classifier | [re-tuning pending] » sur les quatre colonnes ;
+§ 5.3, « Its composite on the sealed cohort is [re-tuning pending] ». Ces emplacements
+attendent le prompt du classifieur re-réglé sur la cohorte de calibration.
+
+Seul le master anglais est écrit. Le LaTeX et le rendu français attendent la validation de
+l'auteur.
+
+---
+
+## [2026-09-24] L'article court donne ses trois prompts en entier, et un trajet décidé sous chacun
+
+Le lecteur de l'article court entendait parler de « prompt minimal » et de « prompt expert » sans
+jamais en lire une ligne. Une annexe D, destinée au matériel supplémentaire, les imprime
+maintenant tels que les décideurs les ont reçus, avec le prompt propre au classifieur typé. Elle
+déroule ensuite un vrai trajet de la première cohorte, Raymond, 45 ans, qui part faire ses
+courses à 13:37 vers Frouzins. On y lit le message exact envoyé au modèle, la répartition rendue
+par chacun des trois décideurs et les deux phrases de justification. Quatre liens mènent aux
+fichiers du dépôt anonyme qui portent ces textes.
+
+La même passe corrige une erreur du § 4.4. Il attribuait au prompt du classifieur une cinquième
+puce sur la météo, que ce prompt n'a pas.
+
+**Avant :** « That prompt adds a fifth general criterion, real exposure to the weather. » Aucun
+texte de prompt n'était lisible, et le dépôt de code n'avait pas d'adresse.
+**Après :** « That prompt rewrites the criterion on walking and waiting, so that a long direct
+walk also counts as a cost. » Le § 4.4 renvoie à l'annexe D. La phrase de diffusion du § 4.1
+porte l'adresse du dépôt anonyme, `https://anonymous.4open.science/r/TBD`, à compléter avant la
+soumission.
+
+Le rendu français attend la validation de cet anglais. Le rendu LaTeX fait l'objet de
+l'entrée « Le matériel supplémentaire de l'article court se compile à part ».
+
+---
+
+## [2026-09-24] La doc mémoire décrit enfin le score de rappel qui tourne
+
+La section « Étape 2 » de la doc mémoire décrivait encore le score d'avant le ticket 071 :
+trois termes pondérés 0,4 / 0,3 / 0,3, dont un recouvrement lexical dit « BLEU-2 ». Le code en
+combine cinq depuis le 14 septembre. La doc les donne maintenant avec leurs vrais poids et dit ce
+que chacun mesure. Le code ne change pas, les runs non plus.
+
+**Avant :** similarité 0,4 + « BLEU-2 » 0,3 + temps 0,3, la similarité étant présentée comme la
+distance cosinus brute de ChromaDB.
+**Après :** similarité 0,30 + temps 0,20 + gravité 0,20 + affinité d'axes 0,20 + météo 0,10,
+soit 1,00. Le terme pesé par `keyword_weight` ne mesure plus que l'appariement de météo.
+
+Le point qui compte pour lire un score : la similarité n'est **pas** le cosinus. L'adaptateur
+`llama-index-vector-stores-chroma` 0.4.2 convertit la distance `1 − cos` en `exp(-distance)`,
+vérifié dans le conteneur `controller`. Le terme vaut donc `exp(cos − 1)`, entre 0,135 et 1. Un
+cosinus nul donne 0,37 et non 0, ce qui laisse 0,11 point de score à un candidat sans rapport
+sémantique avec la requête. Le bornage à [0, 1] de `rank_nodes` n'a aucun effet. Les candidats
+qu'ajoutent les viviers B et C partent à exactement 0 sur ce terme, donc avec 0,11 point de
+retard sur un candidat sémantique orthogonal.
+
+La même passe corrige le terme temporel : Δt compté depuis le dernier rappel, durée de vie
+propre à chaque souvenir, confiance de Laplace pour les concepts. Elle ajoute aussi deux
+constats. Le contexte de décision ne fournit pas de lieu, si bien que l'affinité d'axes
+plafonne à 0,80. Et `default_reflection_importance_score` n'est plus lu par aucun code.
+
+---
+
+## [2026-09-24] L'article court ne laisse plus croire que le banc tient en une journée
+
+Le § 3.3 de l'article court ouvrait sur « Section 5 scores one day, and a one-day run has almost
+nothing to recall ». Un lecteur y voyait une expérience d'une seule journée, et la
+justification avait l'air d'une excuse. En réalité, chaque persona joue un jour de semaine tiré
+entre septembre 2022 et février 2023, et la cohorte couvre toute la période. Le paragraphe
+disparaît du § 3.3. Le fait passe au § 4.1, à la suite du tirage du jour, dit sans plaidoyer.
+
+**Avant :** § 3.3 « Section 5 scores one day […] Its measurements therefore run with memory
+switched off » ; § 3.1 « Section 5 tests the decision alone, with memory off ».
+**Après :** § 4.1 « Each persona starts that day with a blank memory, and no recollection
+reaches its prompt during the day. No bench score therefore depends on the memory constants of
+Section 3.3. » ; § 3.1 « …the decision alone, from a blank memory ».
+
+« Vierge » est le mot retenu par l'auteur : le score est strictement celui des runs du banc,
+qui tournent mémoire coupée (`memoire: false`). Le § 7.1 garde « memory disabled », parce qu'il
+chiffre un coût et qu'une mémoire allumée ajoute 2,5 millions de tokens par jour.
+
+Seuls les masters anglais sont repris. Les `.tex` de `03_Agent` et `04_Bench` sont en retard sur
+eux, comme leurs dates d'en-tête l'indiquent, et le rendu français reste à refaire.
+
+---
+
+## [2026-09-24] L'article court ne réduit plus son objet à la décision
+
+Le § 3.1 de l'article court disait que le modèle de langue intervient en trois points de la
+boucle et que l'article teste la décision. Les deux étaient faux. Le code en expose cinq : la
+décision, le jugement d'un événement à son entrée en mémoire, la consolidation du soir,
+l'auto-réflexion multi-jours et, quand l'expérience l'active, l'enquête d'opinions. Et le § 6
+exerce trois de ces appels pour suivre un événement jusqu'aux décisions des jours suivants,
+ce que l'introduction revendique comme troisième contribution.
+
+**Avant :** « called at three points of the loop […] This paper tests the decision » ; légende
+de la figure 1 : « This paper tests the decision module ».
+**Après :** cinq points d'appel nommés ; le § 5 teste la décision seule, mémoire coupée ; le
+§ 6 suit un événement de son jugement aux décisions qui suivent, et lit les opinions déclarées.
+La légende dit la même répartition.
+
+Le paragraphe et la légende sont aussi reportés dans le `.tex` anglais, et eux seuls. Sa date
+d'en-tête reste en arrière, parce que d'autres changements du master (§§ 3.2 et 3.3) n'y sont
+pas encore. Le français reste à refaire.
+
+---
+
+## [2026-09-24] Une expérience presse se joue sur une population de foyers, avec partage et fournisseur imposé
+
+L'onglet 🧠 Expériences Mémoire sait maintenant jouer `population_20_foyers_059` : les six foyers
+exposés lisent l'article, leurs co-résidents et les quatre foyers témoins sont dans le même run.
+Le partage de la mémoire dans le foyer se coche dans le formulaire et se vérifie dans l'identité
+du run ; l'horizon déclaré est enfin appliqué ; un fournisseur peut être imposé (ex. tout Groq,
+pour déboguer sans consommer le quota Gemini) ; un bras peut être joué seul.
+
+**Avant :** une population scellée devenait `population_1_population_20_foyers_059`, introuvable,
+et GAMA tournait sur une population vide jusqu'au délai de garde. Le routage choisi dans l'onglet
+était écrasé par les clés Gemini. Le partage dans le foyer restait éteint, l'horizon valait
+toujours 42 jours, et l'estimation comptait un persona pour vingt.
+**Après :** la population est résolue depuis la racine du dépôt, ou refusée avec une `[ALARME]` ;
+une règle d'exposition qui n'exposerait personne est refusée avant le lancement ; le routage de
+l'expérience est respecté, filtrable par fournisseur ; `partage_foyer` et `horizon_jours` sont
+appliqués et vérifiés ; un bras joué seul laisse l'expérience `traite_ok`.
+
+---
+
+## [2026-09-24] La figure de rupture compare les deux bras, et suit le mode qu'on lui désigne
+
+`scripts/analysis/figure_rupture_retour.py` prend `--mode` (le mode que l'événement est censé
+faire fuir) et `--temoin` (le bras sans choc, empilé sous le bras traité, réaligné par date
+simulée puisque le témoin n'a pas de jour relatif). Il refuse d'empiler un témoin trop mince
+plutôt que de donner l'illusion d'une comparaison.
+
+**Avant :** une figure du seul bras traité, sur la voiture uniquement. La campagne c3 y aurait
+montré une courbe qui monte puis descend — qu'on aurait pu lire comme un effet.
+**Après :** les deux bras côte à côte montrent qu'ils ne se séparent jamais de plus de six
+points, c'est-à-dire aucun effet.
+
+---
+
+## [2026-09-24] La trace du témoin nomme le choc dont elle parle
+
+Chaque ligne de `temoin_souvenir.jsonl` porte désormais l'identifiant de l'événement du run.
+Il est lu dans le registre, parce que la consolidation du soir ne connaît pas l'événement joint
+à une arrivée du matin — ce que le site d'appel passe explicitement l'emporte toujours.
+
+**Avant :** `{"evenement_id": "", "retrouve": true, …}` — le verdict était juste, la ligne ne
+disait pas de quel choc elle parlait.
+**Après :** `{"evenement_id": "c6_voiture_suspecte", "retrouve": true, …}`.
+
+Exact tant qu'un run ne déclare qu'un événement, ce qui est la forme actuelle de
+`evenement.yaml` ; la limite est écrite dans le code et couverte par des tests.
+
+---
+
+## [2026-09-24] Une figure sépare la rupture décidée de la rupture subie
+
+`scripts/analysis/figure_rupture_retour.py` trace, autour d'un choc injecté, les seules
+décisions où la voiture était offerte **et** où c'est le modèle qui a tranché. Les trajets à
+itinéraire unique en sortent : une voiture que la chaîne de véhicule avait déjà retirée n'est
+plus comptée comme un renoncement. Chaque jour est une colonne dont la hauteur est son nombre
+de décisions, jamais une moyenne, et le script refuse de composer sous vingt décisions.
+
+**Avant :** la part modale brute mélangeait les choix et la mécanique de chaîne — sur le run du
+2026-09-23, 72,2 % → 23,2 % de voiture, dont une bonne part de `sortie_bloquee` qui avait
+triplé.
+**Après :** la part décidée se lit seule — 97,2 % → 33,3 %, puis un retour à 93,3 % trois
+semaines plus tard. Le CSV des points tracés est écrit à côté du SVG.
+
+Une seconde courbe était prévue — « le souvenir est-il encore cité dans le raisonnement ? » —
+et a été retirée : aucun des trois lexiques essayés ne sépare proprement. La liste d'exclusion
+du témoin (ticket 106) est calibrée sur des réflexions de consolidation et ne transfère pas à
+un raisonnement de décision, qui paraphrase. Le détail est consigné dans l'en-tête du script.
+
+---
+
+## [2026-09-24] Les citations de l'article court disent ce que disent leurs sources
+
+Chaque source citée par l'article court AAMAS a été relue contre son texte, et sa notice contre
+Crossref, DataCite ou arXiv. Huit propos étaient faux et une quinzaine approximatifs ; ils sont
+corrigés dans les masters anglais, chacun avec la citation de la source en commentaire.
+Parmi les plus lourds : Chopra et al. ne font pas partager une réponse à tous les agents d'un
+archétype, chacun tire son action ; la sous-estimation du prix de la voiture ne vient pas de
+l'enquête d'Adam & Gaudou mais de leur revue de littérature ; la chaîne eqasim ne prend pas
+l'enquête locale en entrée mais le recensement et l'ENTD 2008 ; la réflexion de Park et al. se
+déclenche sur un seuil d'importance, pas le soir ; SILICA gradue des résultats, il ne certifie
+pas des populations.
+
+La bibliographie est réparée à la source (`docs/paper/sources/sample.bib`). L'entrée eqasim
+renvoyait à un article inexistant. L'entrée GAMA avait un titre et deux auteurs faux. Le DOI de
+l'enquête EMC² pointait sur l'EMD 2013 (`lil-0933`) au lieu de l'édition 2023 (`lil-1750`).
+Cinq préprints cèdent la place à leur version publiée : CitySim, et quatre dont l'année change
+dans le texte, Liu et al., Chopra et al., Meister et al. et Sprague et al., qui passent en 2025. Huit références
+entrent : OSMnx (Boeing, 2025), OpenTripPlanner 2.8.1, LightGBM, régression logistique à noyau,
+forêt aléatoire, Jensen–Shannon et distance du cantonnier. Deux sortent, faute d'avoir pu être
+lues à la source : Gärling & Axhausen (2003) et Tulving (1972).
+
+**Avant :** les copies LaTeX de la bibliographie reprenaient les 57 entrées du fichier source,
+dont 35 jamais citées ; les champs `note` internes (« Verified 2026-09-23… ») s'imprimaient
+dans la liste de références.
+**Après :** les deux copies LaTeX ne gardent que les 29 clés citées ; les remarques de
+vérification sont passées en commentaires BibTeX, hors de ce qui s'imprime.
+
+Côté LaTeX anglais, les §§ 0 à 4 et 7 sont repris phrase à phrase sur leurs masters et portent
+la même date d'en-tête ; la note de bas de page du résumé porte désormais le DOI de l'enquête 2023.
+Les §§ 5 et 6, modifiés par d'autres sessions, restent en arrière de leur master : leur date
+d'en-tête le signale. Le français n'est pas repris.
+
+---
+
+## [2026-09-23] L'article court change de titre
+
+L'article court soumis à AAMAS 2027 s'intitule désormais *Where Chain-of-Thought Earns Its
+Place: Generative Agents Against a Real Household Travel Survey*. Le titre annonce la vérité
+terrain, l'enquête ménages déplacements, et nomme le mécanisme testé avec le terme que la
+littérature emploie : « chain-of-thought », plutôt que « verbalised deliberation », expression
+propre à l'article que les relecteurs ne reconnaissent pas d'emblée.
+
+**Avant :** *Matching the Survey Is Not Reproducing the Population: Where Verbalised Deliberation
+Belongs in a Generative Mobility Agent*
+**Après :** *Where Chain-of-Thought Earns Its Place: Generative Agents Against a Real Household
+Travel Survey* ; version française alignée dans le projet LaTeX francophone et dans la fiche du plan.
+
+Le corps du texte parle toujours de « deliberation » : l'équivalence avec chain-of-thought reste
+à poser à la première occurrence.
+
+---
+
+## [2026-09-23] Un souvenir injecté qui n'atteint pas la mémoire longue se voit
+
+Quand un événement est injecté dans la mémoire d'un agent, la consolidation du soir en garde
+normalement trace. Normalement : le 2026-09-23, une panne de métro jugée **grave (0,75)** a été
+résumée en *« Today went very smoothly overall »*, et aucun des 123 documents de mémoire longue du
+run n'en parlait. Le run a continué 2 h 22 à mesurer l'effet d'un souvenir inexistant.
+
+La consolidation est une synthèse reformulée, pas une copie : rien ne reliait l'entrée courte à la
+réflexion longue, donc rien ne pouvait le signaler. Un témoin compare désormais les mots
+distinctifs du texte injecté à ce qui vient d'être écrit en mémoire longue.
+
+**Avant :** un souvenir injecté pouvait disparaître en silence ; il fallait ouvrir la base de
+mémoire à la main pour s'en apercevoir, et seulement si on y pensait.
+**Après :** `make error` et `make report` le disent, en nommant l'agent, les mots cherchés et ceux
+retrouvés. Les souvenirs bien passés sont annoncés aussi — un témoin dont on ne voit que les échecs
+ne se distingue pas d'un témoin mort.
+
+Le témoin **alarme et n'arrête pas**, contrairement à celui des replis livré le même jour : il est
+heuristique là où l'autre est certain, et une paraphrase légitime produirait une fausse alarme.
+Calibré sur les 13 runs archivés observables — 11 gardent le souvenir, 2 le perdent — avec une
+séparation franche : 3 à 81 mots retrouvés côté sain, 0 et 1 côté perdu.
+
+---
+
+## [2026-09-23] Une expérience s'arrête plutôt que de choisir à la place du modèle
+
+Quand toutes les tentatives d'appel échouent, le simulateur prenait le premier itinéraire de la
+liste et l'agent partait avec. Le trajet avait lieu pour de bon : il entrait dans la mémoire de
+l'agent et dans la statistique habitude/rupture que les expériences mesurent. Rien ne s'arrêtait,
+rien ne le signalait.
+
+Désormais, dans une expérience, **trois de ces replis d'affilée arrêtent le run**. Le seuil n'est
+pas à un : un incident isolé est absorbé par les tentatives et ne produit aucun repli — ce qu'on
+attrape est un changement de régime. Le critère compte les replis, pas les causes, de sorte
+qu'une panne d'un type encore jamais vu déclenche quand même l'arrêt.
+
+**Avant :** la campagne c3 du 23 septembre a laissé quatre décisions être prises par défaut, dans
+les jours qui suivaient le choc — précisément la fenêtre où l'on cherche si le souvenir change le
+choix modal. Découvert à la main, deux heures après le lancement.
+**Après :** le run s'arrête au troisième, écrit son point de reprise, et le dit en alarme.
+
+Toute campagne est protégée d'office, sans réglage à penser. Un run ordinaire, lui, continue de
+se rabattre comme avant.
+
+**Le repli se voit enfin.** Il était journalisé en `debug`, donc invisible : il passe en alarme,
+visible par `make error`. Et `make report` rend maintenant le taux de replis **séparément avant
+et après l'événement** — un taux global cachait exactement ce qui comptait, une ligne de base
+parfaitement propre et une fenêtre de mesure à 10 %.
+
+---
+
+## [2026-09-23] Une reprise à chaud ne dédouble plus les trajets rejoués
+
+À la reprise, la simulation repart de son premier jour et rejoue ce qu'elle a déjà vécu. Les
+trajets rejoués s'écrivaient dans le fichier de mesures comme les autres, sans rien qui les
+distingue des originaux. Le fichier est désormais mis de côté avant tout rejeu, et le rejeu écrit
+dans un fichier neuf.
+
+**Avant :** reprendre un run dont le point de sauvegarde était valide ajoutait les jours rejoués
+aux jours d'origine ; toute part modale calculée ensuite les comptait deux fois.
+**Après :** les deux séries restent lisibles séparément, `moves.csv` et
+`moves.csv.<horodatage>.avant_rejeu`.
+
+La protection existait déjà, mais n'était appliquée que lorsque *aucun* point de sauvegarde
+n'était trouvé — soit le cas le plus rare.
+
+---
+
+## [2026-09-23] Le compteur de quota dit, dans son nom, qu'il ne voit qu'une partie
+
+Les compteurs journaliers de la passerelle s'appellent maintenant `rpd_local_seulement:` et
+`tpd_local_seulement:`. Ils ne comptent que les appels passés par le simulateur, alors que les
+mêmes clés servent aussi aux outils de synthèse et de calibration : ils sous-comptent par
+construction, et ne disent donc pas le budget restant.
+
+**Avant :** le chiffre lu dans Redis a été pris pour un budget et a fait reporter une relance
+d'une journée — alors qu'aucune limite n'était atteinte.
+**Après :** le nom le dit à l'endroit où on lit le chiffre.
+
+Ce qui fait autorité reste le refus du fournisseur, et lui seul ferme une clé. La fonction qui
+aurait pu en décider autrement, inutilisée depuis le 21 septembre, est supprimée.
+
+---
+
+## [2026-09-23] Le report automatique vers le LaTeX est supprimé
+
+L'article court n'a plus d'outil qui porte la prose des masters Markdown dans les chapitres
+LaTeX. `md_vers_tex.py` est supprimé, avec les trois cibles `make paper-court-tex`,
+`paper-court-tex-ecrire` et `paper-court-tex-verifier`.
+
+La mesure qui a décidé : sur les huit chapitres anglais, il en traitait **deux**. Il en
+refusait cinq — il compare le nombre de paragraphes des deux côtés, et une légende de flottant
+compte pour un paragraphe côté Markdown. Sur le huitième il ne refusait pas : il proposait un
+report qui cassait trois renvois, en gardant le numéro littéral *et* en ajoutant la commande,
+ou en posant la commande à côté de sa cible.
+
+**Avant :** `make paper-court-passe S=05 FR=…` injectait la traduction puis réécrivait les
+deux `.tex` et contrôlait citations et renvois sur seize chapitres.
+**Après :** la même commande n'injecte que la traduction dans `sections/05_results.fr.md`.
+Les `.tex` se tiennent à la main.
+
+Ce qui remplace le contrôle : la date d'en-tête. Chaque section anglaise porte
+`<!-- DERNIÈRE ÉCRITURE ANGLAISE : AAAA-MM-JJ hh:mm:ss -->` et son chapitre LaTeX porte la
+même entre parenthèses. Dates égales, rien à faire ; dates différentes, le LaTeX est en
+retard. Convention et commande de relevé dans `docs/paper/article-court/sections/README.md`.
+
+Ce qui disparaît sans remplacement : `paper-court-tex-verifier` était le seul contrôle
+automatique des citations et des renvois sur les seize chapitres des deux projets.
+
+---
+
+## [2026-09-23] Un départ reporté cesse de passer pour un retard, et l'agent juge avant qu'on le consomme
+
+Deux défauts trouvés le jour même de la campagne d'attribution, tous deux capables de la vider
+de son sens sans rien casser de visible.
+
+**Un trajet reporté comptait le report comme du retard.** Quand un départ glisse au lendemain,
+ou du vendredi au lundi parce qu'aucun déplacement ne démarre le week-end, l'heure d'arrivée
+attendue reste calée sur le plan abandonné. Un trajet du vendredi soir joué le lundi comptait
+soixante-douze heures de retard — alors qu'il était arrivé en avance sur son propre départ,
+douze minutes contre quinze planifiées. L'agent en gardait un souvenir « grave », et son prompt
+lui disait qu'il était arrivé avec vingt-trois heures de retard. Le report est maintenant retiré
+du calcul ; un départ qui glisse de vingt minutes parce que l'activité précédente a débordé
+reste, lui, un retard vécu.
+
+**Le jugement de l'agent arrivait après qu'on avait rangé ce qu'il jugeait.** Il partait en
+tâche de fond, pour ne pas retarder l'arrivée, et devait relever l'importance du souvenir avant
+la consolidation du soir. Mais la consolidation n'a pas lieu le soir : elle part quand le nombre
+d'entrées atteint son seuil — et l'entrée de l'événement est souvent celle qui le fait franchir.
+Elle déclenchait donc le rangement de son propre souvenir. Cinq secondes plus tard le jugement
+rendait « grave », trop tard : l'événement avait déjà été qualifié sur la seule mesure. La course
+se jouait sur le nombre de trajets de la journée, autant dire à pile ou face. On attend
+maintenant le jugement.
+
+**Avant :** un souvenir de gravité 0,70 pouvait naître d'un week-end, et un choc déclaré pouvait
+être enregistré sans que l'agent l'ait jugé.
+**Après :** les deux ne dépendent plus du calendrier ni d'une course.
+
+---
+
+## [2026-09-23] Ce qui est faux dans l'article se dit ailleurs que dans l'article
+
+L'article est verrouillé : une session qui y trouve une erreur ne peut pas la corriger, et
+jusqu'ici elle la disait dans sa réponse — c'est-à-dire nulle part. `docs/paper/NOTE_AU_REDACTEUR.md`
+recueille désormais ces constats. Chaque entrée dit ce qui est écrit, ce que la source dit, et
+ce qu'il faudrait changer ; une entrée traitée se date et passe en RÉGLÉ plutôt que de
+disparaître, parce qu'une liste qu'on vide ne se distingue pas d'une liste qu'on n'a jamais
+tenue. Elle se termine sur ce qui a été vérifié et trouvé indemne, pour la même raison.
+
+Quatre points y ouvrent le compte, tous sur le chapitre 7 : un second incident annoncé qui ne
+s'est jamais produit, des chiffres exacts mais devenus irreproductibles depuis le dépôt, une
+injection décrite au singulier qui s'est produite quatre fois, et un abstract anglais qui décrit
+encore l'ancien choc.
+
+**Avant :** une session trouvait une phrase fausse dans l'article, le disait, et l'oubliait.
+**Après :** le constat est écrit, daté, recoupé à sa source, et attend l'accord qui permet de le
+corriger.
+
+---
+
+## [2026-09-23] Un jour de choc déclaré un samedi n'arrive jamais, et c3 le dit maintenant
+
+`c3_panne_reseau` annonce deux journées de panne, les jours 12 et 13 du run. Le jour 12 tombe le
+vendredi 27 mars 2026 ; le jour 13 est donc un samedi, et le dépôt tourne sans départ de
+week-end. La seconde panne n'a jamais eu lieu, dans aucun run, et rien ne le disait : qui lisait
+la déclaration comptait deux chocs et en obtenait un.
+
+La déclaration n'est pas corrigée — elle est **expliquée**. Retirer ce jour du seul fichier
+canonique casserait l'invariant qui exige que la migration du ticket 100 déclare exactement les
+mêmes jours que l'original du ticket 079 ; le retirer des deux réécrirait l'original que cet
+invariant existe pour protéger. Le fichier porte donc en tête de ses journées la raison pour
+laquelle l'une d'elles est inerte.
+
+C'est le troisième cas du même motif : le J16 de c6, la cadence par trajet de c3, et maintenant
+ce samedi. Un jour déclaré n'est pas un jour joué.
+
+**Avant :** la déclaration annonçait deux pannes ; les traces en portaient une, sans explication.
+**Après :** la déclaration dit laquelle des deux ne s'arme pas, et pourquoi elle reste écrite.
+
+---
+
+## [2026-09-23] Une traduction faite dehors s'installe en une commande
+
+L'article court se rédige en anglais, et le français en est un rendu. Ce rendu se faisait
+entièrement à la main, section par section, en relisant l'anglais pour retrouver les coupes de
+paragraphe et les chiffres. Quatre outils prennent maintenant ce travail en charge, et un agent
+dédié, `article-translator`, les enchaîne.
+
+La traduction ne passe par aucun modèle de langue : le texte anglais sort en un lot à coller
+dans l'outil de votre choix, revient par fichier, et se repose tout seul dans la structure de
+l'anglais — mêmes coupes, mêmes commentaires de source, mêmes chiffres. Les deux projets
+LaTeX se régénèrent dans la foulée, en **conservant** ce que le Markdown ne sait pas dire :
+clés de citation, `\label`, renvois de section, italiques, flottants.
+
+Trois refus protègent le rendu. Un chiffre du master absent du français arrête l'écriture. Un
+nombre de paragraphes différent entre Markdown et LaTeX l'arrête aussi. Une citation dont les
+mots d'ancrage ont disparu est nommée plutôt que posée au hasard.
+
+**Avant :** rendre une section en français et régénérer ses deux chapitres LaTeX demandait de
+relire l'anglais en entier, de recomposer la prose et de replacer les citations à la main.
+
+**Après :** `make paper-court-extraire S=01` sort le texte, `make paper-court-passe S=01
+FR=<fichier>` installe la traduction reçue et régénère les deux LaTeX, contrôles compris.
+
+Le report a été vérifié en régénérant le chapitre 1 depuis son propre Markdown : les dix
+paragraphes des deux projets LaTeX se reproduisent à l'identique, citations, renvois et
+italiques compris. Les sections portant des tableaux ou des listes (3 à 6) ne sont pas encore
+prises en charge et s'arrêtent sur un désalignement annoncé.
+
+Le chapitre 2 a montré trois limites du report, toutes corrigées. Une citation qui **ouvre un
+paragraphe** n'effaçait pas la forme en clair qu'elle remplace, et sortait en double. Un
+`\citet` porte le nom d'auteur dans la syntaxe de la phrase : il s'ancre désormais sur le mot
+qui le **suit**, quand `\citep` reste ancré sur celui qui le précède — sans quoi deux citations
+séparées d'un point se repliaient sur le même mot et sortaient collées. Enfin, une traduction
+qui refait la phrase fait disparaître l'ancre : le script cherche alors la forme en clair par
+le **nom d'auteur et l'année de la clé**, groupe de coauteurs compris, et dit dans son
+compte-rendu chaque citation reposée par ce recours.
+
+Les sections 1 et 2 sont désormais en phase dans les deux projets LaTeX, et une seconde passe
+à blanc ne trouve plus rien à reporter.
+
+---
+
+## [2026-09-22] Un run à un agent n'est plus freiné trente secondes par décision
+
+Le frein de la passerelle — qui ralentit les réponses `/sync` pour empêcher la pile d'appels LLM
+de déborder — calcule son intensité sur un ratio **relatif à la population**. Avec un seul agent,
+une seule activité en attente donne 1/1 = 1, donc le frein **maximal** : trente secondes imposées
+à chaque décision.
+
+Mesuré sur la campagne d'attribution : 8 s par pas de simulation, ~12 minutes par jour simulé, et
+un run à un agent **plus lent qu'un run à vingt** (5 s par pas). Un garde-fou calibré pour mille
+agents étranglait les petits, et rien ne le disait — le journal annonçait platement
+« sleep calculé : 30.00s ».
+
+Le correctif énonce l'invariant réel : tant que le nombre d'activités en attente tient dans la
+capacité **simultanée** de la passerelle, toutes les requêtes sont en vol en même temps, la pile
+ne grossit pas, il n'y a rien à freiner. En deçà de `world.worker_concurrency`, plus aucun frein.
+
+**Avant :** 1 activité / 1 agent → 30,00 s · 6 / 20 → 4,93 s
+**Après :** 1 activité / 1 agent → **0 s** · 6 / 20 → **0 s**
+**Inchangé là où le frein sert :** 300 / 1000 → 4,93 s · 900 / 1000 → 25,61 s
+
+Les trois valeurs du régime chargé sont figées dans les tests : si l'une bouge, le correctif a
+débordé de son objet. `sans_frein=0` rétablit le comportement d'avant, et c'est le défaut du
+paramètre — aucun appelant qui ne le passe pas ne change de comportement.
+
+⚠ Un run multi-agents perdait 4,93 s à six activités en attente ; il n'en perdra plus. C'est une
+accélération, mais elle change le rythme auquel les appels partent, donc potentiellement le taux
+d'expiration. Le run du canal lu du 2026-09-22 est le témoin de référence pour le vérifier.
+
+---
+
+## [2026-09-22] Plus une seule figure française dans la version anglaise
+
+Règle posée : une figure anglaise dans la version française ne gêne personne, l'inverse se
+voit. Les cinq figures de l'article court ont été relues une par une. Trois étaient déjà en
+anglais ; deux ne l'étaient pas, et les deux projets les partagent désormais en anglais.
+
+La propension quotidienne à la voiture se régénère depuis les mêmes deux exécutions archivées,
+avec les libellés anglais : « engine failure » à la date du choc, « the account leaves the
+context » à la sortie du récit, « control » et « exposed » en légende. Les courbes, les dates
+et les valeurs sont celles d'avant ; seuls les mots changent. Le script du chapitre 7 de
+l'article long reste français et intact : la version anglaise vit dans son propre module.
+
+Le schéma d'architecture avait son corps en anglais et sa bande de légende du bas en français.
+Les cinq chaînes concernées sont remplacées sur place, le reste de l'image étant laissé octet
+pour octet.
+
+**Avant :** la figure 5 de la version anglaise était entièrement en français, titre, axes,
+légende et annotations ; la figure 1 y portait « Agent GAMA », « corps physique · position ·
+réseau », « état », « Serveur Python (LLM) » et « mémoire · raisonnement · décision ».
+**Après :** les deux versions compilent avec les mêmes figures anglaises, dix pages en anglais
+et onze en français, sans renvoi ni citation non résolus.
+
+---
+
+## [2026-09-22] Les deux projets LaTeX passent sur le gabarit officiel AAMAS-2027
+
+`main.tex` anglais et français sont désormais le gabarit officiel fourni par l'auteur, et non
+plus une adaptation de celui de l'article long. La classe, le style bibliographique et le logo
+Creative Commons étaient déjà identiques au fichier près ; seul l'assemblage changeait. Le bloc
+d'auteurs officiel, avec ses trois auteurs et leurs adresses, remplace celui qui avait été
+recopié.
+
+Trois retraits, les mêmes des deux côtés. Le `\section{Citations and References}` d'exemple du
+gabarit s'imprimait en section vide après le § 7. Le texte d'exemple des remerciements est
+commenté, la consigne R14 interdisant tout placeholder dans un texte livré ; il reste à écrire
+avant la version non anonyme. Le titre est celui de l'article court, le gabarit portant encore
+celui de l'article long.
+
+Côté français, deux lignes s'ajoutent et rien d'autre : `babel` french, qui pose seul la
+ponctuation française, et `\emergencystretch`, sans lequel cinq paragraphes débordent dans la
+gouttière.
+
+**Avant :** les deux projets compilaient sur un préambule dérivé de l'article long, au titre
+faux et à la section d'exemple imprimée.
+**Après :** ils compilent sur le gabarit de la conférence, dix pages en anglais et onze en
+français, sans renvoi ni citation non résolus.
+
+---
+
+## [2026-09-22] L'article court a désormais un projet LaTeX français compilable
+
+`docs/paper/article-court/overleaf-fr/` est le jumeau français du projet anglais : mêmes noms
+de chapitres, mêmes `\label`, mêmes figures, même préambule, même bloc d'auteurs. Une seule
+ligne s'ajoute au préambule anglais, `\usepackage[french]{babel}`, qui charge sans conflit
+sous `aamas.cls`. L'anglais reste la source de vérité (décision du 2026-09-22, consigne R17) :
+ce projet est un rendu, et toute amélioration de fond se décide en anglais avant de
+redescendre.
+
+La typographie française est partagée entre babel et les chapitres, et le README dit qui fait
+quoi : babel pose seul l'espace fine devant `;` `:` `?` `!` et dans les guillemets, tandis que
+les chapitres portent explicitement le séparateur de milliers (`1\,000`) et l'espace devant le
+signe pour cent (`95\,\%`). Trois réglages compensent les 10 % de longueur que le français
+prend en plus, sans toucher aux marges ni au corps que le gabarit interdit de modifier.
+
+La compilation est mesurée : onze pages au total, dix de corps, zéro renvoi ou citation non
+résolus, un seul dépassement de colonne de 1,9 pt — le même que dans le projet anglais, sur la
+même équation.
+
+**Avant :** la version française de l'article court n'existait qu'en Markdown, et personne ne
+savait ce qu'elle coûtait en pages.
+**Après :** elle compile, et elle prend une page de plus que l'anglais (11/10 contre 10/9), ce
+qui chiffre la coupe à faire côté anglais.
+
+---
+
+## [2026-09-22] Le LaTeX de l'article court rejoint ses masters Markdown
+
+Les huit chapitres `.tex` de `docs/paper/article-court/overleaf/chapters/` portent de nouveau
+exactement la prose des `.md` de `sections/` : les 26 ruptures de rythme de l'item G3 de la
+relecture, le nouvel énoncé sur l'étendue de résolution du § 4.3 et le retrait de sa réserve
+périmée, le paragraphe de fuite de cible réécrit au § 5.4, et les deux chiffres 39,0 / 8,3
+corrigés en 40,0 / 9,8. Les flottants, les clés de citation, les `\label`, les `tabularx` et
+les commentaires d'en-tête n'ont pas bougé.
+
+La compilation est mesurée, pas estimée. Dix pages au total, neuf de corps, zéro renvoi ou
+citation non résolus, deux dépassements de colonne inférieurs à 3 pt. Les neuf flottants
+occupent 2,36 page sur les neuf : la figure 2 (`ch6_echelle.png`, pleine largeur) en coûte
+0,63 à elle seule, la figure 1 (architecture) 0,52, le tableau 1 0,38. Atteindre les huit
+pages réglementaires demande de libérer environ 1 050 pt de colonne, soit 0,84 page — plus
+qu'aucun flottant pris isolément.
+
+**Avant :** le `.tex` traînait deux passes de corrections de retard, et le coût des figures
+en pages était une estimation.
+**Après :** le `.tex` est le miroir des masters, et chaque flottant a sa hauteur mesurée dans
+le document compilé.
+
+---
+
+## [2026-09-22] Les huit sections de l'article court sont relues
+
+Les huit sections rédigées par l'agent sont relues en relecteur externe et notées 13/20,
+contre 7/20 pour la version longue : les deux reproches du tuteur, texte difficile à suivre et
+phrases brutes, sont levés. `docs/paper/article-court/RELECTURE_V1.md` porte trente
+corrections ordonnées, chacune avec son passage, sa réécriture, son coût en mots et son test.
+Les plus lourdes : la plateforme GAMA et ses moteurs d'itinéraires ont disparu du texte, une
+affirmation de diffusion de la cohorte n'est pas tranchée, deux bras du classifieur typé
+partagent une étiquette au tableau 3, et un chiffre est publié comme non recalculé.
+
+Une seconde passe, à la demande de l'auteur, retire ce que le texte raconte de lui-même et qui
+n'intéresse personne : l'histoire du papier (ce qui a été trouvé, corrigé, recalculé) et les
+justifications d'implémentation (tokens, tarifs, « one file with one split »). Quinze passages,
+−282 mots, qui paient la réintroduction de la plateforme. La règle 14 de l'agent nomme désormais
+ces deux familles ; elle ne parlait que du plaidoyer.
+
+**Avant :** la qualité d'une section rédigée se jugeait à la lecture, sans liste de reprise.
+**Après :** chaque section a sa liste de corrections testables, et l'ordre des coupes si la
+compilation dépasse huit pages est écrit avant de compiler.
+
+---
+
+## [2026-09-22] Le registre d'expériences se restreint au chantier en cours
+
+Un menu déroulant en tête de « Mes expériences » choisit un **espace de travail**. Le tableau,
+ses compteurs, son panneau de statuts et la liste « s'inspirer d'une expérience existante » se
+restreignent alors aux expériences de cet espace. « Toutes les expériences » reste le défaut et
+ne filtre rien.
+
+Un espace est une **vue**, jamais un rangement : changer d'espace ne déplace, ne renomme et ne
+supprime rien. Une expérience peut appartenir à plusieurs espaces, et une expérience citée par
+aucun espace reste visible sous « Toutes les expériences ».
+
+**Avant :** quatre-vingts lignes dans le tableau, quel que soit le travail en cours.
+**Après :** trente-huit lignes sous l'espace « papier version courte », regroupées par phase.
+
+Les espaces se déclarent dans un fichier versionné, pas depuis l'interface. Chaque entrée porte
+une **étiquette de phase**, affichée en première colonne du tableau, et un drapeau optionnel.
+La colonne de phase n'existe que sous un espace actif : elle apparaît donc en cours de session,
+après que la liste des colonnes a été figée, et le registre la fait entrer d'elle-même. L'étiquette est nécessaire parce que le nom
+d'une expérience se calcule depuis ses paramètres et ne peut donc pas porter son lot : le
+rattachement passe par la vue.
+
+Le fichier échoue ouvert. Absent, tronqué ou mal formé, le registre s'ouvre sur « Toutes les
+expériences » et reste utilisable. Un nom cité sans dossier sur le disque n'est pas une erreur :
+un dépli les compte et les nomme, ce qui permet d'écrire le plan d'un ticket avant de déclarer
+ses expériences. Ce qui tourne n'est jamais filtré — activités en cours, reprises et file
+d'attente ignorent l'espace actif.
+
+Premier espace livré, **« papier version courte »** : les trente-trois expériences du ticket 103,
+dont les dix-huit déclarées ce jour pour les quatre phases du carré Jev × Gemini hors
+échantillon.
+
+---
+
+## [2026-09-22] Un bras traité ne porte plus la même identité que son témoin
+
+`identite_run.json` enregistre l'empreinte de l'événement joué : c'est ce qui distingue deux
+expériences par ailleurs identiques. Le champ lisait `settings.chocs`, la clé du ticket 079.
+Depuis le ticket 100, `make run` écrit la clé canonique `evenements:` — et l'empreinte retombait
+alors sur son défaut, `"aucun"`, **sur un bras traité**. Son identité devenait mot pour mot celle
+de son témoin.
+
+Le commentaire de la fonction disait déjà ce qu'il ne fallait pas faire : « ici on refuse surtout
+de rendre "aucun", qui ferait passer deux expériences différentes pour une ». Les deux clés sont
+désormais lues, `evenements` d'abord, dans le même ordre que le chargement lui-même.
+
+**Avant :** bras traité et témoin, même identité, aucun message.
+**Après :** l'empreinte suit la déclaration réellement jouée, quelle que soit la clé ; une
+campagne lancée sous l'ancienne garde une identité valide.
+
+⚠ **Troisième défaut de la même famille en une heure** — après les tests du ticket 079 et le
+tirage météo. Tous ont la même forme : du code qui lit `settings.chocs` quand le ticket 100 a
+déplacé la vérité dans `settings.evenements`, invisible tant que le `config.yaml` du dépôt
+portait l'ancienne clé. Un balayage du code de production ne trouve plus aucun autre lecteur ;
+les tests restants sont recensés au ticket 102, lot F.
+
+---
+
+## [2026-09-22] L'agent qui rédige l'article court, et ses vingt règles
+
+L'agent `article-writer` est réécrit, en anglais, pour rédiger les sections de l'article court
+depuis son plan. Il portait jusque-là une grille générique pointant sur un autre projet ; il
+porte désormais vingt règles de livraison écrites contre les défauts de la première version du
+papier : budget de mots tenu à ±15 %, squelette écrit avant le remplissage, rien dit deux fois,
+aucun terme employé sans définition en amont, aucun nom du dépôt dans le corps, aucun chiffre
+sans source ni sans sa réserve, quatre tests de lecture avant de rendre, et un bloc de
+compte-rendu fixe. Il écrit dans `docs/paper/article-court/sections/`, jamais dans l'article
+verrouillé, et ne se valide pas lui-même.
+
+**L'anglais se rédige d'abord, le français en est le rendu.** Décision de l'auteur, qui inverse
+la convention de l'article actuel : le « brut » de la première version venait du décalque
+français → anglais, et c'est l'anglais que le relecteur lit. La consigne R17 est réécrite en
+conséquence.
+
+**Avant :** un agent générique, en français, sans lien avec le plan ni avec les consignes de
+forme, libre d'écrire dans l'article.
+**Après :** un agent qui ne peut écrire qu'une section du plan, qu'en anglais d'abord, qu'après
+avoir lu le plan et les sections précédentes, et qui rend un brouillon vérifié plutôt qu'un
+texte final.
+
+---
+
+## [2026-09-22] Cinq tests d'événement étaient verts pour la mauvaise raison
+
+Les tests du ticket 079 éteignaient `settings.chocs` avant de vérifier qu'un run sans déclaration
+se comporte comme avant. Mais depuis le ticket 100, le chargement regarde `settings.evenements`
+**d'abord**, et ne descend sur `chocs` que si le premier bloc est éteint. Tant que le `config.yaml`
+du dépôt portait l'ancienne clé, le premier bloc était vide et les tests passaient — sans jamais
+exercer le chemin qu'ils décrivent.
+
+Une campagne lancée le même jour a écrit la clé neuve dans ce fichier, et les cinq sont tombés
+ensemble. Ils cherchaient une déclaration à un chemin de conteneur, depuis l'hôte.
+
+**Avant :** vert tant que `config.yaml` se trouvait dans le bon état ; rien ne disait que l'état
+comptait.
+**Après :** la fixture éteint les deux blocs à l'entrée et les rend à leur valeur d'origine à la
+sortie. Le fichier ne lit plus `config.yaml` du tout, et ce qu'il vérifie ne dépend plus de ce
+qu'un run a laissé derrière lui.
+
+⚠ **Un run en cours réécrit `services/llm-agents/config/config.yaml`.** Une suite lancée pendant
+une campagne ne mesure donc pas la même chose qu'une suite lancée à froid. D'autres tests portent
+peut-être la même dépendance — le ticket 102 les recense.
+
+---
+
+## [2026-09-22] Un bras de campagne dit qui l'a produit, et où il en est
+
+Deux silences du lanceur de cohorte, tous deux payés le jour même.
+
+**Quels modèles servent le bras.** La restriction d'instances se déclare par catégorie dans
+`infra/docker-compose.yml` et n'apparaissait nulle part dans la sortie du lanceur : il fallait
+entrer dans le conteneur, ou ouvrir `identite_run.json`, pour savoir que les décisions passaient
+par deux clés d'un seul modèle. Le lanceur journalise désormais, au démarrage de chaque bras, les
+modèles admis et le routage par catégorie — et il le dit aussi quand `identite_run.json` est
+absent ou illisible, le silence se lisant sinon comme « aucune restriction », qui est l'inverse
+du cas dangereux.
+
+**Où en est le run.** Le battement d'avancement affichait « journée simulée : ? » tant que la
+boucle de simulation n'avait pas démarré, l'amorçage ne produisant aucune ligne `[sync] END`. Sur
+un run de six heures, « ? » ne distingue pas « ça amorce » de « c'est bloqué » — précisément la
+question que ce battement existe pour trancher. Il nomme maintenant l'étape d'amorçage en cours.
+
+**Avant :** `[861500_treated] en cours depuis 5 min — journée simulée : ?`
+**Après :** `[861500_treated] en cours depuis 5 min — journée simulée : amorçage — pre-computing
+1 act[N+5] itineraries (wave 5)...`
+
+---
+
+## [2026-09-22] Le plan de l'article court, et le ticket qui le conditionne
+
+L'article court a désormais sa thèse et son plan. La thèse, en une phrase : dans une population
+d'agents de mobilité, la délibération verbalisée n'améliore pas la fidélité au régime que
+l'enquête décrit ; ce qu'elle apporte, c'est la prise en compte d'événements qu'aucune variable
+n'encode, dont le chemin jusqu'à la décision est tracé. Trois contributions la portent : le banc
+de comparaison, le positionnement de quinze décideurs avec deux dissociations que l'agrégat ne
+voit pas, et le chemin tracé d'un événement non tabulé. L'architecture en cascade n'en est pas
+une : elle passe en implication, avec sa contradiction dite.
+
+`docs/paper/article-court/PLAN.md` détaille sept sections au niveau 3-4, 5 200 mots, cinq
+figures, trois tableaux, dix annexes, la correspondance avec les dix chapitres actuels et l'ordre
+de rédaction.
+
+**Le plan est écrit sous une hypothèse, et le ticket 103 la teste.** Le résultat pivot, le
+classifieur à sortie typée dans la bande tabulaire à 3,65, repose sur un prompt réglé en
+échantillon comparé à un prompt réglé hors échantillon ; et la stabilité inter-graines du § 6.5
+n'a jamais été mesurée. Le ticket rejoue le carré deux modèles × trois prompts sur la seconde
+cohorte, où aucun prompt n'a été réglé, plus quatre tabulaires et trois planchers, et ajoute deux
+graines à trois décideurs clés. Les critères d'acceptation sont écrits avant la mesure, en trois
+scénarios ; le plan dit ce qui change dans chacun.
+
+**Avant :** la thèse de l'article vivait au chapitre 9, en page 8, et le pivot Jev n'avait ni
+mesure hors échantillon ni graines.
+**Après :** la thèse est en page 1 du plan, le pivot a un ticket avec ses critères, et la
+première mesure de dispersion inter-graines du corpus (gemini-3.5 × prompt expert : 4,86 / 4,65 /
+4,30, étendue 0,56) est nommée, alors qu'elle existait dans le dépôt sans être écrite nulle part.
+
+---
+
+## [2026-09-22] Une cohorte peut enfin jouer un autre événement que l'avarie moteur
+
+L'orchestrateur séquentiel savait jouer un seul cas : `c6_voiture_suspecte`, écrit en dur. Toute
+autre campagne demandait d'éditer le script. Il prend désormais `--evenement`, cherché dans
+`config/evenements/` puis dans `config/chocs/`, et sans lui rien ne bouge — la commande du
+ticket 077 rend le même run qu'avant.
+
+Un piège s'ouvrait avec ce paramètre, et il est refermé du même coup. La dérivation par persona
+écrivait `exposition.agents` **sans toucher à `regle`**. Sur l'avarie moteur, déjà en
+`regle: agents`, cela marchait. Sur une panne de réseau (`regle: mode`) la liste d'agents aurait
+été écrite, acceptée, et ignorée : la règle du mode aurait continué de décider. Sur une
+population d'un seul habitant le résultat aurait même été le bon, **par accident** — la pire des
+situations, puisque la déclaration dit alors autre chose que ce qu'elle fait et que le piège ne
+se referme qu'au premier run à plusieurs agents. La règle est maintenant forcée à `agents`, les
+modes déclarés sont conservés (ils restreignent l'agent désigné à ces trajets-là), et les
+paramètres du tirage — `part`, `graine` — devenus sans objet, sont retirés.
+
+**Avant :** `--personas 861500` jouait l'avarie moteur, quoi qu'on veuille mesurer.
+**Après :** `--evenement c3_panne_reseau --personas 861500` joue la panne de réseau sur ses
+seuls trajets en transports collectifs, et le fichier dérivé dit en tête ce qu'il a changé.
+
+Un nom d'événement mal orthographié n'attend plus six heures pour se signaler : l'erreur liste
+les cas livrés.
+
+---
+
+## [2026-09-22] La panne de réseau ne frappe plus qu'une fois par jour
+
+`c3_panne_reseau` ne déclarait pas sa cadence, qui valait donc `trajet` : une panne déclarée une
+fois s'appliquait à **chacun** des trajets en transports collectifs de la journée. Le sujet de la
+campagne en fait un à deux par jour — il aurait donc « manqué le rendez-vous vers lequel il se
+rendait » deux fois dans la même journée, avec deux jugements et deux souvenirs au lieu d'un.
+
+C'est le défaut exact que l'avarie moteur avait payé le 19 septembre : quatre dépannages de
+trente minutes dans la même journée là où le protocole en comptait un. La même ligne le corrige.
+
+⚠ **Les quatre autres cas du ticket 079 — `c1`, `c2`, `c4`, `c5` — ne l'ont toujours pas.** À
+traiter avant de les jouer.
+
+La déclaration passe par ailleurs au **jugement de l'agent** (`jugement: a_l_injection`) : D7 est
+le régime décidé, et jouer la campagne sous l'ancien aurait mesuré une mécanique abandonnée. Les
+huit autres déclarations restent en l'état — les basculer changerait en silence ce que produit un
+rejeu de l'avarie moteur, dont les chiffres sont cités au § 7.2 du manuscrit.
+
+---
+
+## [2026-09-22] Un dossier de reprise pour l'article, avec ses consignes de forme
+
+Le tuteur a lu la première version compilée et l'a trouvée difficile à suivre, les phrases
+brutes et les idées mal structurées. La relecture a établi quatre causes : le format est
+dépassé d'un facteur trois (20 603 mots pour 8 pages), l'introduction promet un protocole
+que le corps n'exécute pas, l'anglais est un décalque phrase à phrase du français, et le
+PDF relu est en retard de cinq jours sur ses masters.
+
+`docs/paper/article-court/` porte désormais la reprise. Il tient dix-huit consignes de forme
+et de style, chacune avec son test, et un contrôle en ligne de commande pour les huit qui
+s'automatisent. Ce dossier est hors du verrou de `docs/paper/article/`, qui reste la source
+et n'est pas modifié.
+
+**Avant :** le style se vérifiait par la relecture seule, et par un détecteur de marqueurs
+d'IA dont trois interdictions poussaient vers le texte télégraphique reproché.
+**Après :** une phrase de plus de 25 mots, un paragraphe à plusieurs deux-points, une clivée,
+un renvoi vers l'avant, un placeholder ou un terme de la table lexicale proscrite se
+signalent à la commande. Le mode `--squelette` imprime la première phrase de chaque
+paragraphe d'une section : si cette lecture ne raconte pas la section, les phrases-sujets
+manquent.
+
+```bash
+python3 docs/paper/article-court/verifier_forme.py --squelette docs/paper/article/en/03_Architecture.md
+```
+
+L'arbitrage avec la charte anti-IA de la skill `article-verrou` est écrit au § 0 des
+consignes : la lisibilité prime, et trois interdictions sont levées — le balisage de section,
+les connecteurs logiques et la hiérarchie visuelle dans les tableaux et légendes.
+
+---
+
 ## [2026-09-22] L'article retire son hypothèse H0 et nomme le prompt expert de Jev
 
 L'hypothèse **H0** du § 1.3 est retirée. Elle n'était plus un test depuis le 17 septembre —

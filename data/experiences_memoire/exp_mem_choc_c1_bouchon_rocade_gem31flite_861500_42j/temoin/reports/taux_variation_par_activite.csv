@@ -1,0 +1,5 @@
+motif,transitions_total,taux_variation_global,stabilite_globale,taux_variation_itineraire,taux_var_pre_choc,taux_var_post_choc,rigidite_relative
+Achats,26,0.0,1.0,1.0,0.0,0.0,Très Rigide
+Travail,26,0.1923,0.8077,0.9231,0.3333,0.1818,Modérée
+home,30,0.2667,0.7333,0.8667,1.0,0.0833,Modérée
+other,29,0.2759,0.7241,0.5862,1.0,0.087,Modérée

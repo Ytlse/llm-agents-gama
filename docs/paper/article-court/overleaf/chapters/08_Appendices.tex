@@ -1,0 +1,204 @@
+% =====================================================================
+% chapters/08_Appendices.tex — LaTeX rendering of ../sections/08_appendices.en.md (2026-09-24 14:58:01)
+% Appendices of the SHORT paper, for the supplementary material. \input from supplementary.tex,
+%   after \appendix. NOT \input from main.tex: the appendices live outside the eight pages, and
+%   the paper names them in plain text ("Appendix D"), with no \label to \ref across files.
+% Written by hand on 24 September 2026 (no generator, see ../sections/README.md). Only
+%   Appendix D exists. \setcounter{section}{3} makes it print as "D": remove that line when
+%   A, B and C are written above it.
+% Tables: two, numbered D.1 and D.2 (\thetable redefined below), caption ABOVE, booktabs.
+% Verbatim blocks: fvextra Verbatim with breaklines, loaded in supplementary.tex. The four
+%   blocks are copied byte for byte from the fenced blocks of the master, which are the text
+%   as served, schema excluded. The three blank lines before "Reply with" in D.5 are the
+%   template's own.
+% Links: \href{\repobase/<path>}{...}, \repobase being defined in ../repository.tex, the only
+%   place where the TBD of the address is written.
+% Not carried: the <!-- source: --> comments of the master (provenance trace, as in the paper).
+% =====================================================================
+
+\setcounter{section}{3}
+\renewcommand{\thetable}{\thesection.\arabic{table}}
+\setcounter{table}{0}
+
+\section{The three prompts, and one trip decided under each}
+\label{app:prompts}
+
+This appendix gives the three prompts of Section~4.4 as the decision-makers received them.
+It then follows one trip through three decision-makers, \texttt{gemini-3.5} under each of the
+two prompts and the typed classifier under its own.
+
+\subsection{What each decision-maker receives}
+\label{app:receives}
+
+A language model receives two messages. The system message is the prompt, followed by the
+JSON schema of the expected answer. The user message describes the trip, the persona and the
+options. It is built from the trip alone, and the prompt does not change it. Every model runs
+at temperature 0 and top-p 1. The thinking level is set to high for \texttt{gemini-3.5} and
+\texttt{mistral-large}, and left unset for \texttt{gemini-3.1}. The simulation then draws the
+mode at random from the returned distribution.
+
+The typed classifier receives the same prompt, cut before its output instructions. Its typed
+output takes their place. The trip reaches it as the same facts, in two parts. One holds the
+persona and its context, the other gives one line per option. It returns one probability per
+option and writes no text.
+
+Table~\ref{tab:app-files} lists the four files that hold this material in the anonymised
+repository. The prompt file stores each prompt under the key given with it below.
+
+\begin{table}[ht]
+  \caption{Where each element of this appendix is kept.}
+  \label{tab:app-files}
+  \begin{tabular}{ll}
+    \toprule
+    Element & File \\
+    \midrule
+    The three prompts & \href{\repobase/packages/mobility_llm/src/mobility_llm/prompts/prompts.yaml}{\texttt{prompts.yaml}} \\
+    The user message & \href{\repobase/packages/mobility_llm/src/mobility_llm/categories/itinary_multi_agent/template.md.j2}{\texttt{template.md.j2}} \\
+    The JSON schema & \href{\repobase/packages/mobility_llm/src/mobility_llm/categories/itinary_multi_agent/output_schema.json}{\texttt{output\_schema.json}} \\
+    The classifier's input & \href{\repobase/services/llm-agents/experiences/decideur_typesafe.py}{\texttt{decideur\_typesafe.py}} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{The minimal prompt}
+\label{app:minimal}
+
+The minimal prompt gives the task and the output format, and nothing else. It runs to 82
+words, schema excluded, and the prompt file holds it under the key
+\texttt{prompt\_minimal\_02}.
+
+\begin{Verbatim}
+Select the optimal travel mode taking the persona into account.
+
+[Output instructions]
+
+1. Analyse the profile.
+2. Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+3. Return only a valid JSON object — no markdown, no extra text.
+4. Justify the distribution in one concise sentence.
+\end{Verbatim}
+
+\subsection{The expert prompt}
+\label{app:expert}
+
+The expert prompt adds the four general criteria of Section~4.4, under one heading. Its first
+line and its output instructions repeat the minimal prompt, except that the first instruction
+reads the profile ``through these principles''. It runs to 277 words, under the key
+\texttt{prompt\_expert\_05}. The language models receive this text.
+
+\begin{Verbatim}
+Select the optimal travel mode taking the persona into account.
+
+Situational trade-off principles:
+- Chain friction: Reconstruct the real door-to-door duration (access walk, waiting, in-vehicle trip, egress). If the access walk accounts for most of the direct trip in exchange for a few minutes on board, the traveller prefers the simplicity of walking straight there, with no interchange and no waiting.
+- Autonomy of older people: For elderly or frail people, a continuous, unhurried walk at one's own pace is the natural mode of independence for short distances, against the strain and stress of public transport (jolting, risk of falling, steps to climb, standing while waiting with no bench).
+- Carrying logistics: Take into account the physical constraint of loads (shopping, heavy bags, carrier bags). Carrying loads on public transport is off-putting; the trade-off leans towards direct access with no interchange (an immediate neighbourhood walk, or the boot of a private vehicle).
+- Working people's life time: For a working person facing a tightly scheduled day, the time taken away from personal life has critical value. Faced with public transport links that significantly increase the duration or impose multiple interchanges, the traveller prefers the efficiency and schedule control of their available vehicle.
+
+[Output instructions]
+
+1. Analyse the profile through these principles.
+2. Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+3. Return only a valid JSON object — no markdown, no extra text.
+4. Justify the distribution in one concise sentence.
+\end{Verbatim}
+
+\subsection{The classifier's expert prompt}
+\label{app:classifier}
+
+The classifier's prompt differs from the expert prompt in its first criterion only. Its chain
+friction bullet adds the other side of the trade-off, a direct walk that is itself the long
+part of the journey. The other lines are those of Appendix~\ref{app:expert}. It runs to 318
+words, under the key \texttt{prompt\_expert\_32}.
+
+\begin{Verbatim}
+- Chain friction: Reconstruct the real door-to-door duration on both sides — access walk, waiting, in-vehicle trip and egress on one; the unbroken walking effort on the other. If the access walk accounts for most of the direct trip in exchange for a few minutes on board, the traveller prefers the simplicity of walking straight there, with no interchange and no waiting. If the direct walk is itself the long part of the journey, that simplicity is paid in time and fatigue, and it stops being the easy option.
+\end{Verbatim}
+
+\subsection{One trip under the three decision-makers}
+\label{app:trip}
+
+We chose this trip by hand, for legibility, and it is not representative of the cohort.
+Raymond, 45, leaves for a shop at 13:37 on the scored day of the sealed cohort. The three
+decision-makers received the same six options. The message below is the user message that
+both language models received.
+
+\begin{Verbatim}
+--- agent_id=393781 | Destination: shop | Departure: 13:37 ---
+**Context:** Weather: 28°C, Partly cloudy. Today 18°C to 33°C, sunrise 06:19, sunset 21:39. Rain expected in the morning (0.8 mm over the day).
+**Weather later:** evening 13°C, Clear/Sunny.
+Raymond, 45, Full-Time Worker (household of 4, very low income). Usual trip purposes: Shopping. Lives in: 1st ring
+
+**Further trips planned today:**
+    · 14:47 → shop (≈1.4 km)
+
+**Trip options** (6 options, indices 0 to 5):
+- [0] foot: Estimated duration: 16 minutes. Distance: 1.3 km.
+- [1] foot: Travel time: 17 minutes, including 17 minutes of walking.
+    · Walk to 'shop': 17 minutes.
+- [2] car: Travel time: 4 minutes, including 1 minute of access and parking. Distance: 1.5 km.
+    · Walk to the car: 1 minute.
+    · Driving: 3 minutes.
+- [3] foot,bus,foot: Travel time: 43 minutes, including 42 minutes of walking. Has no public transport pass.
+    · Walk to 'Collège Picasso': 21 minutes.
+    · Bus 'L11' to 'Frouzins Complexe Sportif': 1 minute.
+    · Walk to 'shop': 21 minutes.
+- [4] foot,bus,foot: Travel time: 34 minutes, including 33 minutes of walking. Has no public transport pass.
+    · Walk to 'Frouzins Tréville': 10 minutes.
+    · Bus '321' to 'Rouget de Lisle': 1 minute.
+    · Walk to 'shop': 22 minutes.
+- [5] foot,bus,foot: Travel time: 35 minutes, including 34 minutes of walking. Has no public transport pass.
+    · Walk to 'Rouget de Lisle': 14 minutes.
+    · Bus '321' to 'Frouzins Tréville': 1 minute.
+    · Walk to 'shop': 19 minutes.
+
+
+
+Reply with the final JSON object containing the recommendations for 1 persona(s).
+For each persona, copy its `agent_id` **exactly** as provided above (numeric identifier only, without the word "PERSONA" and without the persona's name).
+For each persona, rate **all** of its options — one `probabilities` entry per option, with its `index` and its `mode` copied as they appear — and make the `probability` values sum to 100. An option this persona would never take receives 0.
+Only the `- [n]` lines are options: the « · » sub-bullets detail the steps of an option and never receive a `probabilities` entry. Indices restart from 0 in each persona block — use only those shown in brackets in the block of the persona you are rating, never a numbering continued from one persona to the next.
+\end{Verbatim}
+
+Table~\ref{tab:app-trip} gives the three answers, in percent. The last row is the mode drawn
+from each distribution, under the same seed in the three runs.
+
+\begin{table}[ht]
+  \caption{Probability given to each option of Raymond's trip, in percent.}
+  \label{tab:app-trip}
+  \begin{tabular}{lrrr}
+    \toprule
+    Option & Minimal prompt, & Expert prompt, & Typed classifier, \\
+           & \texttt{gemini-3.5} & \texttt{gemini-3.5} & its expert prompt \\
+    \midrule
+    {[0]} foot, 16 min            & 30 & 45 & 52 \\
+    {[1]} foot, 17 min            & 10 & 45 & 20 \\
+    {[2]} car, 4 min              & 50 & 10 & 27 \\
+    {[3]} foot, bus, foot, 43 min &  0 &  0 &  0 \\
+    {[4]} foot, bus, foot, 34 min &  5 &  0 &  1 \\
+    {[5]} foot, bus, foot, 35 min &  5 &  0 &  0 \\
+    \midrule
+    Mode drawn                    & car & foot & car \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The language models justified their distributions in one sentence each. Under the minimal
+prompt, \texttt{gemini-3.5} wrote the following sentence.
+
+\begin{quote}
+Raymond prefers the speed and shelter of a car for his short shopping trip during inclement weather.
+\end{quote}
+
+Under the expert prompt, the same model wrote the following one.
+
+\begin{quote}
+With a very short distance to the shop and low income constraints, walking directly is the preferred choice.
+\end{quote}
+
+The message gives 28\,\textdegree{}C and partly cloudy skies, with rain in the morning only.
+The second sentence names none of the four criteria.
+
+Under both prompts, \texttt{gemini-3.5} gives the three bus options ten percent at most,
+together. The expert prompt takes forty points from the car and ten from the bus, and gives
+all fifty to walking. The classifier gives walking 72\,\%, between the two.

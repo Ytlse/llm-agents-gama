@@ -245,8 +245,11 @@ class WorkerMetricsCollector:
         rpd_ratio_fam = GaugeMetricFamily('llm_provider_daily_usage_ratio', 'requests_today / rpd_limit (1.0 = quota jour atteint)', labels=['provider'])
         exhausted_fam = GaugeMetricFamily('llm_provider_quota_exhausted', 'Provider écarté jusqu\'à minuit UTC pour quota jour atteint (1=épuisé)', labels=['provider'])
         for provider, cfg in settings.providers.items():
-            req_today = deps.limiter.daily_requests(provider)
-            tok_today = deps.limiter.daily_tokens(provider)
+            # Ticket 105 — vu de cette passerelle seulement ; la même clé sert aussi à
+            # `scripts/synthesis/*` et `prompt_calibration`, donc ces jauges SOUS-ESTIMENT la
+            # consommation réelle. Noms de métrique inchangés : Grafana les lit.
+            req_today = deps.limiter.daily_requests_local_seulement(provider)
+            tok_today = deps.limiter.daily_tokens_local_seulement(provider)
             req_today_fam.add_metric([provider], req_today)
             tok_today_fam.add_metric([provider], tok_today)
             if cfg.rpd_limit:

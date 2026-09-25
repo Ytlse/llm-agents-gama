@@ -10,14 +10,45 @@
 evenement: c3_panne_reseau
 canal: vecu                  # vecu | lu — d'où vient le texte
 moment: arrivee              # arrivee (après la décision) | reveil (avant)
-jugement: aucun              # aucun | a_l_injection (lot 3 du ticket 100)
+jugement: a_l_injection      # aucun | a_l_injection (lot 3 du ticket 100)
+# ══ PASSÉ AU JUGEMENT DE L'AGENT le 2026-09-22 (campagne d'attribution) ══════════════════════
+# D7 est le régime décidé : la gravité est l'estimation de l'agent, et le plancher `max(I_llm,
+# I_det)` a été retiré. Jouer cette campagne sous `jugement: aucun` mesurerait une mécanique
+# qu'on a abandonnée — la gravité déterministe (retard 28 min + incident réseau + correspondance
+# ratée) au lieu de ce que l'agent dit du texte.
+# Ce que l'agent en dit est MESURÉ, pas supposé : garde-fou du 2026-09-22, 4 personas sur 4,
+# `grave` (0,75) à l'unanimité — c'est le seul des sept textes à l'obtenir, et la raison tient en
+# un prédicat : il est le seul à énoncer un rendez-vous MANQUÉ. Durée servie attendue 16,17 j.
+# Les huit autres déclarations restent en `jugement: aucun` : les basculer changerait en silence
+# ce que produit un rejeu de c6, dont les chiffres sont cités au § 7.2 du manuscrit.
 libelle: "Metro network failure"
 source: "scénario déclaré — van Exel & Rietveld (2001), Transport Policy 8(4)"
+
+# CADENCE AJOUTÉE le 2026-09-22, avant la campagne d'attribution. Sans cette ligne la cadence
+# vaut `trajet` : une panne de réseau déclarée une fois s'appliquait à CHACUN des trajets en
+# transports collectifs de la journée. 861500 en fait un à deux par jour — il aurait donc
+# « manqué le rendez-vous vers lequel il se rendait » deux fois dans la même journée, avec deux
+# jugements et deux souvenirs de gravité 0,75 là où le protocole en déclare un.
+# C'est le défaut EXACT que c6 avait payé le 2026-09-19 (quatre dépannages de trente minutes au
+# lieu d'un), corrigé là par la même ligne. Les quatre autres cas du 079 — c1, c2, c4, c5 — l'ont
+# reçue le 2026-09-24.
+cadence: jour
 
 exposition:
   regle: mode
   modes: [public_transport]
 
+# ── LE JOUR 13 NE S'APPLIQUE JAMAIS ─────────────────────────────────────────────────────
+# Constaté le 2026-09-23, avant la campagne d'attribution. Le jour 12 du run tombe le vendredi
+# 2026-03-27 ; le jour 13 est donc le SAMEDI 28, et le dépôt tourne sous NO_WEEKEND_DEPARTURES
+# — aucun départ n'est produit ce jour-là, aucun trajet en transports collectifs n'expose
+# l'agent, la déclaration ne s'arme pas. La campagne mesure UNE application, pas deux.
+# Ce constat ne se corrige pas ici : le jour 13 est l'original du ticket 079, et le test en or
+# du ticket 100 (`test_100_lot1_migration.py`, `sorted(a.jours) == sorted(b.jours)`) exige que
+# ce fichier déclare exactement les mêmes jours que `config/chocs/c3_panne_reseau.yaml`. Le
+# retirer d'un seul côté casserait l'invariant qui protège les originaux ; le retirer des deux
+# réécrirait l'original que cet invariant existe pour protéger. On l'écrit donc, on ne le touche
+# pas. C'est le même motif que le J16 de c6, jamais appliqué pour la même raison.
 jours:
   - jour: 12
     retard_min: 28

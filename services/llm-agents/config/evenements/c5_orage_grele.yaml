@@ -13,6 +13,10 @@ evenement: c5_orage_grele
 canal: vecu                  # vecu | lu — d'où vient le texte
 moment: arrivee              # arrivee (après la décision) | reveil (avant)
 jugement: aucun              # aucun | a_l_injection (lot 3 du ticket 100)
+# Au plus une application par agent et par jour (ticket 100, § 13.2 point 9, 2026-09-24).
+# Sans cette ligne, la cadence par défaut `trajet` injectait l'événement à CHAQUE trajet
+# du mode visé le même jour — le défaut qui a coûté une mesure sur c6 le 19/09.
+cadence: jour
 libelle: "Violent hailstorm"
 source: "scénario déclaré — Böcker et al. (2013), Transport Reviews 33(1), sur l'effet météo"
 

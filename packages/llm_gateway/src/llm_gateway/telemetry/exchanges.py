@@ -34,6 +34,7 @@ class ExchangeRecord:
     messages: list[dict[str, Any]]
     response: Any
     sim_ts: float | None = None
+    origine: str | None = None
     time: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     @property
@@ -45,7 +46,7 @@ class ExchangeRecord:
     def to_json_dict(self) -> dict[str, Any]:
         d = asdict(self)
         return {
-            "time": d["time"], "sim_ts": d["sim_ts"], "sim_day": self.sim_day,
+            "time": d["time"], "sim_ts": d["sim_ts"], "sim_day": self.sim_day, "origine": d["origine"],
             "task_id": d["task_id"], "provider": d["provider"], "category": d["category"],
             "tokens_in": d["tokens_in"], "tokens_out": d["tokens_out"],
             "messages": d["messages"], "response": d["response"],

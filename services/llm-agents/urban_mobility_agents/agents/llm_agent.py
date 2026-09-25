@@ -9,6 +9,7 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 import demjson3
@@ -30,6 +31,7 @@ from llm.axes import (
 )
 from llm.cache import LlmSemanticCache
 from llm import foyer
+from llm.evenements import temoin
 from llm.concepts import (
     CONCEPTS_MONTRES_PAR_PANIER,
     CONFIRMER,
@@ -605,6 +607,9 @@ class LlmAgent:
             # filet : l'UNION de tout ce qui est admis, pour qu'un appel neuf soit restreint
             # par défaut plutôt que libre.
             instances_admises=toutes_les_instances(),
+            # Le nom du run signe chaque échange : le journal du worker est commun à tous les
+            # clients, et c'est ce champ qui permet de n'y lire que les siens.
+            origine=Path(settings.workdir).name,
         )
         self.prompt_manager = PromptManager(
             os.path.join(os.path.dirname(__file__), "prompts")
@@ -2250,6 +2255,22 @@ class LlmAgent:
                     note=f"gravité {float(entry.importance or 0.0):.2f}",
                 )
             await self.aadd_long_term_memory(context, entry)
+
+        # ── Ticket 106 — le souvenir injecté a-t-il atteint la mémoire longue ? ──────────
+        # Ici et pas ailleurs : les entrées viennent d'être ÉCRITES, et c'est leur contenu
+        # écrit qu'on interroge, pas une intention. Ne rend rien — et ne coûte rien — sur les
+        # consolidations ordinaires, qui ne consomment aucune entrée injectée.
+        #
+        # Le contrôle ALARME et n'arrête pas, délibérément : le témoin est heuristique là où
+        # celui du ticket 105 était certain. Brancher l'arrêt se fera quand son taux de
+        # fausses alarmes aura été observé sur des runs réels.
+        temoin.controler(
+            person_id=str(context.person.person_id),
+            sim_ts=int(context.timestamp),
+            contenus_courts=[m.content for m in all_messages],
+            textes_longs=[e.content for e in entries],
+            seuil=settings.agent.temoin_souvenir_mots_min,
+        )
 
         # Ticket 075 — l'état COMPLET de la mémoire après la consolidation, seul moment où il
         # est écrit : c'est le point de comparaison d'une consolidation à la suivante. Il est

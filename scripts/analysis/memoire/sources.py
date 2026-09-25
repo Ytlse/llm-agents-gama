@@ -447,7 +447,13 @@ def lire_echanges(chemin_run: Path) -> list[dict[str, Any]]:
     fichier = Path(chemin_run) / "llm_exchanges.jsonl"
     if not fichier.is_file():
         return []
-    return decoder_json_concatene(fichier.read_text(encoding="utf-8"))
+    # Le worker écrit ce journal pour TOUS ses clients : seuls les échanges signés par ce run
+    # (ou non signés, antérieurs au 2026-09-24) lui appartiennent.
+    nom_run = Path(chemin_run).resolve().name
+    return [
+        o for o in decoder_json_concatene(fichier.read_text(encoding="utf-8"))
+        if o.get("origine") in (None, nom_run)
+    ]
 
 
 def decoder_json_concatene(texte: str) -> list[dict[str, Any]]:

@@ -8,6 +8,10 @@ choc: c5_orage_grele
 libelle: "Violent hailstorm"
 source: "scénario déclaré — Böcker et al. (2013), Transport Reviews 33(1), sur l'effet météo"
 
+# CADENCE AJOUTÉE le 2026-09-24, comme sur c3 et c6 : au plus une application par agent et par
+# jour. Sans elle, la cadence `trajet` injectait l'événement à chaque trajet du mode visé.
+cadence: jour
+
 exposition:
   regle: mode
   modes: [walking, cycling, motorbike]

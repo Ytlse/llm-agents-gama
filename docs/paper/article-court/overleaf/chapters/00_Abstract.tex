@@ -1,0 +1,57 @@
+% =====================================================================
+% chapters/00_Abstract.tex — LaTeX rendering of ../sections/00_abstract.en.md (2026-09-24 00:01:41)
+% Chapter 0 of the SHORT paper: the abstract. \input from main.tex, in the preamble, before
+%   \begin{document}, as the AAMAS sample does.
+% Derived file: regenerate after every validated pass of ../sections/00_abstract.en.md.
+%   The "source:" comments of the Markdown stay there and are not carried over.
+% LENGTH: 306 words, footnote excluded, against the 300 the plan budgets and the "around
+%   100-300 words in plain text" the conference asks. Six words over. The same text serves
+%   the PDF and the OpenReview registration field, which is plain text.
+% CARRIED BY HAND, 24 September 2026, against the master dated 2026-09-24 00:01:41: survey
+%   named "Cerema-certified", "None of our decision-makers built on a language model passes
+%   them", sentence "The aggregate hides what a decision-level reading shows" removed.
+% ⚠ The sentence "Tuning the prompt by adjusting the instructions ..." breaks R1 at 31 words
+%   and opens on a dangling participle: the subject of "Tuning the prompt" is not "the
+%   generative agent". Left as the author wrote it.
+% AUTHOR-ADDED FOOTNOTE — PRESERVE ON REGENERATION. The survey citation hangs on
+%   "Cerema-certified 2023 household travel survey", in the form the distributor requires,
+%   DOI 10.13144/lil-1750 (lil-0933 is the 2013 survey). No \cite in the abstract. It does
+%   not count towards the word total, and it cannot travel into the OpenReview field: there,
+%   the sentence simply names the survey.
+% NO PLACEHOLDER HERE. The typed-classifier sentence is written under scenario 1 of ticket 103
+%   and carries no figure, so nothing in this file waits on that ticket.
+% =====================================================================
+
+\begin{abstract}
+Multi-agent simulations of urban mobility choose travel modes with tabular models fitted on
+surveys of declared trips, or with rules written by domain experts. Both fix the space of
+representable behaviours before the simulation runs, so a factor held by neither a variable
+nor a rule changes no decision. Generative agents built on language models promise to lift
+that bound, carrying decision heuristics that surveys never record. To the best of our
+knowledge, whether the promise survives a comparison with a real population has not been
+measured.
+
+We measure it on the Toulouse area, against its Cerema-certified 2023 household travel
+survey\footnote{\href{https://doi.org/10.13144/lil-1750}{doi:10.13144/lil-1750} Enquête Ménages
+Déplacements (EMC\textsuperscript{2}), Toulouse / Aire métropolitaine toulousaine -- 2023, Cerema,
+Tisséo Collectivités (producteurs), PROGEDO-ADISP (diffuseur).}.
+A sealed cohort of 1{,}000 synthetic personas, controlled against thirteen margins of that
+survey, makes the 3{,}299 trips of the day we score. Fifteen decision-makers run on those
+trips under one protocol. It gives them the same 21 input variables. It scores the
+probability each places on every option offered.
+
+Tuning the prompt by adjusting the instructions to highlight general criteria (such as
+comfort, constraints, or opportunities related to choosing an option), the generative agent
+approaches the characteristics of tabular models. None of our decision-makers built on a
+language model passes them. A classifier that reads
+the same context under a fixed output type, and writes no text, matches them for a fiftieth
+of the cost. Two decision-makers
+that the aggregate cannot tell apart disagree on one trip in three. The classifier gets more
+individual trips wrong than a rule that reads nothing.
+
+Verbalised deliberation earns its place outside that ordinary day. Traced in one agent, an
+engine failure entered memory, discouraged car use for fifteen days, then faded. No
+decision-maker holding the 21 variables alone can answer such an event. Our measurements
+encourage the use of the language model where events arrive, and leave the ordinary day to a
+decision-maker that does not deliberate.
+\end{abstract}

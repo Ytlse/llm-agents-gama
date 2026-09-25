@@ -269,8 +269,15 @@ def section_llm(run: Path, out: list[str], alarms: list[str], top: int) -> None:
     tok_in = tok_out = 0
     prov_calls = Counter()
     exch_times: list[datetime] = []
+    # Le journal est écrit par le worker, commun à tous les clients : on ne compte que les
+    # échanges signés par CE run (ou non signés, antérieurs au 2026-09-24).
+    run_name = run.resolve().name
+    n_etrangers = 0
     if exch_path.exists():
         for o in _iter_json_concat(exch_path):
+            if o.get("origine") not in (None, run_name):
+                n_etrangers += 1
+                continue
             n_exch += 1
             tok_in += int(o.get("tokens_in") or 0)
             tok_out += int(o.get("tokens_out") or 0)
@@ -282,6 +289,11 @@ def section_llm(run: Path, out: list[str], alarms: list[str], top: int) -> None:
                 except ValueError:
                     pass
 
+    if n_etrangers:
+        out.append(
+            f"\n_{n_etrangers} échanges d'un AUTRE client (origine ≠ `{run_name}`) écartés du "
+            f"compte : le worker les a servis pendant ce run._\n"
+        )
     total_decisions = n_hits + n_exch
     hit_rate = n_hits / total_decisions if total_decisions else 0.0
     out.append(
@@ -493,6 +505,134 @@ def section_decisions(run: Path, out: list[str], alarms: list[str]) -> None:
 def _is_llm_fallback(method: str) -> bool:
     """Décision retombée sur l'index par défaut faute de réponse LLM."""
     return "Error" in method or "Default" in method
+
+
+def _instant_evenement(run: Path) -> tuple[int, str] | None:
+    """Instant simulé de la PREMIÈRE injection d'événement, et son identifiant.
+
+    Ticket 105. `evenements.jsonl` est le nom neuf (ticket 100) ; `chocs.jsonl` en est un lien
+    symbolique sur les runs migrés, et le vrai fichier sur les plus anciens.
+    """
+    for nom in ("evenements.jsonl", "chocs.jsonl"):
+        chemin = run / nom
+        if not chemin.exists():
+            continue
+        instants = []
+        for enr in _iter_jsonl(chemin):
+            ts = enr.get("timestamp")
+            if isinstance(ts, (int, float)):
+                instants.append((int(ts), str(enr.get("evenement_id") or enr.get("choc_id") or "?")))
+        if instants:
+            return min(instants, key=lambda t: t[0])
+    return None
+
+
+def section_replis_autour_evenement(run: Path, out: list[str], alarms: list[str]) -> None:
+    """Replis AVANT et APRÈS l'événement — ticket 105.
+
+    Un taux global ne dit rien : le 2026-09-23, la ligne de base était parfaitement propre
+    (0/48) pendant que la fenêtre de mesure en portait 10,3 % (4/39). C'est exactement l'écart
+    qui rend un bras inexploitable, et c'est celui qu'un chiffre agrégé cache. Il avait fallu
+    fouiller `moves.csv` à la main pour le voir.
+    """
+    chemin = run / "moves.csv"
+    evt = _instant_evenement(run)
+    if not chemin.exists() or evt is None:
+        return
+    instant, evenement_id = evt
+
+    avant_llm = avant_repli = apres_llm = apres_repli = 0
+    with chemin.open(encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            try:
+                ts = float(row.get("Temps simulé") or 0)
+            except (TypeError, ValueError):
+                continue
+            methode = row.get("Méthode de sélection", "?")
+            if methode != "LLM" and not _is_llm_fallback(methode):
+                continue  # mono-choix, no-move : pas une décision du modèle
+            repli = _is_llm_fallback(methode)
+            if ts < instant:
+                avant_repli += repli
+                avant_llm += 1
+            else:
+                apres_repli += repli
+                apres_llm += 1
+
+    if not (avant_llm or apres_llm):
+        return
+
+    def part(n: int, d: int) -> str:
+        return f"{n}/{d} = {n / d:.1%}" if d else "aucune décision"
+
+    out.append("\n## 🎯 Replis autour de l'événement\n")
+    out.append(
+        f"Événement `{evenement_id}` injecté à {datetime.fromtimestamp(instant, timezone.utc):%Y-%m-%d %H:%M} "
+        f"(temps simulé).\n"
+    )
+    out.append("| Fenêtre | Décisions du modèle | Replis |")
+    out.append("|:--|--:|:--|")
+    out.append(f"| Avant (ligne de base) | {avant_llm} | {part(avant_repli, avant_llm)} |")
+    out.append(f"| Après (mesure) | {apres_llm} | {part(apres_repli, apres_llm)} |")
+
+    taux_apres = apres_repli / apres_llm if apres_llm else 0.0
+    taux_avant = avant_repli / avant_llm if avant_llm else 0.0
+    if taux_apres >= TH_FALLBACK_SHARE:
+        alarms.append(
+            f"🔴 {apres_repli}/{apres_llm} décisions ({taux_apres:.1%}) de la FENÊTRE DE MESURE "
+            f"servies par l'index par défaut, contre {taux_avant:.1%} avant l'événement — "
+            f"ce ne sont pas des décisions du modèle, la comparaison est entamée."
+        )
+
+
+def section_temoin_souvenir(run: Path, out: list[str], alarms: list[str]) -> None:
+    """Le souvenir injecté a-t-il atteint la mémoire longue ? — ticket 106.
+
+    Le 2026-09-23, le run v4 a injecté une panne de métro jugée 0,75 et l'a perdue : la
+    consolidation du soir a écrit « Today went very smoothly overall », et aucun des 123
+    documents de mémoire longue ne parlait de métro. Les jours suivants ne mesuraient donc
+    l'effet d'aucun souvenir, et rien ne le disait.
+
+    La section rend les DEUX verdicts. Un témoin dont on ne voit que les échecs ne permet pas
+    de distinguer « il ne se déclenche jamais » de « il ne tourne plus ».
+    """
+    chemin = run / "temoin_souvenir.jsonl"
+    if not chemin.exists():
+        return
+    lignes = []
+    for brute in chemin.read_text(encoding="utf-8").splitlines():
+        if not brute.strip():
+            continue
+        try:
+            lignes.append(json.loads(brute))
+        except json.JSONDecodeError:
+            continue
+    if not lignes:
+        return
+
+    perdus = [l for l in lignes if not l.get("retrouve")]
+    out.append("\n## 🧠 Témoin du souvenir injecté\n")
+    out.append("| Agent | Jour simulé | Verdict | Mots retrouvés |")
+    out.append("|:--|:--|:--|:--|")
+    for l in lignes:
+        mots = ", ".join(l.get("mots_retrouves") or []) or "—"
+        verdict = "✅ retrouvé" if l.get("retrouve") else "🔴 **PERDU**"
+        out.append(
+            f"| `{l.get('person_id', '?')}` | {l.get('sim_day', '?')} | {verdict} | {mots} |"
+        )
+    out.append(
+        f"\n{len(lignes)} consolidation(s) contrôlée(s) après injection, "
+        f"{len(perdus)} sans trace du souvenir.\n"
+    )
+
+    for l in perdus:
+        cherches = ", ".join((l.get("mots_cherches") or [])[:8])
+        alarms.append(
+            f"🔴 SOUVENIR INJECTÉ PERDU — l'agent `{l.get('person_id', '?')}` a consolidé le "
+            f"{l.get('sim_day', '?')} sans garder trace de l'événement "
+            f"(cherchés : {cherches}). Les jours suivants ne mesurent l'effet d'AUCUN "
+            f"souvenir : ce bras est inexploitable tel quel."
+        )
 
 
 def section_activity_coverage(run: Path, out: list[str], alarms: list[str]) -> None:
@@ -768,6 +908,8 @@ def main() -> int:
     section_pipeline(run, out, alarms)
     section_agents(run, out, alarms)
     section_decisions(run, out, alarms)
+    section_replis_autour_evenement(run, out, alarms)
+    section_temoin_souvenir(run, out, alarms)
     section_activity_coverage(run, out, alarms)
     section_arrivals(run, out, alarms)
     section_quotas(run, out, alarms)

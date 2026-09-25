@@ -1,0 +1,225 @@
+% =====================================================================
+% chapters/04_Bench.tex — LaTeX rendering of ../sections/04_bench.en.md (2026-09-24 00:01:41)
+% Section 4 of the SHORT paper. \input from main.tex, after 03_Agent.tex.
+% This file DEFINES \label{sec:bench}, referenced by the reading map of Section 1.4.
+% Tables: one. tab:scale is set as table* across both columns (../PLAN.md § 9: Table 1 is
+%   full width), caption ABOVE, booktabs (loaded by aamas.cls). Fifteen rows and five
+%   columns do not fit \columnwidth.
+% Figures: none.
+% Display equation: one, unnumbered (\[ ... \]), amsmath being loaded by aamas.cls. The three
+%   other metrics live in Appendix C, in the supplementary material.
+% PLACEHOLDER, DELIBERATE, waiting on lot B of ticket 103: one cell reading
+%   "[pending]" in the last column of Table 1, as the master writes it. It is set in \textbf{} since
+%   23 September 2026, at the author's request: everything that does not yet exist is bold,
+%   so that it is found at a glance in the compiled PDF. It is NOT \todo. Do not remove
+%   it before the replay lands.
+% The row "Expert prompt, typed classifier (in sample)" carries its reservation in the row
+%   label and nowhere else, by the review (§ 9 bis). It enters no ranking.
+% Citations: tisseo2023emc2 for the survey (twice in 4.1), horl2021eqasim, lin1991divergence,
+%   rubner2000earth, ke2017lightgbm, zhu2005kernel, breiman2001random, as in the master.
+% Appendices A, B, C and D are named in plain text: they live in the supplementary material,
+%   outside this project, so there is no \label to \ref.
+% Derived file: regenerate after every validated pass of ../sections/04_bench.en.md.
+% HAND-CARRIED on 23 September 2026, three passages, the generator md_vers_tex.py refusing
+%   this chapter (its Markdown carries a float caption, which the MD model counts as a
+%   paragraph: 23 blocks against the 21 of this file). The three are the eqasim sentence of
+%   4.1, the availability paragraph of 4.1 and the fifth criterion of 4.4.
+% AUTHOR-ADDED FOOTNOTE — PRESERVE ON REGENERATION: the PROGEDO archive URL in 4.1, set as
+%   a footnote on the model of the survey footnote of the abstract. It is deliberately NOT
+%   in ../sections/04_bench.en.md, where it would cost body words in an over-budget section.
+% Citation added on 23 September 2026: horl2021eqasim, the synthesis chain that produced the
+%   pool the cohort is drawn from. The key was already in sample.bib and cited nowhere.
+% REALIGNED on 23 September 2026, 4.4: the four criteria are named, and "situational
+%   principles" becomes "general criteria", the single term the paper uses (R12). This file
+%   still carried the wording the author corrected on 22 September.
+% Author's edit of 23 September 2026 on the master, carried here: the archive is named
+%   "PROGEDO-Diffusion", not "Quetelet-PROGEDO-Diffusion".
+% Author's edits of 23 September 2026, second batch, carried here:
+%   - 4.3 names the five strata, split three and two so the enumeration stays inside R1,
+%     and says which two are ordered. The gloss on "stratum" goes with it.
+%   - 4.4 loses "The text was tuned against one language model on a separate calibration
+%     population, then served unchanged to the others (Appendix D)." That sentence rested on
+%     the contradiction between the two masters of 21 and 22 September, flagged in the
+%     section report. With it goes the only mention of Appendix D in this file.
+% HAND-CARRIED again on 24 September 2026, whole chapter, against the master of
+%   2026-09-24 00:01:41: the opening and closing sentences and the caption's last sentence,
+%   absent from the master, are gone; "Section 3.2" is \ref{sec:receives}, "Table 1" is
+%   \ref{tab:scale}.
+% HAND-CARRIED on 24 September 2026, three passages and nothing else, so the date on line 2
+%   stays where it was: this file is still behind its master.
+%   - 4.1: "in an anonymised repository", with its address as a footnote. The address comes
+%     from ../repository.tex (\repobase, \repodisplay), the only place where its TBD is
+%     written. PRESERVE ON REGENERATION, like the PROGEDO footnote.
+%   - 4.4: "That prompt adds a fifth general criterion, real exposure to the weather." was
+%     wrong. The classifier's prompt has no weather bullet; it rewrites the chain-friction
+%     bullet on two sides (Appendix D.4 prints it). Replaced by "That prompt rewrites the
+%     criterion on walking and waiting, so that a long direct walk also counts as a cost."
+%   - 4.4: "Appendix D gives the three prompts in full, with one trip decided under each."
+%   NOT carried: the master's rewrite of the same 4.4 paragraph around a "calibration cohort"
+%   (author's decision of 24 September), which its own source comment makes true only once
+%   the classifier's prompt is re-tuned on that cohort.
+% =====================================================================
+
+\section{The comparison bench}
+\label{sec:bench}
+
+\subsection{The cohort}
+\label{sec:cohort}
+
+Every score in this paper comes from one sealed cohort of 1{,}000 synthetic personas. A persona
+is one synthetic person with a household and a day of trips. They form 499 whole households,
+inside the study area. The eqasim synthesis chain \citep{horl2021eqasim}
+produced the pool of 11{,}329 people they were drawn from. It builds that pool from census and
+national travel survey data. Their reference remains the local survey \citep{tisseo2023emc2},
+in which residents describe every trip of the day before.
+
+Thirteen margins of the cohort are controlled against the survey. All thirteen conform. Each
+margin is the share of one trait, such as age class or car ownership. The equivalence bound
+was one point, set before measuring. The largest gap is 0.50 point (Appendix A).
+
+The cohort travels slightly less than the survey population: 3.30 trips per persona and 3.69
+per persona who travels at all, against 3.53 and 3.95. That makes 3{,}299 trips per day.
+
+The weather and the transport offer are those of a weekday of the survey's collection period,
+from September 2022 to February 2023. That weekday is drawn for each persona, so the cohort
+covers the whole period.
+
+The survey records one mode per trip, not an itinerary. Every score therefore sums the
+probability of the options that share a mode.
+
+We release the protocol, the code, the seeds and the sealed cohort in an anonymised
+repository\footnote{\href{\repobase}{\texttt{\repodisplay}}}. Our research convention
+forbids passing on the survey microdata themselves. The survey is obtained from the
+PROGEDO-ADISP archive, on individual
+request\footnote{\url{https://www.progedo.fr/donnees-disponibles/donnees-localisees/}}
+\citep{tisseo2023emc2}.
+
+\subsection{The protocol in three rules}
+\label{sec:rules}
+
+Three rules close three ways of biasing a comparison between a generative agent and a
+tabular model.
+
+Rule 1 gives every decision-maker the same 21 variables, twelve for the person and
+household, three for the trip, six for geometry (Appendix B).
+
+Rule 2 scores the probability mass a decision-maker puts on each option, not the option it
+ranks first. The option ranked first is not the decision the simulation plays
+(Section~\ref{sec:receives}).
+
+Rule 3 restricts every tabular prediction to the modes actually offered for that trip, then
+rescales it to 100\,\%. A tabular model predicts over every mode, whereas a language model sees
+only the options offered. The share of a mode is split evenly among its options.
+
+We equalise the 21 variables, not the information each side holds. The language-based
+decision-makers receive three things no tabular model can receive. They see the agenda of
+the remaining trips, the weather of the coming hours, and each itinerary step by step. The
+tabular references received something the language-based decision-makers never did, the
+39{,}203 survey trips on which they were estimated. The exposure asymmetry runs the other way,
+which makes those models high references.
+
+\subsection{What we measure}
+\label{sec:quantities}
+
+We measure at two scales, the modal split of the cohort and the agreement on each trip. The
+modal split is the share of trips made by car, public transport, walking and
+cycling. The survey gives the reference share globally, then inside five strata. Three are
+nominal, occupation, gender and trip purpose. Two are ordered, age class and distance class.
+
+One composite number carries the aggregate reading. It adds the global divergence to the
+weighted mean divergence of each stratum.
+\[
+  \mathcal{C}_{\text{EMD--JSD}} = \mathrm{JSD}^{\text{global}}
+  + \sum_{d\ \text{nominal}} w_d\,\overline{\mathrm{JSD}}^{\,d}
+  + \sum_{d\ \text{ordinal}} w_d\,\overline{\mathrm{EMD}}^{\,d}
+\]
+The divergence is Jensen--Shannon \citep{lin1991divergence} in base 2 on nominal strata.
+Ordered strata take the earth mover's distance \citep{rubner2000earth}, which respects the
+class order. Both lie in $[0, 1]$, the distance once divided by the number of class steps, and
+both are multiplied by 100. A nominal stratum averages its classes, each weighted by its number
+of personas. An ordered one averages the four modes, each weighted by its survey share. The
+weights are set by design, not fitted. The global term weighs 1, age, occupation and purpose
+0.5 each, gender and distance 0.3 each. A lower composite means a distribution closer to the
+survey.
+
+Two other readings accompany the composite, all three published together. The first
+recomputes it without the trips that offered a single option, where no preference is
+expressed. The second is the L1 error on the global shares, the sum of absolute gaps in
+percentage points.
+
+A difference between two decision-makers counts only when it exceeds what a new cohort would
+move. Another cohort of 1{,}000 personas built the same way would shift a composite by
+$\pm$1.3 points. Resolution varies by decision-maker, from 0.9 point for the typed classifier
+under its expert prompt to 2.1 under its minimal prompt.
+
+Trips of one person are not independent, so every interval comes from resampling clusters at
+the person level. A paired difference compares two decision-makers on the persons both scored,
+at 95\,\%.
+
+The unit-level audit asks the other question, on the days respondents actually described. It
+covers 9{,}621 trips of 2{,}930 respondents, each carrying its declared mode. We publish
+accuracy, cross-entropy in nats, and recall and precision per mode. Cross-entropy falls as a
+decision-maker puts more probability on the declared mode. Recall is the share of a mode's
+declared trips that it designates.
+
+\subsection{Floors, references, decision-makers}
+\label{sec:deciders}
+
+Three floors give the level a decision-maker reaches without behavioural knowledge. One
+draws uniformly over the options offered, another puts everything on the car, the area's
+majority mode. The third, the minimum-duration heuristic, keeps the fastest option offered.
+
+Four tabular references give the level that estimation on the survey reaches. They are a
+multinomial logit, the standard discrete-choice model, and three learned models. These are
+LightGBM gradient boosting \citep{ke2017lightgbm}, a kernel logistic regression
+\citep{zhu2005kernel} and a random forest \citep{breiman2001random}. We estimate the four at
+strict parity, on the same survey partition. None of them leads on all three readings, so we
+read the ceiling one reading at a time.
+
+Three families of decision-makers are under test. The minimal prompt gives a language model
+the facts of the trip and the output format, with no general criteria. The expert prompt
+keeps that format and draws the model's attention to four general criteria. Two bear on
+comfort, the walking and waiting public transport really adds, and an unhurried pace for an
+older traveller. The other two bear on constraints, heavy shopping bags to carry and a
+working day with no slack. The third family is a zero-shot classifier with typed output
+(TypeSafe System One, \texttt{jev-1.13.0}). It reads that same text and returns one
+probability per option without writing a sentence.
+
+We obtained the expert prompt by successive mutations of one text, under three constraints.
+Each iteration reads the gaps per stratum of the prompt in service, proposes one targeted
+rewrite, and keeps it when the over-represented mode recedes. The constraints forbid a
+numeric threshold, forbid naming a survey category, and require scoring on verbalised
+distributions. We call tuned agent the expert prompt served to \texttt{gemini-3.5}, the
+best-scoring language-model condition in Table~\ref{tab:scale}.
+
+The classifier has its own expert prompt, tuned on the first cohort. That prompt rewrites
+the criterion on walking and waiting, so that a long direct walk also counts as a cost.
+Every crossing of models and prompts is therefore measured on a second cohort, which shares
+no persona with the first. Appendix D gives the three prompts in full, with one trip decided
+under each.
+
+\begin{table*}[tp]
+  \caption{The fifteen decision-makers on the three readings, with the inter-seed range where it was measured.}
+  \label{tab:scale}
+  \begin{tabular}{lrrrl}
+    \toprule
+    Decision-maker & Composite & Excluding single option & L1 on global shares & Inter-seed range \\
+    \midrule
+    Uniform random                                     & 50.16 & 57.90 & 86.80 & deterministic \\
+    All-car                                            & 30.73 & 28.41 & 58.00 & deterministic \\
+    Minimum duration                                   & 26.97 & 23.93 & 53.62 & deterministic \\
+    Minimal prompt, \texttt{mistral-large}             & 14.75 & 20.72 & 44.71 & not replayed \\
+    Minimal prompt, typed classifier                   & 13.75 & 19.84 & 42.76 & not replayed \\
+    Minimal prompt, \texttt{gemini-3.1}                & 12.38 & 16.65 & 39.88 & not replayed \\
+    Minimal prompt, \texttt{gemini-3.5}                &  7.02 & 10.39 & 24.08 & \textbf{[pending]} \\
+    Expert prompt, \texttt{gemini-3.1}                 &  8.98 & 12.39 & 31.25 & not replayed \\
+    Expert prompt, \texttt{mistral-large}              &  7.63 & 12.27 & 26.64 & not replayed \\
+    Expert prompt, \texttt{gemini-3.5}                 &  4.86 &  6.86 & 13.85 & 0.56 \\
+    Multinomial logit                                  &  4.02 &  6.63 &  8.99 & deterministic \\
+    Random forest                                      &  4.09 &  5.81 &  5.28 & deterministic \\
+    Expert prompt, typed classifier (in sample)        &  3.65 &  6.58 & 10.48 & 0.05 \\
+    Kernel logistic regression                         &  3.61 &  5.61 &  6.69 & deterministic \\
+    Gradient boosting                                  &  3.60 &  5.84 &  9.49 & deterministic \\
+    \bottomrule
+  \end{tabular}
+\end{table*}

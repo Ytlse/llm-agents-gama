@@ -1417,8 +1417,16 @@ async def _sync_impl(raw: Request):
             )
         _k = settings.world.min_internal_coeff_k
         _cap = settings.world.min_internal_coeff_cap
+        # `sans_frein` vaut la capacité SIMULTANÉE de la passerelle : en deçà, toutes les
+        # requêtes sont en vol en même temps et la pile ne grossit pas — il n'y a rien à
+        # freiner. Sans ce seuil, un run à un agent prenait le frein maximal (30 s) à chaque
+        # décision, le ratio 1/1 valant 1 (campagne c3 du 2026-09-22 : 12 min par jour simulé).
         min_interval = compute_backpressure_interval(
-            in_progress_count, settings.data.population_size, k=_k, cap=_cap
+            in_progress_count,
+            settings.data.population_size,
+            k=_k,
+            cap=_cap,
+            sans_frein=settings.world.worker_concurrency,
         )
         logger.info(
             f"Activités à calculer: {in_progress_count} — applying min_interval={min_interval:.2f}s"

@@ -68,6 +68,21 @@ def expose(exposition, evenement_id: str, person_id: str, mode: str | None) -> t
     return False, "tirage:epargne"
 
 
+# Un article de presse se lit par un ADULTE du foyer (décision du 2026-09-24) : un enfant de
+# neuf ans tiré lecteur dans une famille de quatre ferait porter la mesure de transmission sur
+# un agent qui ne décide pas des déplacements du foyer.
+AGE_ADULTE = 18
+
+
+def age_de(personne) -> int | None:
+    """L'âge déclaré par la population (`identity.traits_json.age`), ou None s'il manque."""
+    traits = getattr(getattr(personne, "identity", None), "traits_json", None) or {}
+    try:
+        return int(traits.get("age"))
+    except (TypeError, ValueError):
+        return None
+
+
 def lecteurs(exposition, evenement_id: str, population) -> dict[str, tuple[str, str]]:
     """Qui lit, dans quel foyer, et pour quelle raison — règle `foyers` (ticket 100, lot 2).
 
@@ -101,7 +116,25 @@ def lecteurs(exposition, evenement_id: str, population) -> dict[str, tuple[str, 
                 f"foyer comme exposé dans l'analyse."
             )
             continue
-        ordonnes = sorted(mobiles, key=lambda p: (len(str(p.person_id)), str(p.person_id)))
+        # Seuls les adultes lisent. Un âge ABSENT n'exclut pas : on ne sait pas, et l'écarter
+        # viderait sans bruit les populations qui ne le portent pas ; il se signale en revanche.
+        mineurs = [p for p in mobiles if (a := age_de(p)) is not None and a < AGE_ADULTE]
+        sans_age = [str(p.person_id) for p in mobiles if age_de(p) is None]
+        adultes = [p for p in mobiles if p not in mineurs]
+        if sans_age:
+            logger.warning(
+                f"[evenements] « {evenement_id} » : foyer {foyer} — âge inconnu pour "
+                f"{sans_age}, admis au tirage des lecteurs faute de pouvoir les écarter."
+            )
+        if not adultes:
+            logger.error(
+                f"[ALARME] [evenements] « {evenement_id} » : le foyer {foyer} est déclaré "
+                f"exposé mais ne compte AUCUN adulte mobile (âges "
+                f"{[age_de(p) for p in mobiles]}). Personne n'y lira : ne pas compter ce foyer "
+                f"comme exposé dans l'analyse."
+            )
+            continue
+        ordonnes = sorted(adultes, key=lambda p: (len(str(p.person_id)), str(p.person_id)))
         combien = max(1, min(int(exposition.lecteurs_par_foyer), len(ordonnes)))
         classes = sorted(
             ordonnes,
@@ -112,10 +145,11 @@ def lecteurs(exposition, evenement_id: str, population) -> dict[str, tuple[str, 
         for personne in classes[:combien]:
             retenus[str(personne.person_id)] = (foyer, f"foyer:{foyer}")
         ecartes = [str(p.person_id) for p in classes[combien:]]
+        enfants = [str(p.person_id) for p in mineurs]
         logger.info(
             f"[evenements] « {evenement_id} » : foyer {foyer} — lecteur(s) "
             f"{[str(p.person_id) for p in classes[:combien]]}, co-résident(s) témoin(s) "
-            f"{ecartes or 'aucun'}"
+            f"{ecartes or 'aucun'}, mineur(s) hors tirage {enfants or 'aucun'}"
         )
     if not retenus:
         logger.error(

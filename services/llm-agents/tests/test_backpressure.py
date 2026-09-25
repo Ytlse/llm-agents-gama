@@ -272,3 +272,72 @@ class TestEdfFeasibility:
         # doit déclencher la rétention même si la moyenne globale semble saine.
         deadlines = [5.0, 5.0] + [100000.0] * 100
         assert edf_hold_needed(deadlines, 0.0, throughput_per_s=0.2, sim_ratio=1.0, margin=self.MARGIN) is True
+
+
+class TestSeuilSansFrein:
+    """Le frein ne doit pas étrangler les runs que la passerelle absorbe sans reculer.
+
+    Défaut trouvé le 2026-09-22 sur la campagne c3, à un agent : le ratio étant relatif à la
+    population, UNE activité en attente sur une population de 1 donne 1/1 = 1, donc le frein
+    MAXIMAL. Mesuré : 8 s par pas de simulation et ~12 min par jour simulé, soit un run à un
+    agent plus lent qu'un run à vingt. Le garde-fou calibré pour mille agents étranglait les
+    petits, et rien ne le disait — le journal annonçait simplement « sleep calculé : 30.00s ».
+    """
+
+    SANS_FREIN = 8  # `world.worker_concurrency`
+
+    def test_un_agent_seul_n_est_JAMAIS_freine(self):
+        """Le cas qui a coûté une soirée de calcul.
+
+        Une population de 1 ne peut pas avoir plus d'une activité en attente : la pile ne peut
+        pas déborder, et le frein n'a rien à protéger.
+        """
+        assert compute_backpressure_interval(1, 1, k=K, cap=CAP) == pytest.approx(CAP), (
+            "sans le seuil, le comportement d'avant doit rester reproductible"
+        )
+        assert compute_backpressure_interval(
+            1, 1, k=K, cap=CAP, sans_frein=self.SANS_FREIN
+        ) == 0.0
+
+    def test_une_petite_cohorte_n_est_plus_freinee(self):
+        """Six activités sur vingt agents : la passerelle en traite huit de front."""
+        assert compute_backpressure_interval(6, 20, k=K, cap=CAP) == pytest.approx(4.93, abs=0.05)
+        assert compute_backpressure_interval(
+            6, 20, k=K, cap=CAP, sans_frein=self.SANS_FREIN
+        ) == 0.0
+
+    def test_les_regimes_qui_comptent_ne_bougent_PAS(self):
+        """Le frein reste intact là où il protège quelque chose — c'est la condition du correctif.
+
+        Ces trois valeurs sont celles du garde-fou d'origine ; si l'une bouge, le correctif a
+        débordé de son objet.
+        """
+        for n, attendu in ((300, 4.93), (500, 10.61), (900, 25.61)):
+            assert compute_backpressure_interval(
+                n, 1000, k=K, cap=CAP, sans_frein=self.SANS_FREIN
+            ) == pytest.approx(attendu, abs=0.05), n
+
+    def test_le_seuil_est_une_borne_INFERIEURE_stricte(self):
+        """Exactement `sans_frein` en attente : encore libre. Un de plus : la formule reprend."""
+        assert compute_backpressure_interval(
+            self.SANS_FREIN, 1000, k=K, cap=CAP, sans_frein=self.SANS_FREIN
+        ) == 0.0
+        assert compute_backpressure_interval(
+            self.SANS_FREIN + 1, 1000, k=K, cap=CAP, sans_frein=self.SANS_FREIN
+        ) > 0.0
+
+    def test_un_seuil_nul_rend_le_comportement_d_avant(self):
+        """La sortie de secours : `sans_frein=0` est l'identité, et c'est le défaut du paramètre."""
+        for n, pop in ((1, 1), (6, 20), (300, 1000), (900, 1000)):
+            assert compute_backpressure_interval(
+                n, pop, k=K, cap=CAP, sans_frein=0
+            ) == compute_backpressure_interval(n, pop, k=K, cap=CAP)
+
+    def test_le_seuil_vient_du_reglage_et_n_est_pas_un_nombre_en_dur(self):
+        """Il doit suivre la capacité réelle de la passerelle, pas une constante recopiée."""
+        from settings import settings
+
+        assert settings.world.worker_concurrency == self.SANS_FREIN, (
+            "si la capacité de la passerelle change, ce test le dit au lieu de laisser "
+            "le seuil se désaligner en silence"
+        )

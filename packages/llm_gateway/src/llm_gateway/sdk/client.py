@@ -122,6 +122,7 @@ class LLMGatewayClient:
         circuit_failure_threshold: int = 10,
         circuit_probe_interval: float = 60.0,
         instances_admises: list[str] | None = None,
+        origine: str | None = None,
     ):
         self._base_url = base_url.rstrip("/")
         self._wait_timeout = wait_timeout
@@ -158,6 +159,8 @@ class LLMGatewayClient:
         # sur gemini 3.1, consolidation mémoire sur mistral, sur une expérience dont l'objet
         # EST la mémoire. Posée ici, elle couvre les trois appels et tout appel futur.
         self._instances_admises = list(instances_admises or [])
+        # Posée sur le client pour la même raison : tout appel, présent ou futur, se signe.
+        self._origine = origine
         if self._instances_admises:
             logger.info(
                 f"[gateway] restriction d'instances active sur TOUS les appels de ce client : "
@@ -211,6 +214,8 @@ class LLMGatewayClient:
         # maître de son routage (cas A4 du contrat).
         if self._instances_admises and not payload.get("instances_admises"):
             payload = {**payload, "instances_admises": list(self._instances_admises)}
+        if self._origine and not payload.get("origine"):
+            payload = {**payload, "origine": self._origine}
 
         # Disjoncteur ouvert : la soumission est SUSPENDUE jusqu'au rétablissement du
         # gateway (aucune décision dégradée — on attend le renouvellement des quotas).

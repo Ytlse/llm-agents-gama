@@ -1,0 +1,23 @@
+{
+  "nom": "exp_mem_choc_c6_voiture_suspecte_gem38f_899549_42j",
+  "etat": "terminee",
+  "debut": "2026-09-24T05:28:06.006291+00:00",
+  "traite": {
+    "etat": "ok",
+    "debut": "2026-09-24T05:28:06.006713+00:00",
+    "fin": "2026-09-24T05:28:06.029536+00:00"
+  },
+  "temoin": {
+    "etat": "ok",
+    "fin": "2026-09-24T05:28:06.050631+00:00"
+  },
+  "branche_active": "control",
+  "fin": "2026-09-24T05:28:06.054148+00:00",
+  "rapprochement_ticket108": {
+    "evenement_id": "c6_voiture_suspecte",
+    "declarees": 2,
+    "produites": 1,
+    "manquantes": 1,
+    "conforme": false
+  }
+}

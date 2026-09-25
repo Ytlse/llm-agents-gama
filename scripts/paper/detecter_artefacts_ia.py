@@ -204,6 +204,12 @@ def analyser(chemin: Path, langue: str) -> dict:
 def recenser(racine: Path, fichier: Path | None) -> list[tuple[str, Path]]:
     if fichier:
         langue = fichier.parent.name
+        # L'article court range ses deux langues dans un seul dossier et les distingue par
+        # le suffixe du nom (03_agent.fr.md). On accepte cette forme-là aussi.
+        if langue not in DOSSIERS:
+            suffixe = fichier.name.rsplit(".", 2)
+            if len(suffixe) == 3 and suffixe[1] in DOSSIERS:
+                langue = suffixe[1]
         if langue not in DOSSIERS:
             print(f"ERREUR  hors périmètre : {fichier} (attendu dans {'/'.join(DOSSIERS)})",
                   file=sys.stderr)

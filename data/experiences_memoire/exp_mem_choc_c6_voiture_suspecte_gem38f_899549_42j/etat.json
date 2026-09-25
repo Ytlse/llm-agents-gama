@@ -1,0 +1,11 @@
+{
+  "nom": "exp_mem_choc_c6_voiture_suspecte_gem38f_899549_42j",
+  "etat": "en_attente",
+  "traite": {
+    "etat": "en_attente"
+  },
+  "temoin": {
+    "etat": "en_attente"
+  },
+  "note": "2026-09-24 : l'état « terminee » venait d'un essai à blanc (05:28, 50 ms, aucune simulation). Remis en attente ; les traces synthétiques et l'ancien état sont sous essai_a_blanc/."
+}

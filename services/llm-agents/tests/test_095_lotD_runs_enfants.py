@@ -51,6 +51,7 @@ IDENTITE_SOCLE = {
     "plafond_changement_jours": 30.0,
     "reflexion_stm_min_entrees": 10,
     "meteo_par_agent": False,
+    "partage_foyer": False, "taches_en_vol": 8,
     "run_parent": "",
     "champs_libres": [],
 }

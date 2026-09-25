@@ -64,6 +64,11 @@ class LLMRequest(BaseModel):
     instances_admises: list[str] | None = None
     # Optionnel : TPM minimum requis — le load balancer exclut les providers en dessous de ce seuil
     min_tpm_required: int | None = None
+    # Qui a émis la requête (pour la simulation : le nom du run). Le journal des échanges est
+    # écrit par le WORKER, commun à tous les clients : sans ce champ, un run lisait dans son
+    # `llm_exchanges.jsonl` les appels d'un autre client servis pendant qu'il tournait (97
+    # échanges d'une population de 1 000 agents dans un bras de 20, le 2026-09-24).
+    origine: str | None = None
     context: str | None = Field(default=None, description="Contexte global de la ville (ex: trafic, météo)")
 
 

@@ -10,6 +10,10 @@ choc: c1_bouchon_rocade
 libelle: "Major congestion on the ring road"
 source: "scénario déclaré — ordre de grandeur adossé à Zhu et al. (2010), TR-A 44(10)"
 
+# CADENCE AJOUTÉE le 2026-09-24, comme sur c3 et c6 : au plus une application par agent et par
+# jour. Sans elle, la cadence `trajet` injectait l'événement à chaque trajet du mode visé.
+cadence: jour
+
 exposition:
   regle: mode
   modes: [car, motorbike]

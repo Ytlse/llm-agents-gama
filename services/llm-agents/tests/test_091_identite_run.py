@@ -162,6 +162,62 @@ class TestLEmpreinteDuChoc:
         r.chocs = SimpleNamespace(enabled=True, fichier=str(tmp_path / "absent.yaml"))
         assert I.composer(r)["choc"] != "aucun"
 
+    # ── La clé du ticket 100 (2026-09-22) ────────────────────────────────────────────────
+    # `_empreinte_du_choc` ne lisait QUE `reglages.chocs`. Depuis le ticket 100, `make run`
+    # écrit la clé `evenements:` dans config.yaml — la forme canonique — et l'empreinte rendait
+    # « aucun » SUR UN BRAS TRAITÉ. Son identité devenait celle de son témoin, ce que le
+    # docstring de la fonction donne pour la chose à ne pas faire. Trouvé sur la campagne c3,
+    # vingt minutes après son lancement.
+
+    def test_la_cle_evenements_du_ticket_100_donne_une_empreinte(self, tmp_path):
+        f = tmp_path / "c3.yaml"
+        f.write_text("evenement: c3\njours:\n  - jour: 12\n", encoding="utf-8")
+        r = _reglages()
+        r.chocs = SimpleNamespace(enabled=False, fichier=None)
+        r.evenements = SimpleNamespace(enabled=True, fichier=str(f))
+        assert I.composer(r)["choc"] not in ("aucun", "")
+
+    def test_un_bras_traite_ne_porte_jamais_la_meme_identite_que_son_temoin(self, tmp_path):
+        """Le cas qui a échappé : la campagne d'attribution, deux bras appariés."""
+        f = tmp_path / "c3.yaml"
+        f.write_text("evenement: c3\njours:\n  - jour: 12\n", encoding="utf-8")
+
+        traite = _reglages()
+        traite.chocs = SimpleNamespace(enabled=False, fichier=None)
+        traite.evenements = SimpleNamespace(enabled=True, fichier=str(f))
+
+        temoin = _reglages()
+        temoin.chocs = SimpleNamespace(enabled=False, fichier=None)
+        temoin.evenements = SimpleNamespace(enabled=False, fichier=None)
+
+        assert I.composer(temoin)["choc"] == "aucun"
+        assert I.composer(traite)["choc"] != I.composer(temoin)["choc"]
+
+    def test_la_cle_evenements_prime_sur_la_cle_chocs(self, tmp_path):
+        """Même ordre que `_declaration_demandee()` : ce qui est JOUÉ est ce qui est enregistré."""
+        neuf, vieux = tmp_path / "neuf.yaml", tmp_path / "vieux.yaml"
+        neuf.write_text("evenement: c3\njours:\n  - jour: 12\n", encoding="utf-8")
+        vieux.write_text("choc: c6\njours:\n  - jour: 8\n", encoding="utf-8")
+
+        r = _reglages()
+        r.evenements = SimpleNamespace(enabled=True, fichier=str(neuf))
+        r.chocs = SimpleNamespace(enabled=True, fichier=str(vieux))
+        empreinte_des_deux = I.composer(r)["choc"]
+
+        seul_le_neuf = _reglages()
+        seul_le_neuf.evenements = SimpleNamespace(enabled=True, fichier=str(neuf))
+        seul_le_neuf.chocs = SimpleNamespace(enabled=False, fichier=None)
+        assert empreinte_des_deux == I.composer(seul_le_neuf)["choc"]
+
+    def test_l_ancienne_cle_reste_lue_quand_elle_est_seule(self, tmp_path):
+        """Une campagne lancée sous le ticket 079 doit garder une identité valide."""
+        f = tmp_path / "c6.yaml"
+        f.write_text("choc: c6\njours:\n  - jour: 8\n", encoding="utf-8")
+        r = _reglages()
+        r.evenements = SimpleNamespace(enabled=False, fichier=None)
+        r.chocs = SimpleNamespace(enabled=True, fichier=str(f))
+        assert I.composer(r)["choc"] not in ("aucun", "")
+
 
 class TestEcriture:
     def test_C1_l_identite_est_ecrite(self, tmp_path):

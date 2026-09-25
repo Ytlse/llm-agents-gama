@@ -47,6 +47,12 @@ make run OFFLINE=1        # ou l'alias : make run-offline
 
 (`make run --offline` n'est pas une syntaxe make valide — utiliser `OFFLINE=1`.)
 
+`make run` écrit d'abord ses leviers (`CACHE=`, `CHOC=`/`EVENEMENT=`, `JEU=`) dans
+`services/llm-agents/config/config.yaml`, puis le compare à la copie du dernier lancement
+(`.config.yaml.applique`). S'ils diffèrent, le contrôleur est retiré **avant** `make up`, qui le
+crée une seule fois avec la nouvelle configuration. Un seul contrôleur ouvre donc le répertoire
+du run et y écrit l'identité (`identite_run.json`) que la cohorte vérifie.
+
 Options combinables :
 
 ```shell
@@ -95,6 +101,21 @@ l'état est restauré à ce point, puis **la mémoire est gelée** jusqu'à ce q
 le dépasse : les agents circulent et décident, mais n'apprennent rien de ce qu'ils savent déjà.
 Le dégel est journalisé (`[reprise] DÉGEL au …`). Pendant le gel, le cache de décisions
 s'adresse à la branche exacte, donc rend la décision que le run d'origine a prise.
+
+**Les mesures par trajet sont mises de côté avant tout rejeu (ticket 105).** `move_logger` n'a
+aucune connaissance du gel : les trajets rejoués s'écrivent dans `moves.csv` comme les autres, et
+rien dans le fichier ne les distingue. Le contrôleur renomme donc `moves.csv` en
+`moves.csv.<horodatage>.avant_rejeu` à chaque reprise, et le rejeu écrit dans un fichier neuf —
+les deux séries restent lisibles séparément. Jusqu'au ticket 105 ce renommage n'avait lieu que
+lorsque *aucun* point de reprise n'était trouvé ; avec un point valide, les trajets rejoués
+s'ajoutaient aux originaux (84 trajets dédoublés sur le run du ticket 075).
+
+**Reprendre à un jour antérieur.** Il n'y a pas d'option pour cela : la restauration prend
+toujours le point de `jour_XXX` le plus élevé. Pour repartir plus tôt — par exemple avant un
+incident —, il suffit de **déplacer** les points postérieurs hors de `checkpoints_memoire/` ; le
+plus récent restant devient le point de reprise. Vérifier ensuite avec
+`make mesures-continuite AVANT=… APRES=…`, qui contrôle qu'une coupure n'a ni dédoublé, ni troué,
+ni fait bouger une courbe.
 
 Ce que fait le mode offline :
 

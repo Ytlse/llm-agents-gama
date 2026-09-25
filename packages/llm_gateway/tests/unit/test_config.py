@@ -272,8 +272,8 @@ class TestSanteExposeLaCapacite:
             def is_disabled(self, n): return False
             def is_in_cooldown(self, n): return False
             def active_workers(self, n): return 0
-            def daily_requests(self, n): return 0
-            def daily_tokens(self, n): return 0
+            def daily_requests_local_seulement(self, n): return 0
+            def daily_tokens_local_seulement(self, n): return 0
 
         statut = LoadBalancer(actifs, _LimiterFactice()).get_status()
         assert statut["big"]["batch_max_agents"] == actifs["big"].batch_max_agents

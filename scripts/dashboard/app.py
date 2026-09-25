@@ -36,12 +36,12 @@ import streamlit as st
 # est sur sys.path, mais pas la racine du dépôt — d'où les imports relatifs au
 # package quand il est disponible, absolus sinon.
 try:  # pragma: no cover
-    from scripts.dashboard import campagne, experiences, live, makefiles, mes_travaux, metrics, palette, runner, tickets
+    from scripts.dashboard import campagne, experiences, live, makefiles, memoire, mes_travaux, metrics, palette, runner, tickets
 except ImportError:  # pragma: no cover
     import sys
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from scripts.dashboard import campagne, experiences, live, makefiles, mes_travaux, metrics, palette, runner, tickets
+    from scripts.dashboard import campagne, experiences, live, makefiles, memoire, mes_travaux, metrics, palette, runner, tickets
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -164,6 +164,17 @@ def cached_cache_hit_rate(run_path: str):
 @st.cache_data(ttl=30, show_spinner=False)
 def cached_providers_static():
     return metrics.providers_static()
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_tokens_cumules():
+    """Tokens cumulés lus dans les compteurs.json des exécutions en cours (classiques + mémoire).
+
+    TTL 30 s : même cadence que les autres caches de pilotage. Le compteur Redis (daily_tokens)
+    est local au gateway — il ne voit ni les modèles MLX/LM Studio ni les appels hors-gateway.
+    Ce compteur lit les fichiers écrits par le runner, qui couvrent tous les fournisseurs.
+    """
+    return experiences.tokens_cumules_executions()
 
 
 @st.cache_data(ttl=15, show_spinner=False)
@@ -318,11 +329,21 @@ def render_sidebar() -> None:
 
 # ── Panneau des jobs ──────────────────────────────────────────────────────────
 def _job_decideur(job: runner.Job) -> str:
-    """Décideur d'un job d'expérience, lu dans son `experience.yaml` (vide sinon).
+    """Décideur d'un job d'expérience, lu dans son yaml de configuration (vide sinon)."""
+    if "experience-memoire" in job.label:
+        nom = next((tok[4:] for tok in job.argv if tok.startswith("EXP=")), "")
+        if nom:
+            cfg_file = REPO_ROOT / "data" / "experiences_memoire" / nom / "experience_memoire.yaml"
+            if cfg_file.is_file():
+                try:
+                    import yaml
 
-    `experience-lancer`/`-reprendre` ne portent que `EXP=<nom>` sur leur ligne de
-    commande ; le décideur est celui défini pour cette expérience.
-    """
+                    data = yaml.safe_load(cfg_file.read_text(encoding="utf-8")) or {}
+                    mod = data.get("modeles", {}).get("itinary_multi_agent", "")
+                    return f"{mod} (🧠 mémoire)" if mod else "🧠 mémoire"
+                except Exception:
+                    return "🧠 mémoire"
+        return "campagne mémoire" if "nuit" in job.label else "🧠 mémoire"
     if "experience-lancer" not in job.label and "experience-reprendre" not in job.label:
         return ""
     nom = next((tok[4:] for tok in job.argv if tok.startswith("EXP=")), "")
@@ -375,6 +396,7 @@ def render_jobs_live() -> None:
     if action.button("🧹 Purger l'historique", disabled=bool(len(jobs) == len(running)), width="stretch",
                      help="retire les lancements terminés de la liste ; rien à purger tant qu'ils tournent tous"):
         REGISTRY.clear_finished()
+        experiences.purger_terminees()
         st.rerun()
 
     # Ouverture d'office du job de tête : valeur par défaut au premier affichage seulement
@@ -388,22 +410,42 @@ def render_jobs_live() -> None:
 @battement_surveille("activites_disque")
 def render_activites_disque() -> None:
     """Exécutions et jeux en cours d'après le DISQUE : indépendant du registre de cette session."""
-    experiences.rendre_activites(st, experiences.activites_en_cours())
+    act_classique = experiences.activites_en_cours()
+    act_memoire = memoire.activites_en_cours()
+    nuit = memoire.enchainement_nuit_en_cours()
+
+    if nuit and nuit.get("vivant"):
+        memoire.rendre_enchainement_nuit(st, nuit)
+
+    has_classique = bool(act_classique.get("executions") or act_classique.get("jeux"))
+    has_memoire = bool(act_memoire)
+
+    if not has_classique and not has_memoire:
+        experiences.rendre_activites(st, act_classique, afficher_vide=True)
+        return
+
+    experiences.rendre_activites(st, act_classique, afficher_vide=not has_memoire)
+    if has_memoire:
+        memoire.rendre_activites(st, act_memoire, lancer=launch_target)
 
 
 @st.fragment(run_every=BATTEMENT)
 @battement_surveille("reprenables_disque")
 def render_reprenables_disque() -> None:
-    """Les exécutions ARRÊTÉES et leur cause, avec de quoi les relancer.
+    """Les exécutions ARRÊTÉES et leur cause, avec de quoi les relancer."""
+    rep_classique = experiences.interrompues()
+    rep_memoire = memoire.interrompues()
+    has_classique = bool(rep_classique.get("lignes"))
+    has_memoire = bool(rep_memoire)
 
-    Elles ne s'affichaient nulle part ici : une exécution qui s'arrête — quota épuisé,
-    passerelle injoignable, PC éteint, pause — quittait l'onglet à la seconde même, et il
-    fallait la retrouver dans le registre de 🧪 Expériences pour la reprendre. Dix secondes
-    suffisent : une exécution arrêtée ne bouge plus.
-    """
-    # `launch_target` en direct, pas `session_state["_lancer"]` : celui-là n'est écrit que par
-    # l'onglet Expériences, dessiné APRÈS celui-ci — au premier passage le bouton serait grisé.
-    experiences.rendre_reprenables(st, experiences.interrompues(), lancer=launch_target)
+    if not has_classique and not has_memoire:
+        experiences.rendre_reprenables(st, rep_classique, lancer=launch_target, afficher_vide=True)
+        return
+
+    experiences.rendre_reprenables(st, rep_classique, lancer=launch_target, afficher_vide=not has_memoire)
+    if has_memoire:
+        memoire.rendre_reprenables(st, rep_memoire, lancer=launch_target)
+
 
 
 @st.fragment(run_every=BATTEMENT)
@@ -467,14 +509,39 @@ def render_derniere_erreur_llm() -> None:
                + f"  \n_{err.get('experience')} / {err.get('execution')} · personne {err.get('person_id')}_")
 
 
+@st.fragment(run_every=BATTEMENT)
+@battement_surveille("terminees_disque")
+def render_terminees_disque() -> None:
+    """Les exécutions terminées avec succès, avec leur date et heure de fin."""
+    term_classique = experiences.terminees()
+    term_memoire = memoire.terminees()
+    has_classique = bool(term_classique)
+    has_memoire = bool(term_memoire)
+
+    if not has_classique and not has_memoire:
+        experiences.rendre_terminees(st, term_classique, afficher_vide=True)
+        return
+
+    experiences.rendre_terminees(st, term_classique, afficher_vide=not has_memoire)
+    if has_memoire:
+        memoire.rendre_terminees(st, term_memoire)
+
+
 def render_activites() -> None:
-    st.markdown("#### 🧪 Exécutions et jeux en cours")
+    st.markdown("#### 🧪 & 🧠 Exécutions et jeux en cours")
     st.caption(
-        "Lu sur le disque : une exécution d'expérience ou une construction de jeu lancée depuis "
+        "Lu sur le disque : une exécution d'expérience classique ou mémoire, ou une construction de jeu lancée depuis "
         "un terminal, ou survivante d'un redémarrage du tableau de bord, apparaît ici aussi."
     )
     render_activites_disque()
     render_derniere_erreur_llm()
+    st.divider()
+    st.markdown("#### ✅ Exécutions terminées avec succès")
+    st.caption(
+        "Exécutions menées à terme relevées sur le disque, avec leur date et heure de fin. "
+        "Elles restent affichées ici jusqu'à leur purge."
+    )
+    render_terminees_disque()
     st.divider()
     st.markdown("#### ⏹ Exécutions arrêtées, à relancer")
     st.caption(
@@ -487,6 +554,7 @@ def render_activites() -> None:
     st.divider()
     st.markdown("#### ⚙️ Cibles `make` lancées depuis cette session")
     render_jobs_live()
+
 
 
 # ── Volet Tickets ─────────────────────────────────────────────────────────────
@@ -1727,6 +1795,32 @@ def render_run_tab() -> None:
     render_run_report(run)
 
 
+@st.fragment(run_every="30s")
+def _rendre_tokens_cumules() -> None:
+    """Compteur informel de tokens : lit les compteurs.json des runs en cours (classiques + mémoire).
+
+    Le gateway Redis (daily_tokens affiché dans le tableau) porte la mention
+    « local_seulement » (Ticket 105) : il ne voit pas les modèles MLX/LM Studio ni
+    les appels de calibration. Ce compteur lit les fichiers du runner — il couvre tout.
+    """
+    tok = cached_tokens_cumules()
+    if tok["sources"] == 0:
+        return
+    total = tok["total"]
+    label = (
+        f"**🧮 Tokens cumulés (exécutions en cours)** — "
+        f"{total:,}".replace(",", " ")
+        + f" ({tok['tokens_in']:,}".replace(",", " ")
+        + f" in · {tok['tokens_out']:,}".replace(",", " ")
+        + f" out) · {tok['sources']} source(s)"
+    )
+    st.caption(
+        label + "  \n"
+        "_Lu dans les `compteurs.json` du runner (couvre tous fournisseurs, y compris MLX/LM Studio). "
+        "Distinct du `Tokens jour` du tableau ci-dessus (gateway Redis, local seulement — Ticket 105)._"
+    )
+
+
 # ── Volet Providers ───────────────────────────────────────────────────────────
 def render_providers_tab() -> None:
     health = cached_health()
@@ -1779,6 +1873,10 @@ def render_providers_tab() -> None:
             "État vu par le load balancer (`GET :8000/health`). "
             "🟢 disponible · 🟠 cooldown · 🔴 indisponible ou quota épuisé."
         )
+        # Compteur informel : tokens cumulés lus dans les compteurs.json des exécutions en
+        # cours (classiques + mémoire). Complète le daily_tokens du gateway Redis qui ne
+        # voit pas les modèles locaux (MLX/LM Studio) ni les appels hors-gateway.
+        _rendre_tokens_cumules()
     else:
         st.warning(f"{health.error} Les quotas ci-dessous sont ceux déclarés dans `providers.yaml`.")
         if static.available:
@@ -1874,6 +1972,7 @@ ONGLETS = [
     ("tickets", "🎫 Tickets"),
     ("metriques", "📊 Métriques"),
     ("experiences", "🧪 Expériences"),
+    ("memoire", "🧠 Expériences Mémoire"),
     ("campagne", "🔁 Campagne"),
     ("travaux", "🗂️ Mes travaux"),
 ]
@@ -1899,7 +1998,7 @@ elif query_slug and last_synced and query_slug != last_synced and query_slug in 
 # Les libellés d'onglet ne peuvent pas être rafraîchis par un fragment : le
 # compteur de jobs vit dans la barre latérale et dans le volet Activités en cours.
 # `on_change` fait que Streamlit rejoue le script à chaque changement d'onglet.
-tab_overview, tab_run, tab_providers, tab_calib, tab_jobs, tab_tickets, tab_metrics, tab_experiences, tab_campagne, tab_travaux = st.tabs(
+tab_overview, tab_run, tab_providers, tab_calib, tab_jobs, tab_tickets, tab_metrics, tab_experiences, tab_memoire, tab_campagne, tab_travaux = st.tabs(
     [libelle for _, libelle in ONGLETS],
     key=CLE_ONGLET,
     on_change="rerun",
@@ -1951,6 +2050,17 @@ with tab_experiences:
     if _should_render("experiences"):
         experiences.render(st, pd, lancer=launch_target, inline=run_make_inline, jobs=REGISTRY.jobs,
                            arreter=REGISTRY.stop)
+with tab_memoire:
+    if _should_render("memoire"):
+        try:
+            memoire.render(st, pd, lancer=launch_target, inline=run_make_inline, jobs=REGISTRY.jobs,
+                           arreter=REGISTRY.stop)
+        except Exception as erreur:  # noqa: BLE001
+            st.error(f"L'onglet Expériences Mémoire est en erreur : {erreur}")
+            st.caption("Le détail est dans la console du tableau de bord.")
+            import logging as _logging
+
+            _logging.getLogger(__name__).exception("onglet memoire")
 with tab_campagne:
     if _should_render("campagne"):
         # E-5 — garde d'exception : sans elle, une faute de frappe dans ce module

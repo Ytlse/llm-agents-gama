@@ -7,6 +7,10 @@ choc: c2_crevaison
 libelle: "Flat tyre on the way"
 source: "scénario déclaré — Aldred (2016), TR-A 90, sur le poids des incidents vécus à vélo"
 
+# CADENCE AJOUTÉE le 2026-09-24, comme sur c3 et c6 : au plus une application par agent et par
+# jour. Sans elle, la cadence `trajet` injectait l'événement à chaque trajet du mode visé.
+cadence: jour
+
 exposition:
   regle: tirage
   part: 0.30

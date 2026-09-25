@@ -125,20 +125,43 @@ def get_osmnx_cache_stats() -> tuple[int, int]:
     return _OSMNX_CACHE_HITS, _OSMNX_CACHE_LOOKUPS
 
 
-def _cache_dir_is_mounted(cache_dir: str) -> Optional[bool]:
-    """Le répertoire du cache est-il un point de montage ? ``None`` si indéterminable.
+def _montage_couvrant(chemin: str, cibles: set[str]) -> str:
+    """La cible de montage la plus longue qui contient ``chemin`` (``/`` au pire)."""
+    chemin = chemin.rstrip("/") or "/"
+    meilleure = "/"
+    for cible in cibles:
+        c = cible.rstrip("/") or "/"
+        if (chemin == c or chemin.startswith(c + "/") or c == "/") and len(c) > len(meilleure):
+            meilleure = c
+    return meilleure
+
+
+def _cache_dir_is_mounted(
+    cache_dir: str, mountinfo: str = "/proc/self/mountinfo", code_path: str = __file__
+) -> Optional[bool]:
+    """Le cache est-il sur SON volume, et non dans le bind du code ? ``None`` si indéterminable.
 
     Le seul test fiable dans un conteneur : deux binds venant du même disque hôte
     partagent leur ``st_dev``, donc ni ``st_dev`` ni ``os.path.ismount`` ne les
     distinguent — la cible du montage se lit dans ``/proc/self/mountinfo``.
     Hors Linux (hôte macOS, tests), la question ne se pose pas : ``None``.
+
+    ⚠ On compare le montage qui COUVRE le cache à celui qui couvre le code, et non le chemin
+    exact : le contrôleur range le cache d'une population dans un SOUS-dossier du volume
+    (``/app/data/cache/osmnx/toulouse_population_20``). Le test d'égalité stricte le déclarait
+    « hors volume » alors qu'il y était — fausse alarme du 2026-09-24.
     """
     try:
-        with open("/proc/self/mountinfo", encoding="utf-8") as fh:
-            targets = {line.split()[4] for line in fh}
+        with open(mountinfo, encoding="utf-8") as fh:
+            # mountinfo échappe les espaces en octal (\040) : on les rend au chemin.
+            cibles = {
+                line.split()[4].encode().decode("unicode_escape") for line in fh if line.strip()
+            }
     except (OSError, IndexError):
         return None
-    return os.path.realpath(cache_dir) in targets
+    cache = _montage_couvrant(os.path.realpath(cache_dir), cibles)
+    code = _montage_couvrant(os.path.realpath(code_path), cibles)
+    return cache != "/" and cache != code
 
 
 def init_persistent_cache(cache_dir: str) -> None:

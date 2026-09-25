@@ -1,0 +1,66 @@
+{
+ "auto_reflexion": true,
+ "cache_decisions": false,
+ "chaine_vehicules": true,
+ "champs_libres": [],
+ "changements_max": 3,
+ "choc": "aucun",
+ "fenetre_changements_jours": 14,
+ "graine_meteo": 42,
+ "graine_ordre": 42,
+ "graine_tirage": 42,
+ "instances_admises": [
+  "google_gemini31_key1",
+  "google_gemini31_key2",
+  "google_gemini35_key1",
+  "google_gemini35_key2"
+ ],
+ "memoire_longue": true,
+ "meteo_par_agent": false,
+ "mode_fenetre_changements": "derivee",
+ "modeles_admis": [
+  "gemini-3.1-flash-lite",
+  "gemini-3.5-flash-lite"
+ ],
+ "partage_foyer": false,
+ "plafond_changement_jours": 50.0,
+ "plancher_changement_jours": 2.0,
+ "population": "/data/eqasim-output/population_1_861500/population.json",
+ "reflexion_stm_min_entrees": 5,
+ "retard_gravite_max": 0.7,
+ "retard_ref_s": 1800,
+ "retard_saturation": "asymptote",
+ "routage_instances": {
+  "defaut": [
+   "google_gemini31_key1",
+   "google_gemini31_key2"
+  ],
+  "enquete_affinite": [
+   "google_gemini35_key1",
+   "google_gemini35_key2"
+  ],
+  "evenement_jugement": [
+   "google_gemini31_key1",
+   "google_gemini31_key2"
+  ],
+  "itinary_multi_agent": [
+   "google_gemini31_key1",
+   "google_gemini31_key2"
+  ],
+  "ltm_self_reflection": [
+   "google_gemini31_key1",
+   "google_gemini31_key2"
+  ],
+  "stm_reflection": [
+   "google_gemini35_key1",
+   "google_gemini35_key2"
+  ]
+ },
+ "run_parent": "",
+ "seuil_choc": 0.7,
+ "seuil_service_changement": 0.35,
+ "seuil_troncature": 0.15,
+ "taches_en_vol": 8,
+ "variante_prompt": "prompt_expert_05",
+ "verrou_retour_domicile": true
+}

@@ -6,6 +6,16 @@ choc: c3_panne_reseau
 libelle: "Metro network failure"
 source: "scénario déclaré — van Exel & Rietveld (2001), Transport Policy 8(4)"
 
+# CADENCE AJOUTÉE le 2026-09-22, avant la campagne d'attribution. Sans cette ligne la cadence
+# vaut `trajet` : une panne de réseau déclarée une fois s'appliquait à CHACUN des trajets en
+# transports collectifs de la journée. 861500 en fait un à deux par jour — il aurait donc
+# « manqué le rendez-vous vers lequel il se rendait » deux fois dans la même journée, avec deux
+# jugements et deux souvenirs de gravité 0,75 là où le protocole en déclare un.
+# C'est le défaut EXACT que c6 avait payé le 2026-09-19 (quatre dépannages de trente minutes au
+# lieu d'un), corrigé là par la même ligne. Les quatre autres cas du 079 — c1, c2, c4, c5 — l'ont
+# reçue le 2026-09-24.
+cadence: jour
+
 exposition:
   regle: mode
   modes: [public_transport]

@@ -273,9 +273,12 @@ class LoadBalancer:
                 "active_tasks":    self._limiter.active_workers(name),
                 "usage_pct":       round(current / cfg.rpm_limit * 100, 1) if cfg.rpm_limit else 0,
                 "cooldown":        self._limiter.is_in_cooldown(name),
-                "daily_requests":  self._limiter.daily_requests(name),
+                # Ticket 105 — chiffres INDICATIFS : ils ne voient que le trafic de cette
+                # passerelle et ne ferment jamais une clé (seul le 429 du fournisseur le fait).
+                # Les noms de champ restent stables : le tableau de bord les lit.
+                "daily_requests":  self._limiter.daily_requests_local_seulement(name),
                 "rpd_limit":       cfg.rpd_limit,
-                "daily_tokens":    self._limiter.daily_tokens(name),
+                "daily_tokens":    self._limiter.daily_tokens_local_seulement(name),
                 "tpd_limit":       cfg.tpd_limit,
                 "quota_exhausted": quota_exhausted,
                 "available":       available,

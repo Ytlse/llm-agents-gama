@@ -476,6 +476,10 @@ services:
       # appartient au run et se retrouve dans son identité. Sans ces lignes, `MEMOIRE__…` posé
       # sur l'hôte n'atteindrait pas le conteneur — c'est exactement ce que L1.1 du 077 vérifie.
       MEMOIRE__PARTAGE_FOYER_ENABLED: ${MEMOIRE__PARTAGE_FOYER_ENABLED:-false}
+      # Tâches de planification EN VOL (2026-09-24) : elles bornent la taille des micro-lots.
+      # À 8, un lot ne pouvait réunir que 8 agents, quelle que soit la population ; une
+      # expérience la pose à la taille de sa population pour que tous partent ensemble.
+      WORLD__WORKER_CONCURRENCY: ${WORLD__WORKER_CONCURRENCY:-8}
       MEMOIRE__PARTAGE_FOYER_OBSERVATIONS_MIN: ${MEMOIRE__PARTAGE_FOYER_OBSERVATIONS_MIN:-1}
       MEMOIRE__PARTAGE_FOYER_MAX_BLOC: ${MEMOIRE__PARTAGE_FOYER_MAX_BLOC:-12}
       MEMOIRE__RECIT_SOIR_MAX: ${MEMOIRE__RECIT_SOIR_MAX:-8}
@@ -493,6 +497,10 @@ services:
       # quatre modes dont aucun n'est celui que le choc a frappé.
       EXPERIMENT_SURVEY_MODES: ${EXPERIMENT_SURVEY_MODES:-}
       EXPERIMENT_TARGET_PERSONAS: ${EXPERIMENT_TARGET_PERSONAS:-}
+      # Ticket 105 — le run s'arrête plutôt que de servir une décision par défaut. Deux motifs :
+      # quota journalier (077) et replis consécutifs (105). L'ancien nom, qui ne parlait que du
+      # quota, reste admis comme alias : il est écrit dans des scripts de campagne déjà lancés.
+      EXPERIMENT_STOP_ON_FALLBACK: ${EXPERIMENT_STOP_ON_FALLBACK:-0}
       EXPERIMENT_HIBERNATE_ON_QUOTA: ${EXPERIMENT_HIBERNATE_ON_QUOTA:-0}
       # Ticket 035 — plateforme d'expériences : où vivent jeux, expériences et le référentiel d'enquête
       EXPERIENCES_DIR: /app/data/experiences

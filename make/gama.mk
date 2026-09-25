@@ -117,17 +117,21 @@ else
 		echo "📼 Aucun jeu désigné : calcul en vol (data.jeu_enregistre retiré de $(APP_CONFIG))"; \
 	fi
 endif
-	@$(MAKE) up
 	@# Les réglages de $(APP_CONFIG) sont lus au DÉMARRAGE du contrôleur, jamais à chaud : tant que
 	@# le fichier diffère de la copie appliquée au dernier lancement (.config.yaml.applique), le
 	@# contrôleur est recréé — CACHE=, JEU= et toute édition manuelle prennent ainsi effet
 	@# (décision de l'auteur du 2026-09-06, question 17 du ticket 035).
+	@# ⚠ La comparaison se fait AVANT `make up` (2026-09-24) : faite après, elle recréait un
+	@# contrôleur que `make up` venait de démarrer. Les deux tombaient dans la même minute, donc
+	@# dans le même répertoire de run ; le second gardait l'identité du premier (ticket 091) et
+	@# la cohorte refusait le bras (« aucune identité POSTÉRIEURE au démarrage du contrôleur »).
+	@# On retire donc le contrôleur ici, et `make up` le crée UNE fois, avec la bonne config.
 	@if ! cmp -s $(APP_CONFIG) .config.yaml.applique; then \
-		echo "♻️  $(APP_CONFIG) a changé depuis le dernier lancement : recréation du contrôleur"; \
-		$(COMPOSE) up -d --force-recreate --no-deps controller && cp $(APP_CONFIG) .config.yaml.applique; \
-	else \
-		cp $(APP_CONFIG) .config.yaml.applique 2>/dev/null || true; \
+		echo "♻️  $(APP_CONFIG) a changé depuis le dernier lancement : le contrôleur repartira à neuf"; \
+		$(COMPOSE) rm -sf controller 2>/dev/null || true; \
 	fi
+	@cp $(APP_CONFIG) .config.yaml.applique 2>/dev/null || true
+	@$(MAKE) up
 	@$(MAKE) wait-ready
 ifneq ($(OFFLINE),)
 	@if pgrep -f "launch_headless.py" > /dev/null; then \

@@ -1,0 +1,48 @@
+% =====================================================================
+% chapters/03_Agent.tex — rendu LaTeX de ../traductions/03_agent.en_brut.txt (23 septembre 2026)
+% Section 3 de la VERSION FRANÇAISE de l'article court. \input depuis main.tex, après 02_Related_work.tex.
+% Ce fichier DÉFINIT \label{sec:agent} et \label{sec:memory}.
+% Figure : une, figure* sur les deux colonnes (architecture_GAMA_Agents.jpg), légende AU-DESSOUS.
+% Rendu mot pour mot de la traduction fournie par l'auteur.
+% =====================================================================
+
+\section{L'agent évalué}
+\label{sec:agent}
+
+Chaque agent transforme la description d'un trajet en une préférence parmi les options proposées. Cette section décrit ce que l'agent reçoit, ce qu'il renvoie, ainsi que les deux mécanismes testés dans cet article : la masse de probabilité et la mémoire.
+
+\subsection{La boucle}
+\label{sec:loop}
+
+La simulation repose sur trois composants. Une simulation multi-agents GAMA modélise le monde : la géographie réelle des 453 communes, les réseaux, l'horloge et l'exécution physique de chaque trajet. OpenTripPlanner génère les itinéraires de transport public à partir des horaires réels. Un calcul du plus court chemin sur le graphe OpenStreetMap détermine les trajets directs à pied, à vélo et en voiture. Un contrôleur gère le cycle de vie de l'agent et construit les options disponibles à l'heure de départ. Un module de décision effectue le choix. Le modèle de langage est appelé à trois moments de la boucle : la décision, la consolidation de la mémoire en fin de journée et une auto-réflexion sur plusieurs jours. Cet article teste la décision.
+
+\begin{figure*}[tp]
+  \centering
+  \includegraphics[width=\textwidth]{images/architecture_GAMA_Agents.jpg}
+  \caption{Les trois composantes de la boucle. Cet article teste le module de décision.}
+  \Description{Schéma fonctionnel du dispositif, sur trois bandes horizontales. Bande supérieure, l'agent génératif : groupe d'icônes d'agents relié à gauche à une boîte passerelle LLM (rotation des fournisseurs, cache), à droite à deux boîtes (planification des activités quotidiennes et planification des déplacements), et en dessous à deux mémoires (mémoire à court terme et mémoire à long terme), reliées par une flèche réflexion ; une double flèche entre les agents et les mémoires indique la lecture et l'écriture en mémoire. Deux boîtes en tiretés alimentent l'agent par le haut : données de population (identité personnelle, activités journalières) et environnement (météo, trafic). Bande médiane, une barre horizontale échange de données, avec les services Python au-dessus et GAMA en Java en dessous ; les perceptions montent par HTTP vers la mémoire à court terme, les actions descendent par WebSocket. Bande inférieure, la plateforme GAMA : carte du réseau toulousain et icônes bus, train, tramway, téléphérique, vélo, marche et voiture, alimentée à droite par les données GTFS et OSM. À droite de la figure, une boîte en tiretés moteurs de routage contient OpenTripPlanner pour les transports en commun et OSMnx pour la marche, le vélo et la voiture, avec résultats mis en cache. En bas, deux boîtes de synthèse : simulation (agent GAMA, corps physique, position, réseau) et cognition (serveur Python avec modèle de langue, mémoire, raisonnement, décision).}
+  \label{fig:architecture}
+\end{figure*}
+
+La boucle se termine avec les résultats de la simulation. Un agent sur le point de partir déclenche une demande de planification, reçoit les itinéraires générés par les moteurs de routage et exprime sa préférence. La simulation exécute le trajet et renvoie le détail du parcours : les correspondances, les temps d’attente et l’heure d’arrivée. Ces informations alimentent la mémoire qui influence la décision suivante.
+
+\subsection{Ce que l’agent reçoit et ce qu’il renvoie}
+\label{sec:receives}
+
+L’agent reçoit une description de trajet et renvoie une probabilité par option. La description contient un bref profil de la personne et de son foyer, la destination, l’heure de départ et les prévisions météorologiques. Elle contient également les trajets restants avant le retour, les souvenirs pertinents et la liste numérotée des itinéraires possibles.
+
+Le modèle répartit une masse de probabilité sur cette liste, une entrée par option. La masse de probabilité représente la part de préférence attribuée à une option. La somme des entrées d’une décision est égale à un. La décision jouée est un tirage aléatoire dans ce vecteur, et non l’option classée première. Les options sont listées dans un ordre aléatoire, afin que le classement ne devienne pas une préférence. Un décideur qui renvoie un vecteur peut être évalué par rapport à une distribution.
+
+\subsection{Deux registres de mémoire}
+\label{sec:memory}
+
+Deux registres stockent l'historique de l'agent. Un tampon à court terme reçoit les décisions et l'expérience physique renvoyée par la simulation. Une opération de consolidation écrit chaque soir à partir de ce tampon dans le registre à long terme. Une trace épisodique indique ce qui s'est passé et quand, avec un poids qui décroît selon une constante de temps de 2,8 jours. Une croyance représente ce que l'agent considère comme vrai, ne décroît pas et repose sur la conviction que les observations évoluent. Le soir, chaque membre du foyer raconte sa journée aux autres, et ce récit alimente la réflexion des auditeurs.
+
+L'invite intègre le contexte historique au processus de prise de décision à travers quatre blocs distincts : les habitudes de l'agent, ses croyances, les événements récents et trois souvenirs récupérés par similarité. L'influence spécifique de chaque module sur la décision finale peut être quantifiée. Le bloc «~événements récents~» contient les occurrences qui restent actives pendant une période déterminée par leur gravité initiale. Les mesures d'une journée ordinaire sont effectuées avec cette mémoire désactivée.
+
+\subsection{La chaîne de véhicules}
+\label{sec:chain}
+
+Décider de chaque trajet individuellement aboutit à des journées physiquement impossibles. Un agent qui se rend au travail à vélo n'a pas de voiture au bureau le soir. Le contrôleur suit donc la position de chaque véhicule personnel. Un véhicule n'est proposé qu'à partir de l'endroit où il est stationné, après quoi il suit son utilisateur. Lors d'un trajet retour, un véhicule laissé au point de départ limite ce trajet à son mode.
+
+Ces règles s'appliquent à tous les décideurs que nous comparons, y compris les modèles tabulaires, car sans elles, nous comparerions des décisions prises dans des contextes différents. La section suivante indique ce que cette comparaison égalise d'autre.

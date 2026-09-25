@@ -5,6 +5,10 @@ choc: c4_train_supprime
 libelle: "Regional train cancelled"
 source: "scénario déclaré"
 
+# CADENCE AJOUTÉE le 2026-09-24, comme sur c3 et c6 : au plus une application par agent et par
+# jour. Sans elle, la cadence `trajet` injectait l'événement à chaque trajet du mode visé.
+cadence: jour
+
 exposition:
   regle: mode
   modes: [train]

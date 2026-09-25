@@ -522,6 +522,20 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     stm_reflection_min_entries: int = (
         10  # déclenche la réflexion STM dès que N entrées accumulées
     )
+    # Ticket 105 — nombre de replis CONSÉCUTIFS au-delà duquel un run d'expérience s'arrête.
+    # Un repli (`plan_index = 0`) n'est pas une mesure manquante : le trajet a lieu, l'agent s'en
+    # souvient, et le mode emprunté entre dans la statistique habitude/rupture. Le seuil n'est pas
+    # 1 parce qu'un 503 isolé est rattrapé par les tentatives et ne produit aucun repli : ce qu'on
+    # attrape ici est un RÉGIME, pas un incident. Mesuré le 2026-09-23 : 4 replis en 40 minutes
+    # ont porté la fenêtre de mesure à 10,3 % avant qu'on ne s'en aperçoive à la main.
+    # N'a d'effet que si EXPERIMENT_STOP_ON_FALLBACK (ou son alias historique) vaut "1".
+    replis_consecutifs_max: int = 3
+    # Ticket 106 — nombre de MOTS DISTINCTIFS du texte injecté qu'il faut retrouver dans la
+    # consolidation qui le consomme pour considérer que le souvenir a atteint la mémoire longue.
+    # Calibré le 2026-09-23 sur les 13 runs archivés où une consolidation suit l'injection : les
+    # runs qui gardent le choc en retrouvent 3 à 81, ceux qui le perdent 0 et 1. La séparation
+    # est franche, le seuil n'est pas un arbitrage fin.
+    temoin_souvenir_mots_min: int = 2
     # Échéance FALLBACK (temps SIMULÉ) d'une réflexion STM, utilisée seulement si
     # l'agent n'a aucune activité horodatée. Depuis le ticket 010, l'échéance EDF
     # normale est le RÉVEIL de l'agent (première activité planifiée du jour
@@ -1036,6 +1050,7 @@ class AppConfig(BaseSettings, WorkdirPathResolutionMixin):
         "llm_cache_hits_file",
         "trace_rappel_file",
         "trace_concepts_file",
+        "temoin_souvenir_file",
         "mesures_dir",
         "pipeline_log_file",
     ]
@@ -1053,6 +1068,10 @@ class AppConfig(BaseSettings, WorkdirPathResolutionMixin):
     trace_rappel_file: str = "trace_rappel.jsonl"
     # Opérations de concept (ticket 093) : une ligne par créé / confirmé / précisé / contredit.
     trace_concepts_file: str = "operations_concept.jsonl"
+    # Témoin du souvenir injecté (ticket 106) : une ligne par consolidation qui suit une
+    # injection, qu'elle ait retrouvé le souvenir ou non. Les deux verdicts se tracent —
+    # un taux de fausses alarmes ne se compte pas sur les seuls échecs.
+    temoin_souvenir_file: str = "temoin_souvenir.jsonl"
     # Répertoire des CSV de mesures par jour simulé. Créé à la première écriture, jamais à
     # l'import.
     mesures_dir: str = "mesures"

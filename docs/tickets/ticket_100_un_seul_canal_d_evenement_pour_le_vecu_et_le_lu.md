@@ -301,3 +301,127 @@ troncatures : le 077 a mesuré un prompt qui stagne vers 2 100 jetons.
 - `services/llm-agents/llm/chocs.py`, `llm/gravite.py`, `llm/noyau.py`, `llm/memory.py`.
 - `specs/ticket_059/plan.md` (lot 4), `specs/ticket_059/questions.md` (Q1, Q15 à Q21),
   `specs/ticket_095/questions.md` (Q3bis, Q6, Q7).
+
+---
+
+## 13. État au 2026-09-24 — reprise par une autre session
+
+Cette section existe pour qu'une session neuve puisse prendre le ticket sans relire les
+32 000 caractères de la note de statut. La note reste la source de vérité et porte le détail ;
+ce qui suit en est l'état, lot par lot.
+
+### 13.1 Ce qui est livré
+
+| Lot | État | Preuve |
+|---|---|---|
+| **0** plan, tests, questions | **livré** 21/09 | `specs/ticket_100/` — `plan.md` 416 l., `tests.md` R1–R55, `questions.md` Q1–Q11 |
+| **1** paquet `evenements/`, prise `arrivee`, migration, test en or | **livré** 21/09 | `llm/chocs.py` tombe à 76 l. (adaptateur d'alias) ; 36 tests du 079 + 24 du 077-H inchangés ; 26 tests neufs `test_100_lot1_migration.py` |
+| **2** prise `reveil`, canal `lu`, garde de citation, règle `foyers` | **livré** 22/09 | 30 tests (R12–R23) ; cinq articles du 059 déclarés, empreintes concordantes |
+| **3** jugement à l'injection, échelle unique, refus franc | **livré** 22/09 | `llm/evenements/jugement.py`, catégorie LLM `evenement_jugement`, 22 tests |
+| **4** foyer, croyances R1–R6, provenance | **livré** 22/09 | `llm/foyer.py` 480 l., `memoire__partage_foyer_enabled` **faux** par défaut, 28 tests |
+| **5** sorties et mesure | **partiel** | `Rôle` et `Raison d'exposition` dans `moves.csv`, `evenement_par_jour.csv`. **Manquent la figure unique et le tableau des quatre voies.** |
+| **6** leviers, doc, changelog | **livré** 22/09 | `make run EVENEMENT=`, alias `CHOC=`/`PRESSE=`, `docs/arch/evenements.md` |
+
+Deux défauts bloquants trouvés par les premiers runs ont été corrigés et **vérifiés en run
+réel** le 23/09 : le jugement différé de Q6, ingagnable (il est désormais **attendu**), et le
+départ reporté compté comme retard subi (`retard_d_arrivee()` déduit le report). 15 tests neufs.
+
+### 13.2 Ce qui reste, par ordre de dépendance
+
+1. ~~Rejouer les deux bras de bout en bout.~~ **FAIT le 2026-09-24**, et c'était le seul reste
+   bloquant de la note du 23/09. Campagne `e_c3_attribution_861500_v7`, bras traité
+   `experiments/archive/2026-09-24_00_15` (277 trajets, zéro repli), bras témoin
+   `experiments/archive/2026-09-24_03_28` (299 trajets, un repli sur vecteur de probabilités
+   nul). **Sous `jugement: a_l_injection`** — vérifié dans `evenement.yaml` du run et dans sa
+   ligne de trace : `intensite_jugee: grave`, `importance_estimee: 0.75`,
+   `valence: negative`, `modes_touches: [public_transport]`, `ecart_au_fait: −0,1167`. C'est
+   donc la campagne d'attribution que Q4 annonçait comme remplaçant l'existante, et le seuil
+   D7 de 0,30 gagne un **quatrième** point de mesure (+0,22 sur c6, −0,1167 sur c3 les 22, 23
+   et 24). Résultats dans `docs/paper/article-court/experiments_results.md`.
+   ⚠ **Le résultat de cette campagne est un résultat nul, et il est acquis** : la part de
+   transports collectifs décidée ne s'écarte pas de plus de six points entre les deux bras,
+   alors que le souvenir est servi au modèle dans 85 des 155 décisions postérieures. Voir le
+   ticket 110.
+2. **Lot 5, le reliquat :** la figure unique et le tableau des quatre voies. La figure
+   `scripts/analysis/figure_evenement.py` existe déjà (ticket 100, lot 5) mais rend
+   « non concluant » sur un run à un persona : ses trois rôles exigent 3 décisions par
+   (rôle, jour), et `Rôle` est **vide** dans `moves.csv` sur la prise `arrivee` d'un run
+   désigné — vérifié le 24/09 sur `2026-09-23_20_35`, 178 lignes toutes à `Rôle=""`. Décider
+   si c'est exact (pas de cohorte, donc pas de rôle) ou si la colonne doit être renseignée.
+3. **Run de non-régression sur `c6_voiture_suspecte`**, qui conditionne la suppression de
+   `llm/chocs.py` (Q11). Consomme du quota, jamais lancé sans accord.
+4. **Rendre `evenement_jugement` robuste à une réponse mal enveloppée.** La cause principale
+   (`AgentSpec` `extra="ignore"`) est corrigée et verrouillée par un test structurel ; la
+   robustesse au format de sortie reste à faire.
+5. **Trancher E3/E4 du 095.**
+6. **Seuil d'alarme D7 de 0,30 :** trois points de mesure seulement (+0,22 sur c6, −0,1167 sur
+   c3 deux fois).
+7. **Deux confirmations de l'auteur** : le bilan du soir comme citation de la réflexion ; le
+   jugement à l'injection pour la prise `reveil`.
+8. **Un signalement article dû** : `docs/paper/article/en/07_untabulated_regimes.md:94` cite
+   `choc_par_jour.csv`, qui n'existe plus sous ce nom. Celui de Q4 est rendu
+   (`docs/paper/NOTE_AU_REDACTEUR.md`).
+9. ~~**Dette déclarée, hors lot :** `c1`, `c2`, `c4` et `c5` n'ont toujours pas de `cadence`.~~
+   **FAIT le 2026-09-24** : les quatre déclarent `cadence: jour`, comme c3 et c6, et les six
+   passent le chargeur une fois dérivés sur 861500. c4 et c5 restent sans persona exposé : le
+   jour 12, 861500 ne prend ni le train ni la marche (`docs/arch/evenements.md`).
+   Texte d'origine : `c1`, `c2`, `c4` et `c5` n'avaient pas de `cadence`.
+   Sans elle, la valeur par défaut `trajet` injecte l'événement à **chaque** déplacement du
+   mode visé — le défaut qui a coûté une mesure sur c6 le 19/09 et failli la coûter sur c3 le
+   23/09. À traiter **avant** de les jouer.
+
+### 13.3 Comment jouer ce qui reste — le ticket 109 sert exactement à cela
+
+Le ticket 109 (livré le 2026-09-24, `terminé`) fournit l'orchestration A/B que ce ticket
+faisait jusqu'ici à la main. **Ne plus appeler `run_sequential_cohort.py` directement pour une
+campagne de ce ticket** : l'orchestrateur le fait, et il tient l'état des deux bras.
+
+**Chiffrer avant de consommer du quota** — c'est le geste qui manquait, le point 3 ci-dessus
+ayant été retenu des semaines faute de savoir ce qu'il coûtait :
+
+```bash
+make experience-memoire-estimer EXP=<nom>
+```
+
+**Jouer les deux bras consécutivement**, le traité puis le témoin apparié :
+
+```bash
+make experience-memoire-lancer EXP=<nom>
+```
+
+`DRY_RUN=1` valide toute la chaîne sans simulation ni appel, et écrit des traces synthétiques
+(`moves.csv`, `evenements.jsonl`, `temoin_souvenir.jsonl`) — à utiliser avant tout vrai
+lancement. `BRANCHE=treated|control` ne joue qu'un bras. L'expérience n'est marquée
+`terminee` que si **les deux** ont abouti (décision D3 du 109).
+
+L'expérience se déclare depuis l'onglet `🧠 Expériences Mémoire` du tableau de bord
+(`scripts/dashboard/memoire.py`), qui écrit sa configuration sous
+`data/experiences_memoire/<nom>/`. Le nom est **calculé** depuis les paramètres (D4), il n'y a
+pas de champ libre, et la sélection d'événement est stricte sur `config/evenements/` (D5).
+
+**Ce que le 109 apporte à ce ticket, concrètement :**
+
+- **Le routage par fonction cognitive** (D2) : les cinq catégories — `itinary_multi_agent`,
+  `evenement_jugement`, `stm_reflection`, `ltm_self_reflection`, `enquete_affinite` — reçoivent
+  chacune leur modèle, posé en `INSTANCES_ADMISES` sur l'environnement du run. C'est
+  exactement ce que le lot 3 de ce ticket demandait de pouvoir isoler, et cela évite de poser
+  la variable à la main avec le mauvais nom — erreur qui a duré du 08/09 au 21/09.
+- **Le bras témoin apparié**, joué sans événement (`--evenement 0`), sans avoir à s'en
+  souvenir.
+- **La réconciliation avec les tickets 106 et 108** est déjà branchée dans l'onglet.
+
+**Trois réserves vérifiées le 2026-09-24, à connaître avant de lancer :**
+
+1. Le modèle par défaut du formulaire est `gemini-3.8-flash`, et `providers.yaml` n'en déclare
+   qu'**une seule clé** (`google_gemini_3_8_flash_key1`). Les campagnes des 23 et 24/09
+   tournaient sur **deux** clés par catégorie et ont tout de même essuyé 13 à 20 saturations
+   par run. Avec une clé unique, une saturation n'a pas d'alternative et le garde-fou du
+   ticket 105 coupe plus tôt. Choisir un modèle à deux clés pour un run long, ou accepter le
+   risque en connaissance de cause.
+2. L'orchestrateur **ne passe pas `--force-fresh`**. Le nom canonique évite les collisions,
+   mais un `EXP=` réutilisé à la main reprendrait à chaud — et une reprise à chaud ne recrée
+   pas le contrôleur, donc **ne prend pas une modification de code** faite depuis.
+3. Chaque bras reçoit son propre `--experiment-id` (`<nom>_treated`, `<nom>_control`), à la
+   différence des campagnes `e_c3_attribution_*` faites à la main, qui logeaient les deux bras
+   sous un seul identifiant. Les outils qui cherchent les deux bras d'une campagne doivent le
+   savoir.

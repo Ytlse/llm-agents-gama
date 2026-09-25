@@ -52,10 +52,10 @@ class TestFenetreDuCompteur:
         (Une seule réservation : le lissage 60 s/rpm refuse deux appels dans la même
         micro-seconde, ce qui ne dit rien du datage.)
         """
-        assert ports.limiter.daily_requests("p_pacifique") == 0
+        assert ports.limiter.daily_requests_local_seulement("p_pacifique") == 0
         assert ports.limiter.try_reserve("p_pacifique") is True
-        assert ports.limiter.daily_requests("p_pacifique") == 1
+        assert ports.limiter.daily_requests_local_seulement("p_pacifique") == 1
 
     def test_les_tokens_du_jour_suivent_la_meme_fenetre(self, ports):
         ports.limiter.record_tokens("p_pacifique", 1_500)
-        assert ports.limiter.daily_tokens("p_pacifique") == 1_500
+        assert ports.limiter.daily_tokens_local_seulement("p_pacifique") == 1_500

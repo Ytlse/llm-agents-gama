@@ -292,7 +292,7 @@ class TestInMemoryRateLimiter:
         # RPD limit est déclaratif et informatif : toutes les requêtes sont admises pour mesure
         assert granted == 10
         assert limiter.is_quota_exhausted("p") is False
-        assert limiter.daily_requests("p") == 10
+        assert limiter.daily_requests_local_seulement("p") == 10
         # Seul un signal 429 écarte l'instance
         limiter.mark_quota_exhausted_until("p")
         assert limiter.is_quota_exhausted("p") is True
@@ -306,7 +306,7 @@ class TestInMemoryRateLimiter:
         limiter = InMemoryRateLimiter({"p": cfg})
         assert self._reserve_no_smoothing(limiter, "p") is True
         limiter.record_tokens("p", 150)  # dépasse le quota tokens/jour déclaré
-        assert limiter.daily_tokens("p") == 150
+        assert limiter.daily_tokens_local_seulement("p") == 150
         # Ne bloque pas localement
         assert self._reserve_no_smoothing(limiter, "p") is True
         assert limiter.is_quota_exhausted("p") is False

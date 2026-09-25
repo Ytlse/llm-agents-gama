@@ -1,0 +1,79 @@
+% =====================================================================
+% chapters/01_Introduction.tex — LaTeX rendering of ../sections/01_introduction.en.md (2026-09-24 00:01:41)
+% Section 1 of the SHORT paper. \input from main.tex, first of the body.
+% This file DEFINES \label{sec:intro}. It carries no \ref: the former 1.4 Organisation,
+%   with its six renvois and \label{sec:organisation} (referenced nowhere), was removed from
+%   the master on 2026-09-23 and is removed here on 2026-09-24.
+% Citations: lammer2026gta (GTA), vu2025modeling (the architecture this work follows),
+%   tisseo2023emc2 (the survey; the acronym EMC^2 is deliberately not written in the body,
+%   the citation carries it).
+% Derived file: regenerate after every validated pass of ../sections/01_introduction.en.md.
+%   The "source:" comments of the Markdown stay there and are not carried over.
+% =====================================================================
+
+\section{Introduction}
+\label{sec:intro}
+
+\subsection{What generative agents promise}
+\label{sec:promise}
+
+Existing multi-agent simulations of multimodal urban mobility rely on tabular models
+estimated from household travel surveys, or on explicit rules defined by domain experts. A
+household travel survey asks the residents of one territory to describe every trip they made
+on one day. In both, the space of representable behaviours is fixed \emph{a priori}: a factor
+encoded as neither variable nor rule cannot influence any decision.
+
+The fixed behaviour space binds precisely where simulation is asked to help. A city tests a
+transport policy on a simulated population before it builds anything. The answer it gets is
+bounded by the behaviour its model can represent.
+
+Generative agents built on language models promise to lift that bound. Fed on
+massive corpora, they carry decision heuristics that surveys do not record, and they adapt
+without explicit rules. A strike, a heatwave or a news item about safety in the metro could
+then reach a decision that no survey column holds. They also promise to work without the
+local calibration data that agent-based models require. Detailed multimodal trajectory
+datasets exist for a few large metropolitan areas only.
+
+\subsection{Measuring the promise against a real population}
+\label{sec:gap}
+
+Published evaluations of these agents rarely have a human population to compare with. Most
+judge a generative agent against a rule-based agent, or against aggregate patterns the
+authors produced themselves.
+
+GTA \citep{lammer2026gta} confronts a simulated modal split with a national travel
+survey. The modal split is the share of trips made by each mode. GTA draws its personas from
+that survey. A language model writes each of their day plans. Lacking a baseline, it
+compares itself with the observed splits of other German states. Copying Hamburg's shares scores a
+root-mean-square error of 1.99 on Berlin, against 4.07 for its own simulation.
+
+This paper supplies four things missing from these comparisons. A baseline beneath the
+agents says what a decision-maker reaches with no behavioural knowledge of the territory.
+Models fitted on that territory's own survey say what its data support. The same
+inputs on both sides make a gap attributable to the decision-maker rather than to what it was
+told. A reading below the aggregate says whether two decision-makers that produce the same
+shares decide alike.
+
+\subsection{What this paper does}
+\label{sec:contributions}
+
+This paper measures where verbalised deliberation earns its place in a mobility agent.
+Verbalised deliberation is the model writing its reasoning in words before it answers. In a
+population of mobility agents, it does not improve fidelity to the ordinary regime the
+survey describes. It brings in events that no variable encodes. We trace the path of one such
+event to the decision.
+
+We measure on one study area, the 453 communes around Toulouse that its Cerema-certified 2023
+household travel survey covers \citep{tisseo2023emc2}. A controlled cohort of 1{,}000 synthetic personas makes the
+3{,}299 trips of the day we score. Fifteen decision-makers run on those trips. We call
+decision-maker anything that turns a trip description into a probability over the options
+offered. The agents live in a GAMA multi-agent simulation of the study area, with its real
+networks and timetables. That simulation follows the GAMA--OpenTripPlanner--LLM architecture
+of \citet{vu2025modeling}.
+
+The paper rests on three contributions. The first is a comparison bench with equal inputs
+between generative agents and tabular models, on a synthetic cohort controlled against that
+survey. The second is the position of fifteen decision-makers on that bench, and two
+dissociations the aggregate shares do not show. The third is the traced path of a
+non-tabulated event to the decision, inside a generative agent with memory.
+

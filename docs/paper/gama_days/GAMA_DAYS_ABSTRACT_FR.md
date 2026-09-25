@@ -1,11 +1,10 @@
 # Résumé — GAMA Days
 
 **Document :** résumé soumis aux GAMA Days. **La source LaTeX [`GAMA_DAYS_ABSTRACT_EN_TEX.md`](GAMA_DAYS_ABSTRACT_EN_TEX.md) fait référence**, pour le texte comme pour le décompte ; ce fichier et le miroir anglais [`GAMA_DAYS_ABSTRACT_EN.md`](GAMA_DAYS_ABSTRACT_EN.md) s'alignent dessus.
-**Version :** `v2.3` (21 septembre 2026) — le dernier paragraphe devient celui du tuteur dans sa forme finale, repris de la source LaTeX. **Ce que vaut le modèle de langage est désormais énoncé**, là où la version précédente disait seulement qu'il valait ailleurs : décrire des choix modaux complexes, en circonstance imprévue surtout, ce que ne permettent ni les modèles à règles ni les enquêtes ménages-déplacements statiques. L'architecture hybride découle de cet énoncé au lieu de le côtoyer. **La phrase de clôture sur GAMA disparaît :** le résumé ne nomme plus la plateforme en dehors du § 2, où la simulation est construite avec elle. Le corps fait 497 mots, quatre paragraphes, deux notes.
-**Version antérieure :** `v2.2` (21 septembre 2026) — reprise de la révision du tuteur sur le cadrage et les résultats : l'énoncé de difficulté à l'échelle d'une ville, les facteurs objectifs face aux subjectifs, les agents qui adaptent sans règle explicite, et le paragraphe de résultats dépouillé de ses chiffres. Corps à 493 mots.
-**Version antérieure :** `v2.1` (18 septembre 2026) — le dernier paragraphe portait l'argument de la cascade au lieu d'une quasi-parité, et trois références entraient en notes de bas de page.
-**Historique :** `v2.0` (17 septembre 2026) refonte des trois derniers paragraphes sur le jeu corrigé du ticket 088 ; `v1.0` (9 septembre 2026) texte soumis, 488 mots. Le détail des versions `v0.1` à `v0.12` est dans le journal en fin de fichier.
-**Longueur :** 497 mots, notes exclues. Le décompte se prend sur la source LaTeX, et sur elle seule : `python3 scripts/paper/compter_mots_latex.py docs/paper/gama_days/GAMA_DAYS_ABSTRACT_EN_TEX.md`. La version soumise en faisait 488, la `v2.1` 497, la `v2.2` 493. **Recompter après chaque passe.**
+**Version :** `v2.4` (24 septembre 2026) — reprise de la source LaTeX du tuteur du 24 septembre. **Le corps ne dit plus comment l'agent répartit sa décision :** « en répartissant 100 % de la décision sur celles-ci » quitte la fin du § 2, qui s'arrête aux « itinéraires réellement offerts ». L'anglais écrit « Large Language Models » avec les majuscules des mots-clés ; le français garde « grands modèles de langage ». Hors du corps, la figure d'architecture passe après le matériel additionnel et reçoit une légende, le lien du dépôt est étiqueté, et le bloc de commentaires d'en-tête disparaît de la source. Le corps fait 490 mots, quatre paragraphes, deux notes.
+**Version antérieure :** `v2.3` (21 septembre 2026) — le dernier paragraphe du tuteur dans sa forme finale : ce que vaut le modèle de langage est énoncé (décrire des choix modaux complexes, en circonstance imprévue surtout), l'architecture hybride en découle, la phrase de clôture sur GAMA disparaît. Corps à 497 mots.
+**Historique :** `v2.2` (21 septembre 2026) révision du tuteur sur le cadrage et les résultats, 493 mots ; `v2.1` (18 septembre 2026) argument de la cascade et références en notes de bas de page, 497 mots ; `v2.0` (17 septembre 2026) refonte des trois derniers paragraphes sur le jeu corrigé du ticket 088 ; `v1.0` (9 septembre 2026) texte soumis, 488 mots. Le détail de chaque version est dans le journal en fin de fichier.
+**Longueur :** 490 mots, notes et commentaires LaTeX exclus. Le décompte se prend sur la source LaTeX, et sur elle seule : `python3 scripts/paper/compter_mots_latex.py docs/paper/gama_days/GAMA_DAYS_ABSTRACT_EN_TEX.md`. **Ce compteur rend aujourd'hui 516 :** il compte aussi les deux lignes que le tuteur a laissées en commentaire dans l'environnement `abstract` (26 mots), qui n'arrivent pas au PDF. La version soumise en faisait 488, la `v2.1` 497, la `v2.2` 493, la `v2.3` 497. **Recompter après chaque passe.**
 **Convention des tags :** un chiffre laissé en clair se recalcule depuis un fichier du dépôt ; sa source est donnée en commentaire HTML à côté. Aucun emplacement à remplir ne subsiste. Le corps n'en porte plus que deux, les 1 000 individus et les 3 299 déplacements.
 **Fichiers liés :** [`fr/01_introduction.md`](../article/fr/01_introduction.md) (dont ce résumé reprend le cadrage), [`fr/06_results.md`](../article/fr/06_results.md) (les mesures), [`fr/08_limits_and_hybrid.md`](../article/fr/08_limits_and_hybrid.md) (le coût d'inférence et la cascade), [`article/fr/00_abstract.md`](../article/fr/00_abstract.md) (le résumé AAMAS, aligné sur cette révision le même jour).
 
@@ -15,7 +14,7 @@
 
 Les simulations multi-agents existantes de mobilité urbaine multimodale reposent soit sur des modèles tabulaires estimés depuis des enquêtes ménages-déplacements, soit sur des règles explicites définies par des experts du domaine. Dans les deux cas, l'espace des comportements représentables est fixé a priori : un facteur encodé ni comme variable ni comme règle ne peut influencer aucune décision de l'agent dans la simulation. Or, dans la réalité, le choix d'un mode de transport est multidimensionnel : des facteurs objectifs comme le temps de trajet, l'effort physique, la vitesse et le confort s'entremêlent à des facteurs subjectifs liés à la personnalité et à l'expérience. Intégrer une telle complexité de décision dans une simulation de mobilité multimodale à l'échelle d'une ville est une tâche difficile. Les agents génératifs fondés sur les grands modèles de langage (LLM) promettent de lever cette limite. Nourris de vastes corpus textuels, ils portent des heuristiques de décision que les enquêtes n'enregistrent pas, et savent adapter leurs décisions sans qu'il faille écrire de règles explicites.
 
-Face à une enquête ménages-déplacements certifiée, nous mesurons l'écart de calibration entre ces agents et les modèles estimés sur elle, et nous testons si les agents s'adaptent à des situations qu'aucune variable n'encode. Nous avons construit avec GAMA une simulation de l'aire métropolitaine toulousaine, intégrant les réseaux routier et ferroviaire et trois réseaux de transport en commun. Une population synthétique de 1 000 individus est générée par eqasim <!-- source : data/population/population_1000_AAMAS/MANIFEST.yaml, sceau 1 du 2026-09-02 -->, et les itinéraires alternatifs sont calculés sur les réseaux réels par OpenTripPlanner. La simulation simule une journée réaliste, avec des contraintes réalistes qu'ignore le calculateur d'itinéraires : une voiture disponible là seulement où elle a été laissée, le conducteur nécessaire pour la déplacer, les retours contraints au domicile, l'enchaînement temporel des activités. Chaque habitant y devient un agent génératif : sa règle de choix modal n'est plus écrite dans le modèle de simulation, un grand modèle de langage interrogé par lots la produit à partir du profil de l'agent et des itinéraires réellement offerts, en répartissant 100 % de la décision sur celles-ci.
+Face à une enquête ménages-déplacements certifiée, nous mesurons l'écart de calibration entre ces agents et les modèles estimés sur elle, et nous testons si les agents s'adaptent à des situations qu'aucune variable n'encode. Nous avons construit avec GAMA une simulation de l'aire métropolitaine toulousaine, intégrant les réseaux routier et ferroviaire et trois réseaux de transport en commun. Une population synthétique de 1 000 individus est générée par eqasim <!-- source : data/population/population_1000_AAMAS/MANIFEST.yaml, sceau 1 du 2026-09-02 -->, et les itinéraires alternatifs sont calculés sur les réseaux réels par OpenTripPlanner. La simulation simule une journée réaliste, avec des contraintes réalistes qu'ignore le calculateur d'itinéraires : une voiture disponible là seulement où elle a été laissée, le conducteur nécessaire pour la déplacer, les retours contraints au domicile, l'enchaînement temporel des activités. Chaque habitant y devient un agent génératif : sa règle de choix modal n'est plus écrite dans le modèle de simulation, un grand modèle de langage interrogé par lots la produit à partir du profil de l'agent et des itinéraires réellement offerts.
 
 Sur un jeu de 3 299 déplacements <!-- source : data/population/population_1000_AAMAS/MANIFEST.yaml, sceau 1 -->, nous comparons les résultats de nos agents génératifs à ceux de systèmes classiques fondés sur des règles rigides ou sur des données tabulaires. En situation connue (là où l'espace des comportements représentables est défini a priori), les agents génératifs produisent des résultats très proches des modèles traditionnels, à un léger écart près. Leur véritable force apparaît en circonstance imprévue, tel un article de presse signalant des punaises de lit dans le métro, qui influence les décisions des agents. Nous observons une évolution de leurs choix dans le temps, ainsi que leur capacité à réduire progressivement l'impact de cette information, une adaptabilité que les modèles classiques ne savent pas reproduire.
 
@@ -57,19 +56,25 @@ acquis, avec une installation ancienne il faut `\usepackage[utf8]{inputenc}`.
 
 ---
 
-## Deux détails à remonter au tuteur
+## Trois détails à remonter au tuteur
 
-Aucun n'est corrigé ici : la source LaTeX est la sienne, et ces deux points se tranchent avec lui.
+Aucun n'est corrigé ici : la source LaTeX est la sienne, et ces trois points se tranchent avec lui.
 
 1. **« behaviors » contre « behaviours »** dans le même texte. Le § 1 écrit `behaviours`, le § 3
    `behaviors`. Une orthographe à choisir.
 2. **Un trait d'union à la place d'un tiret**, au § 3 : `this information-an adaptability`. Sur
    le PDF le mot paraîtra soudé.
+3. **Deux lignes de travail en commentaire dans le résumé**, entre le dernier paragraphe et le
+   `\end{abstract}` : `%The value of the language model lies elsewhere` et `%GAMA is what grounds
+   the decision in reality…`. Le PDF ne les montre pas, mais le compteur du dépôt les lit
+   (516 mots au lieu de 490). Les sortir de l'environnement, ou les supprimer, rend au compteur
+   le bon chiffre sans avoir à le modifier.
 
 **Deux points réglés au passage.** Le collage de la `v2.3` avait emporté le `\end{abstract}` avec
 l'ancien paragraphe : le compteur ne trouvait plus l'environnement et le document n'aurait pas
 compilé. Il est remis. Le bloc de commentaires en tête du source, qui annonçait encore 497 mots
-et quatre notes et listait des chiffres sortis du texte, suit maintenant ce que le corps dit.
+et quatre notes et listait des chiffres sortis du texte, a été aligné sur le corps en `v2.3`,
+puis retiré par le tuteur en `v2.4`.
 
 ---
 
@@ -110,7 +115,7 @@ Une journée simulée sur 1 000 habitants consomme 3 millions de tokens, mémoir
 
 ## Ce qui reste à trancher
 
-1. **Format.** Classe `gamadays`, titre, auteurs, mots-clés, figure d'architecture, matériel additionnel, aucune bibliographie : les deux références du texte sont portées par des notes de bas de page. Le corps fait 493 mots, comptés sur la source LaTeX, soit cinq de plus que la version soumise en `v1.0`.
+1. **Format.** Classe `gamadays`, titre, auteurs, mots-clés, matériel additionnel, figure d'architecture légendée placée après lui, aucune bibliographie : les deux références du texte sont portées par des notes de bas de page. Le corps fait 490 mots, comptés sur la source LaTeX, soit deux de plus que la version soumise en `v1.0`.
 2. **Les références.** Le résumé porte les siennes en **notes de bas de page**, qui ne comptent pas dans la longueur. GTA et Alves et al. sont sorties avec la phrase qui les accrochait ; `taillandier2019gama`, `horl2021eqasim` et `park2023generative` tiendraient au même prix, et `park2023generative` est le seul dont le corps emploie déjà le terme sans le créditer (« agents génératifs »). **Deux réserves :** personne n'a vérifié que les organisateurs excluent les notes du décompte, ni que `gamadays.cls` accepte un `thebibliography` si l'on préférait une vraie bibliographie.
 3. **La décroissance de l'effet de presse n'existe toujours pas comme mesure.** L'article mesure l'hystérésis après un choc vécu (tickets 041 et 063) et l'effet de presse dans une campagne séparée (ticket 064). Le retour aux habitudes après une annonce n'est décrit nulle part, ni comme protocole ni comme mesure. Le résumé l'annonce pourtant — « une évolution de leurs choix dans le temps » et « réduire progressivement l'impact de cette information » — et c'est une expérience à écrire avant la présentation.
 4. **Le degré de détail sur la plateforme.** La figure d'architecture porte une partie de cette charge. Pour l'oral, nommer les briques (service de décision, passerelle multi-fournisseurs, cache d'itinéraires, registre d'expériences) rendrait le travail directement réutilisable.
@@ -119,6 +124,10 @@ Une journée simulée sur 1 000 habitants consomme 3 millions de tokens, mémoir
 ---
 
 ## Journal
+
+- 24 septembre 2026 — `v2.4`. Reprise de la source LaTeX du tuteur. Le § 2 perd sa fin, « en répartissant 100 % de la décision sur celles-ci » : le résumé ne dit plus comment l'agent répartit sa décision entre les itinéraires. L'anglais passe à « Large Language Models », comme les mots-clés. La figure d'architecture passe après le matériel additionnel, avec une légende ; le lien du dépôt est étiqueté ; le bloc de commentaires d'en-tête disparaît, et deux phrases de travail restent en commentaire dans le corps. Le corps passe de 497 à 490 mots.
+
+- 21 septembre 2026 — `v2.3`. Le dernier paragraphe devient celui du tuteur dans sa forme finale : le modèle de langage vaut pour décrire des choix modaux complexes, en circonstance imprévue surtout, et l'architecture hybride découle de cet énoncé. La phrase de clôture sur GAMA disparaît. Le `\end{abstract}` emporté par le collage est remis et le bloc de commentaires d'en-tête aligné sur le corps. Le corps passe de 493 à 497 mots.
 
 - 21 septembre 2026 — `v2.2`. Reprise de la révision du tuteur, qui fait désormais référence. Le cadrage gagne l'énoncé de difficulté et l'adaptation sans règle explicite, les facteurs objectifs sont nommés face aux subjectifs, et le paragraphe de résultats abandonne ses chiffres pour « très proches des modèles traditionnels, à un léger écart près ». Les 21 variables, les 39 203 déplacements et la comparaison aux systèmes publiés quittent le texte, emportant deux des quatre notes. Le corps passe de 497 à 493 mots. Le coût d'inférence du tableau de mesures passe de 23 à 3 millions de tokens, erratum du § 8.3. Le résumé AAMAS est aligné le même jour.
 

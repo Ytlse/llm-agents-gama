@@ -279,9 +279,13 @@ du notebook n'a jamais été tenue une seule fois. Trois garde-fous ont été po
    routes en base** (`[osmnx-cache] Cache de routes actif : … — N routes en base`), en distinguant
    « fichier existant » de « FICHIER CRÉÉ ». C'est le chiffre dont l'absence a rendu la dérive
    invisible huit semaines.
-2. **`[ALARME]`** si le répertoire du cache n'est **pas un point de montage** (lu dans
+2. **`[ALARME]`** si le répertoire du cache n'est **pas sur son volume** (lu dans
    `/proc/self/mountinfo` : dans un conteneur, deux binds du même disque hôte partagent leur
-   `st_dev`, donc ni `st_dev` ni `os.path.ismount` ne les distinguent). Un `WARNING` distinct
+   `st_dev`, donc ni `st_dev` ni `os.path.ismount` ne les distinguent). On compare le montage
+   qui **couvre** le cache (la plus longue cible préfixe) à celui qui couvre le code : le cache
+   d'une population est un SOUS-dossier du volume (`/app/data/cache/osmnx/<population>`), et le
+   test d'égalité stricte d'origine le déclarait hors volume à chaque démarrage (fausse alarme
+   corrigée le 2026-09-24). Un `WARNING` distinct
    signale un cache vide sur un chemin correctement monté — légitime pour une population neuve.
 3. **Dans le notebook**, la cellule des chemins **refuse de continuer** si
    `infra/docker-compose.yml` ne monte pas le répertoire hôte sur le chemin lu dans `settings.py` :

@@ -191,6 +191,7 @@ def log_llm_exchange(
     category: str = "",
     sim_ts: float | None = None,
     telemetry: Any = None,
+    origine: str | None = None,
 ) -> None:
     """
     Consigne un échange complet avec le LLM dans le journal des échanges (cf. telemetry/exchanges).
@@ -223,4 +224,5 @@ def log_llm_exchange(
     journal.write(ExchangeRecord(
         task_id=task_id, provider=provider, category=category, tokens_in=tokens_in,
         tokens_out=tokens_out, messages=messages, response=response, sim_ts=sim_ts,
+        origine=origine,
     ))

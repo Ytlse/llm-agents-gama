@@ -252,3 +252,4 @@ reports/*
 node_modules/
 package-lock.json
 package.json
+docs/paper/article-court/traductions/*

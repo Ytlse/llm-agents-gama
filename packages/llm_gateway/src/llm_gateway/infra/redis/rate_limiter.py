@@ -34,8 +34,16 @@ CONS_ERR_KEY_PREFIX     = "cons_err:"
 DISABLED_KEY_PREFIX     = "disabled:"
 ACTIVE_WORKER_PREFIX    = "active_workers:"
 LAST_REQUEST_KEY_PREFIX = "last_req:"
-RPD_KEY_PREFIX          = "rpd:"              # compteur requêtes/jour (fuseau du provider)
-TPD_KEY_PREFIX          = "tpd:"              # compteur tokens/jour (fuseau du provider)
+# ⚠ Ticket 105 — « local_seulement » est DANS LE NOM DE LA CLÉ, et pas seulement dans une
+# docstring, parce que c'est `redis-cli --scan` qu'on lit quand on se demande où en est un quota.
+# Ces deux compteurs ne voient QUE le trafic de cette passerelle : la même clé d'API est aussi
+# consommée par `scripts/synthesis/*` et `prompt_calibration`. Le 2026-09-08 le compteur affichait
+# 49 requêtes sur 500 pendant que Google refusait pour dépassement des 500 ; le 2026-09-23 il a
+# été lu comme un budget restant et a fait reporter une relance d'une journée, pour rien.
+# Ils sont INDICATIFS : ils ne bloquent aucune réservation et aucun code de production ne les lit.
+# Le seul fait qui ferme une clé est le 429 du fournisseur, via `mark_quota_exhausted_until`.
+RPD_KEY_PREFIX          = "rpd_local_seulement:"   # requêtes/jour VUES D'ICI (fuseau du provider)
+TPD_KEY_PREFIX          = "tpd_local_seulement:"   # tokens/jour VUS D'ICI (fuseau du provider)
 QUOTA_EXHAUSTED_PREFIX  = "quota_exhausted:"  # provider écarté jusqu'au reset de SA journée
 
 RPM_WINDOW_SECONDS = 60
@@ -202,16 +210,6 @@ class RedisRateLimiter:
         via mark_quota_exhausted_until) écarte le provider."""
         return bool(self._r.exists(f"{QUOTA_EXHAUSTED_PREFIX}{provider}"))
 
-    def _mark_quota_exhausted(self, provider: str, kind: str, used: int, limit: int) -> None:
-        tz = self._tz(provider)
-        ttl = seconds_until_quota_reset(tz)
-        self._r.set(f"{QUOTA_EXHAUSTED_PREFIX}{provider}", kind, ex=ttl)
-        logger.warning(
-            f"Quota journalier {kind.upper()} épuisé (compteur local) — provider écarté jusqu'au "
-            f"reset | provider={provider} used={used} limit={limit} tz={tz} "
-            f"reset={next_quota_reset(tz).isoformat(timespec='seconds')} reset_in={ttl}s"
-        )
-
     def mark_quota_exhausted_until(
         self, provider: str, kind: str = "rpd", until: datetime | None = None
     ) -> int:
@@ -252,11 +250,13 @@ class RedisRateLimiter:
         if self._r.incrby(key, tokens) == tokens:
             self._r.expire(key, DAILY_KEY_TTL_SECONDS)
 
-    def daily_requests(self, provider: str) -> int:
+    def daily_requests_local_seulement(self, provider: str) -> int:
+        """Requêtes du jour VUES DE CETTE PASSERELLE. Indicatif — cf. RPD_KEY_PREFIX."""
         val = self._r.get(f"{RPD_KEY_PREFIX}{provider}:{quota_day(self._tz(provider))}")
         return int(val) if val else 0
 
-    def daily_tokens(self, provider: str) -> int:
+    def daily_tokens_local_seulement(self, provider: str) -> int:
+        """Jetons du jour VUS DE CETTE PASSERELLE. Indicatif — cf. TPD_KEY_PREFIX."""
         val = self._r.get(f"{TPD_KEY_PREFIX}{provider}:{quota_day(self._tz(provider))}")
         return int(val) if val else 0
 

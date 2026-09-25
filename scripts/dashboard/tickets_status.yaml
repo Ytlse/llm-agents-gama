@@ -4959,6 +4959,31 @@ tickets:
       de 31 à 50 j (HORIZON_MAX_JOURS dans scripts/dashboard/experiences.py, test dédié) : le
       garde-fou de coût décidé par l'auteur est désormais appliqué AU FORMULAIRE, pas seulement au
       plafond de durée d'un souvenir. 5 tests neufs.
+      CAMPAGNE D'ATTRIBUTION LANCÉE le 2026-09-22 à 16:55 (choix C de l'auteur parmi trois
+      dessins proposés) : `c3_panne_reseau` sur 861500, deux bras appariés traité + témoin, 42
+      jours, arrêt sur extinction armé sur le traité. Archive du bras traité :
+      experiments/archive/2026-09-22_16_55. Ce qu'elle mesure : que le changement de comportement
+      vient du choc. Ce qu'elle NE mesure PAS, et il faut le dire : la durée — sans second niveau
+      de gravité à comparer, la date d'extinction lue dans le journal ne montre pas que la durée
+      suit la gravité. Le bras A (même texte, deux durées servies) reste ouvert.
+      POURQUOI c3 ET 861500 : c3 est le seul des sept textes jugé `grave` à l'unanimité des 4
+      personas au garde-fou, et 861500 choisit les transports collectifs 6 fois sur 12 trajets
+      dans les traces archivées — vérifié AVANT de lancer, c'est la garde qui manquait au J16 de
+      c6, resté sans exposé. DEUX DÉFAUTS CORRIGÉS EN PRÉPARANT, tous deux capables de fausser la
+      mesure sans rien signaler. (1) Le lanceur de cohorte avait `c6_voiture_suspecte` EN DUR ;
+      il prend maintenant `--evenement`, et surtout la dérivation par persona écrivait
+      `exposition.agents` SANS toucher à `regle` — sur c3 (`regle: mode`) la liste d'agents aurait
+      été écrite, acceptée et ignorée, et sur une population d'un habitant le résultat aurait été
+      bon PAR ACCIDENT. La règle est forcée à `agents`, les modes conservés, `part`/`graine`
+      retirés ; 6 tests (test_095_cohorte_evenement_parametre.py). (2) c3 ne déclarait pas de
+      `cadence`, donc `trajet` : la panne aurait frappé CHAQUE trajet en transports collectifs de
+      la journée — deux rendez-vous manqués le même jour, deux jugements, deux souvenirs. C'est le
+      défaut que c6 avait payé le 2026-09-19 (quatre dépannages au lieu d'un). `cadence: jour`
+      posée dans les DEUX copies. ⚠ c1, c2, c4 et c5 ne l'ont TOUJOURS PAS : à traiter avant de
+      les jouer. c3 passe aussi à `jugement: a_l_injection` (D7 est le régime décidé) ; les huit
+      autres déclarations restent en `aucun` pour ne pas changer en silence ce que rend un rejeu
+      de c6, cité au § 7.2. Chargement vérifié dans le run : « cadence jour, jugement
+      a_l_injection, exposition agents ['public_transport'] ». 1956 tests llm-agents, 0 échec.
   ticket_097_le_plafond_declare_ne_ferme_plus_une_cle:
     status: en cours
     category: Ingénierie & Système
@@ -5466,6 +5491,116 @@ tickets:
       « Ce que la cause a changé », et les mesures d'avant dans avant_correctif/. RESTE : le seuil
       d'alarme D7 de 0,30 n'a qu'un point de mesure (+0,22 sur c6) ; le banc ne compte pas les
       jetons de raisonnement (680 comptés pour ~3 000 émis) ; E3/E4 du 095 toujours à trancher.
+      AVANCE DU 2026-09-23 : LA CAMPAGNE D'ATTRIBUTION SOUS `jugement: a_l_injection` EST LANCÉE —
+      c'est celle que Q4 annonçait comme REMPLAÇANT l'existante. Cas retenu `c3_panne_reseau`
+      (traité + témoin, persona 861500, population d'un agent), et non c6 : c3 est le seul des
+      sept textes jugé `grave` (0,75) à l'unanimité des quatre personas du garde-fou, le seul à
+      énoncer un rendez-vous MANQUÉ. Les huit autres déclarations restent en `jugement: aucun`,
+      pour ne pas changer en silence ce que produit un rejeu de c6. SIGNALEMENT ARTICLE DÛ PAR Q4
+      : RENDU, dans `docs/paper/NOTE_AU_REDACTEUR.md` — quatre points sur le chapitre 7, aucune
+      écriture dans l'article. Celui du lot 6 (`choc_par_jour.csv` cité à
+      en/07_untabulated_regimes.md:94) reste dû. TROIS DÉFAUTS CORRIGÉS AVANT LE LANCEMENT, chacun
+      aurait faussé la mesure sans rien dire. (1) `c3_panne_reseau` n'avait pas de `cadence` : la
+      valeur par défaut `trajet` aurait injecté la panne à CHACUN des trajets en transports
+      collectifs de la journée — deux rendez-vous manqués, deux jugements, deux souvenirs à 0,75
+      là où le protocole en déclare un. Même défaut que c6 le 19/09. ⚠ c1, c2, c4 et c5 ne l'ont
+      TOUJOURS PAS : à traiter avant de les jouer. (2) `identite_run.json` écrivait `"choc":
+      "aucun"` sur un bras pourtant exposé : `_empreinte_du_choc()` ne lisait que la clé héritée
+      `chocs` alors que le code lit `evenements` d'abord. Les tests du 079 étaient verts POUR LA
+      MAUVAISE RAISON — leur fixture neutralisait `settings.chocs` et laissait
+      `settings.evenements` armé ; fixture reprise, quatre tests neufs dans
+      test_091_identite_run.py. (3) Un run à UN agent prenait le frein de contre-pression maximal
+      (30 s) à chaque décision, le ratio 1/1 valant 1 : seuil `sans_frein` = concurrence du
+      worker, mesuré 12 min → 4,7 min par jour simulé, les régimes chargés figés par
+      test_backpressure.py::TestSeuilSansFrein (300/1000 à 4,93 s, 900/1000 à 25,61 s, inchangés).
+      CONSTAT DE PROTOCOLE : le jour 13 de c3 est un SAMEDI et ne s'applique jamais sous
+      NO_WEEKEND_DEPARTURES — une application sur deux déclarées, dans tous les runs c3 passés.
+      Écrit en tête du fichier et non corrigé : le retirer casserait l'invariant du test en or du
+      lot 1. Résultats consignés dans docs/paper/article-court/experiments_results.md (quatre
+      entrées du 2026-09-23). Le run de mise au point du 2026-09-22 est archivé NON PUBLIABLE
+      (docs/traces/campagne_c3_mise_au_point/, 46,9 % de replis sur la ligne de base) mais il a
+      établi deux choses à confirmer : l'agent juge `grave` dans un vrai run (ecart_au_fait
+      −0,1167, sous le seuil D7 de 0,30, qui gagne là son SECOND point de mesure après le +0,22 de
+      c6), et le souvenir a vécu 21,42 j au lieu des 16,17 que sa gravité seule prévoit — cinq
+      rappels, cinq jours de plus. La durée de vie n'est pas fonction de la seule gravité.
+      AVANCE DU 2026-09-23 (fin de journée) : DEUX DÉFAUTS BLOQUANTS TROUVÉS PAR LE PREMIER RUN,
+      CORRIGÉS ET VÉRIFIÉS EN RUN RÉEL. (1) LE JUGEMENT DIFFÉRÉ DE Q6 NE PEUT PAS GAGNER. Q6 le
+      posait « dans la file du soir », en tâche de fond, en comptant sur la consolidation du soir
+      pour prendre l'importance relevée. Il n'y a PAS de consolidation du soir : la réflexion part
+      au SEUIL D'ENTRÉES (`stm_reflection_min_entries`, 10), et l'entrée de l'événement est
+      souvent celle qui fait franchir le seuil — elle déclenche donc le rangement de son propre
+      souvenir. Mesuré : injection 10:24:08, consolidation 10:24:09, jugement rendu 10:24:14.
+      L'événement a été qualifié sur le fait mesuré (0,87) au lieu de la gravité jugée (0,75),
+      c'est-à-dire sous le régime que D7 a abandonné. La course se joue sur le nombre de trajets
+      qui précèdent l'événement dans la journée : ingagnable. Le jugement est désormais ATTENDU
+      (`await` au lieu de `_spawn`), ce que `a_l_injection` annonce et ce que la prise `reveil`
+      fait déjà. L'alarme du jugement tardif RESTE, inatteignable : qui reviendrait au différé
+      retrouverait l'alarme plutôt qu'un silence. Son libellé disait « la consolidation DU SOIR »
+      — faux, et c'est ce qui m'a fait chercher une latence de modèle. (2) UN DÉPART REPORTÉ
+      COMPTAIT COMME UN RETARD SUBI. `expected_arrive_at` est calculé par GAMA depuis le
+      `schedule_at` d'ORIGINE et n'est pas recalculé quand le départ est reporté — ni par le
+      bouclage J+1, ni par `no_weekend_departures`. Relevé sur gama_arrivals.csv : schedule_at
+      vendredi 19:35, started_at lundi 19:15, expected_arrive_at resté au vendredi → 71,6 h de «
+      retard » pour un trajet de douze minutes contre quinze planifiées, ARRIVÉ EN AVANCE sur son
+      propre départ. Coût : gravité 0,70 et un souvenir « grave » dans la ligne de base, contre
+      0,75 pour le choc c3 déclaré — une ligne de base indiscernable de ce qu'on y injecte ; et
+      dans le prompt de l'agent un « Late by: 23 hours » qu'il n'a pas vécu. ⚠ CE N'EST PAS UN
+      DÉFAUT DE WEEK-END : le premier des deux cas était un bouclage J+1 ordinaire.
+      `retard_d_arrivee()` (text_helper/models/arrival.py) retire le report en le DÉDUISANT
+      (`started_at - schedule_at` au-delà d'une demi-journée), et sert À LA FOIS la gravité et
+      `ob.late`, donc le texte que lit l'agent. Le glissement ordinaire d'un départ reste compté :
+      c'est un retard vécu. Le commentaire du code affirmait que `expected_arrive_at` suivait le
+      report — corrigé. Le rééchelonnement d'activité sur `ob.late` est hors de portée :
+      `reschedule_activity_departure_time` vaut False. PREUVES : 15 tests neufs
+      (test_104_retard_reporte.py 10, test_104_jugement_synchrone.py 5), dont dix bâtis sur les
+      deux cas RÉELLEMENT MESURÉS, chacun vérifiant d'abord que le cas porte le défaut puis qu'il
+      est corrigé, et trois qui verrouillent ce qui ne doit PAS changer ; suite complète 1985
+      passés, 6 ignorés, 0 échec. VÉRIFIÉ EN RUN RÉEL le 2026-09-23 (campagne v3, arrêtée
+      volontairement au jour 12 en fin de poste) : jugé grave (0,75), IMPORTANCE RETENUE 0,75 — la
+      gravité jugée, plus le fait mesuré — ecart_au_fait −0,1167 identique à celui du 22 sur le
+      même texte, zéro alarme de jugement tardif, zéro retard aberrant, zéro repli. Le seuil D7 de
+      0,30 compte maintenant TROIS points : +0,22 (c6), −0,1167 (c3 le 22), −0,1167 (c3 le 23).
+      RESTE : rejouer les deux bras d'un bout à l'autre (~3 h par bras, quota très large — 53
+      requêtes 3.1 pour douze jours). Résultats consignés dans
+      docs/paper/article-court/experiments_results.md.
+      AVANCE DU 2026-09-24 : ÉTAT COMPLET ÉCRIT DANS LE TICKET, § 13 — une session neuve
+      reprend là sans relire cette note. Lot par lot : 0, 1, 2, 3, 4 et 6 livrés ; LOT 5
+      PARTIEL, il manque la figure unique et le tableau des quatre voies. Les deux bras ONT été
+      rejoués de bout en bout le 2026-09-24 (`e_c3_attribution_861500_v7`, traité
+      `experiments/archive/2026-09-24_00_15`, 277 trajets, zéro repli ; témoin
+      `2026-09-24_03_28`, 299 trajets, un repli sur vecteur de probabilités nul) — c'était le
+      SEUL RESTE BLOQUANT de la note du 23/09, et il tombe. ⚠ Vérifié, contrairement à ce que
+      j'ai d'abord écrit : ce run tourne bien SOUS `jugement: a_l_injection` — `evenement.yaml`
+      du run le déclare et la ligne de trace porte `intensite_jugee: grave`,
+      `importance_estimee: 0,75`, `valence: negative`, `modes_touches: [public_transport]`,
+      `ecart_au_fait: -0,1167`. C'est donc la campagne d'attribution que Q4 annonçait comme
+      remplaçant l'existante, et le seuil D7 de 0,30 gagne un QUATRIÈME point de mesure.
+      SON RÉSULTAT EST NUL ET ACQUIS : la part de transports collectifs décidée ne s'écarte pas
+      de plus de six points entre les deux bras, alors que le souvenir est servi au modèle dans
+      85 des 155 décisions postérieures (ticket 110). OBSTACLE
+      MESURÉ SUR LE RELIQUAT DU LOT 5 : `scripts/analysis/figure_evenement.py` rend « non
+      concluant » sur un run à un persona — ses trois rôles exigent trois décisions par rôle et
+      par jour, et la colonne `Rôle` de `moves.csv` est VIDE sur la prise `arrivee` d'un run
+      désigné (vérifié sur `2026-09-23_20_35`, 178 lignes toutes à rôle vide). À trancher :
+      exact parce qu'il n'y a pas de cohorte, ou colonne à renseigner.
+      LE TICKET 109 EST LIVRÉ ET SERT EXACTEMENT CE QUI RESTE — vérifié le 2026-09-24 :
+      `scripts/dashboard/memoire.py`, `scripts/experiment/orchestrateur_memoire.py`,
+      `make/memoire.mk` (cibles `experience-memoire-estimer` et `experience-memoire-lancer`),
+      neuf tests au vert dans `scripts/tests/test_109_dashboard_memoire.py`, et le routage par
+      fonction cognitive résolu depuis les défauts (les cinq catégories reçoivent bien leur
+      `INSTANCES_ADMISES`). Les campagnes de ce ticket passent désormais par
+      `make experience-memoire-lancer EXP=…`, précédé de `make experience-memoire-estimer` — le
+      chiffrage manquait, et c'est ce qui retenait le run de non-régression c6 (Q11).
+      ⚠ TROIS RÉSERVES VÉRIFIÉES, à connaître avant de lancer. (a) Le modèle par défaut du
+      formulaire est `gemini-3.8-flash`, dont `providers.yaml` ne déclare QU'UNE clé, alors que
+      les campagnes des 23 et 24/09 tournaient sur deux clés par catégorie et essuyaient quand
+      même 13 à 20 saturations — une clé unique n'a pas d'alternative et le garde-fou du 105
+      coupe plus tôt. (b) L'orchestrateur ne passe pas `--force-fresh`, et une reprise à chaud
+      ne recrée pas le contrôleur, donc ne prend pas une modification de code faite depuis.
+      (c) Chaque bras reçoit son propre `--experiment-id` (`<nom>_treated`, `<nom>_control`), à
+      la différence des campagnes `e_c3_attribution_*` faites à la main qui logeaient les deux
+      bras sous un identifiant unique. DETTE RAPPELÉE : `c1`, `c2`, `c4` et `c5` n'ont toujours
+      pas de `cadence`, à traiter AVANT de les jouer.
     triage:
       faisabilite: 3
       surete: 3
@@ -5596,3 +5731,404 @@ tickets:
         agrégé, sous le plancher tout-voiture en individuel) n'est publié nulle part.
       date: '2026-09-22'
       aamas: 5
+  ticket_102_la_suite_scripts_tests_ne_distingue_plus_une_regression:
+    status: à faire
+    category: Ingénierie & Système
+    note: >-
+      OUVERT LE 2026-09-22 à la demande de l'auteur. scripts/tests rend 62 échecs, dont ZÉRO
+      imputable au travail du jour — établi en rejouant la suite sur un worktree détaché au commit
+      2baf55b puis en comparant les NOMS des tests en échec (73 au commit, 62 ici, un seul présent
+      ici et absent là : test_083 sur un chapitre que la réécriture de l'article a nettoyé).
+      ⚠ Comparer les noms et jamais les comptes : le worktree détaché ignore 123 tests contre 22
+      dans l'arbre de travail. Deux populations très différentes : 28 échouent ISOLÉMENT (vrais
+      défauts), 34 n'apparaissent QUE dans la suite complète — et ces 34 ne sont pas des tests
+      instables, ils butent sur une violation réelle de l'API Streamlit, `st.button()` appelé dans
+      un `st.form()`, levée au rendu sur un chemin que la suite débloque. 14 tests la portent.
+      C'est le lot A et il commande les autres : tant que 14 échecs dépendent de l'ordre, la suite
+      n'est pas un signal. Lot B : trois attentes périmées sans arbitrage (onglet « 🔁 Campagne »
+      absent de la copie que le test garde volontairement, liste des services requis élargie à
+      otp1/2/3 et osmnx1, chapitre du 083 devenu propre — lui donner un chapitre FABRIQUÉ, ne
+      JAMAIS dégrader le seuil). Lot C : ~22 tests (formulaire d'expérience, car scolaire) venant
+      de chantiers qu'une autre session écrit peut-être — vérifier `git worktree list` AVANT d'y
+      toucher, sinon c'est un conflit et pas une amélioration. Lot D, deux arbitrages de l'auteur :
+      (D1) le quota journalier insuffisant est passé de REFUS à DÉTAIL dans aptitude.py, avec le
+      motif « les limites de providers.yaml sont déclaratives et connues comme parfois fausses » —
+      le test du formulaire attend encore un refus ; trancher, puis aligner celui des deux qui a
+      tort. Le message du test est en plus trompeur (« un dict vide signale un import muet ») alors
+      que le module se charge : à corriger dans tous les cas. (D2) le ticket 095 n'a pas de bloc
+      triage. Lot E : weather_draw lit le config.yaml VIVANT, mode_choice_forest, gama_includes,
+      une page de synthèse non générée. CRITÈRE CENTRAL : la suite doit rendre le MÊME verdict
+      jouée en entier et fichier par fichier — un écart signifie qu'il reste de l'état partagé. Et
+      une cible make unique doit couvrir les trois périmètres : le défaut d'origine est là, trois
+      commandes et un chiffre annoncé (« 1946 tests, 0 échec ») qui n'en couvrait qu'un.
+      NE BLOQUE AUCUNE CAMPAGNE : le chemin d'une campagne est vert (services/llm-agents 1950/0,
+      les trois paquets 0, les 4 fichiers de test touchant run_sequential_cohort.py 68/0) ; les 62
+      sont dans le tableau de bord (54/62), le détecteur de style, le tirage météo et l'outillage
+      papier. DÉPEND DE : aucun ticket — le triage (D2 ci-dessus, et celui de ce ticket) attend
+      l'auteur.
+  ticket_103_carre_jev_gemini_hors_echantillon_et_graines:
+    status: en cours
+    category: Expériences & Cognition
+    note: >-
+      Ouvert le 2026-09-22, à la demande de l'auteur, après la relecture sévère de l'article
+      (docs/paper/article-court/). DEUX MESURES MANQUENT pour que la thèse de l'article court
+      tienne : (1) le pivot, jev-1.13.0 × prompt_expert_32 à 3,65 dans la bande tabulaire, est
+      un prompt réglé EN ÉCHANTILLON comparé à un prompt gemini réglé HORS échantillon —
+      l'asymétrie favorise la thèse ; (2) le § 6.5 affirme la stabilité inter-graines sans
+      mesure, son commentaire dit « do not publish without that replay ». Lot A : carré
+      hors échantillon sur la SECONDE COHORTE c2 (aucun prompt n'y a été réglé, donc tout y
+      est out-of-sample pour les deux modèles) — 2 modèles × 3 prompts + 4 tabulaires + 3
+      planchers, 13 exécutions, graine 42. La ligne clé est gemini × prompt_expert_32 : sans
+      elle on ne sait pas si l'avantage tient au texte ou au modèle. Lot B : graines 123 et
+      789 pour jev × {expert_32, expert_05} et gemini × minimal, 6 exécutions ; gemini ×
+      expert_05 a DÉJÀ ses trois graines (4,86 / 4,65 / 4,30, étendue 0,56 < ±1,3) — première
+      mesure de dispersion du corpus, écrite nulle part dans l'article. Lot C conditionnel :
+      prompt sur mesure pour gemini, seulement si scénario 3. CRITÈRES ÉCRITS AVANT MESURE
+      (§ 5 du ticket) : Q1 Jev tient-il hors échantillon (3 scénarios, seuil 1,3 point) ;
+      Q2 le carré est-il carré (expert_32 améliore-t-il gemini autant que Jev) ; Q3 le signe
+      de chaque écart publié tient-il sur les trois graines — sinon il ne se publie pas.
+      Le run gemini c2 est DÉCLARÉ depuis le 22/09 13 h 42 et jamais exécuté. UNE SEULE
+      CAMPAGNE À LA FOIS, jamais pendant un run manuel. DÉPEND DE : aucun ticket. BLOQUE : la
+      version définitive de docs/paper/article-court/PLAN.md (§ 5.3 et § 7) et toute
+      réécriture des chapitres 6, 8, 9.
+      AVANCE DU 2026-09-22 : plan resserré validé par l'auteur, puis phase 0 lancée et
+      outillage livré. (a) PLAN CHIFFRÉ contre la trace de coût du 2026-09-21 : la ressource
+      rare n'est ni l'argent ni le calcul, c'est le quota gratuit gemini et l'horloge — 7
+      témoins à 35 s et 0 $, un run Jev à 100 s et 0,11 $, un run gemini à 2-5 h et ~316
+      requêtes sur 1000/jour. Sur 19 exécutions, 5 runs gemini portent toute la charge.
+      L'auteur a retenu la coupe proposée sur A1 (gemini × minimal_02 sur c2, qu'aucune des
+      questions Q1/Q2 n'utilise) et sur B5-B6, tout en les gardant VISIBLES marqués
+      optionnels : 2 runs gemini au lieu de 5, ~4 h et 2/3 de journée de quota au lieu de
+      ~10 h et 2 jours. (b) RIEN À RÉCUPÉRER des graines supprimées : la trace du 22/09
+      12 h 12 est explicite, les définitions 456 et 2026 n'avaient que leur experience.yaml
+      avec executions_connues vide. La seule dispersion acquise reste gemini × expert_05
+      (42/123/789). (c) JEU c2 REPRIS : il était arrêté à 1595/3296 depuis 14 h 08 sans
+      erreur moteur ; la reprise (J11) est repartie où le fichier s'arrêtait, sans recalculer
+      les 1595 faits. (d) 18 EXPÉRIENCES DÉCLARÉES, dérivées de leurs homologues c1 par
+      `definir`, 0 refusée, derive_de porté par chacune : 7 témoins c2, 3 Jev c2, gemini ×
+      expert_32 c2, 4 graines Jev c1, 3 optionnelles. Les noms sont CALCULÉS par la
+      plateforme, pas choisis. (e) ESPACE DE TRAVAIL livré dans le tableau de bord (spec
+      specs/espaces-de-travail-experiences.md, scripts/dashboard/espaces.py +
+      espaces_experiences.yaml, 30 tests dans scripts/tests/test_103_espaces_experiences.py,
+      tous verts) : l'espace « papier version courte » ramène le registre de 81 lignes à 38,
+      groupées par phase. Non-régression vérifiée par comparaison de NOMS de tests avant/après
+      sur test_dashboard_app.py — 10 échecs strictement identiques des deux côtés, tous
+      préexistants et relevant du ticket 102. RESTE À FAIRE : clore le jeu c2 (95,8 % au
+      moment d'écrire), puis les 4 phases d'exécution, puis les différences appariées sur c2
+      et le README de trace du § 5. AUCUN CHIFFRE mesuré à ce stade.
+  ticket_105_un_repli_par_defaut_n_est_pas_une_decision:
+    status: en cours
+    category: Ingénierie & Système
+    note: >-
+      Ouvert le 2026-09-23 après l'arrêt de la campagne c3 v4 sur saturation amont. QUATRE
+      DÉCISIONS PRISES PAR L'INDEX 0 s'étaient inscrites dans la fenêtre de mesure sans que rien
+      ne s'arrête ni ne le signale : 0/48 replis avant le choc, 4/39 = 10,3 % après, aux jours
+      +5,8 / +6,5 / +6,6 / +7,8. Cause amont, réponse de Google mot pour mot : HTTP 503 « This
+      model is currently experiencing high demand », statut UNAVAILABLE, 54 occurrences sur la
+      journée, montant de 1-2 par tranche de 10 min à 15 au plus fort. AUCUNE erreur de quota ce
+      jour-là (RESOURCE_EXHAUSTED = 0) : le garde-fou du ticket 077 axe 3 ne regarde que
+      `genre_erreur == "quota_journalier"`, et une saturation ne renvoie AUCUN genre_erreur —
+      `error_kind` ne connaît que quota_journalier et restriction_instances. POURQUOI C'EST
+      DISQUALIFIANT ET PAS DU BRUIT : le repli fait `plan_index = 0` puis
+      `plan = itineraries[plan_index]`, donc LE TRAJET A LIEU ; l'agent part, arrive, s'en
+      souvient, et le mode emprunté entre dans la statistique habitude/rupture que l'expérience
+      mesure. Écarter ces lignes après coup ne retire pas leurs effets en aval. CE QUI CHANGE :
+      (1) le critère d'arrêt compte les replis CONSÉCUTIFS (seuil `replis_consecutifs_max` = 3) et
+      non les motifs, délibérément plus large que la saturation ; le seuil n'est pas 1 parce qu'un
+      503 isolé est rattrapé par les tentatives et ne produit pas de repli — on vise un régime,
+      pas un incident ; le chemin quota_journalier du 077 reste inchangé, lui seul sait à quelle
+      heure la reprise est possible. (2) Armé sur le verrou d'expérience déjà posé par
+      run_sequential_cohort.py, donc actif d'office en campagne et muet en run ordinaire ;
+      EXPERIMENT_HIBERNATE_ON_QUOTA renommée EXPERIMENT_STOP_ON_FALLBACK, ancien nom admis en
+      alias. (3) DÉFAUT INDÉPENDANT TROUVÉ EN INSTRUISANT LE TICKET :
+      `reprise.restaurer_si_demande` n'appelle `ecarter_les_sorties_du_rejeu` que sur la branche
+      « aucun point trouvé » ; quand un point EST trouvé, GAMA rejoue quand même les jours vécus
+      et `move_logger.py` ignore le gel, donc les trajets rejoués s'ajoutent à moves.csv,
+      indiscernables des originaux — c'est le défaut qui avait dédoublé 84 trajets sur le run du
+      075, et la fonction écrite pour l'empêcher n'était pas appelée sur ce chemin. (4) Le repli
+      était en logger.debug, donc invisible : il passe en ERROR avec préfixe [ALARME], et
+      `make report` rend le taux de replis avant/après l'événement — le chiffre qu'il a fallu
+      reconstituer à la main pour décider d'arrêter. (5) Le compteur journalier Redis a été lu
+      comme un budget le 23/09 et a fait reporter une relance d'une journée pour rien, alors que
+      le code dit le contraire depuis l'incident du 2026-09-08 : la docstring ne suffit pas parce
+      qu'elle n'est pas là où on lit le chiffre. `rpd:` devient `rpd_local_seulement:`, `tpd:`
+      devient `tpd_local_seulement:`, accesseurs suffixés de même ; `_mark_quota_exhausted` est
+      SUPPRIMÉE, sans appelant depuis le 097 et ressemblant à du code vivant. AUCUN consommateur
+      de production ne lit ces compteurs (vérifié : daily_requests/daily_tokens n'apparaissent que
+      dans les tests et le contrat de ports), le renommage ne casse rien, les anciennes clés
+      expirent sous 24 h. QUESTION OUVERTE (§ 7 du ticket) : un repli est-il mémorisé dans le
+      cache de rejeu ? Sans effet sur la reprise décidée le 23/09 — le point jour_017 (01 avril
+      03:00) précède le premier repli (01 avril 19:38) — mais à trancher avant qu'un rejeu ne
+      traverse une fenêtre contaminée. DÉPEND DE : aucun ticket. PROLONGE l'axe 3 du ticket 077.
+      LIVRÉ le 2026-09-23, les quatre chantiers, dans l'ordre D → B → C → A. (D) Compteurs Redis
+      renommés `rpd_local_seulement:` / `tpd_local_seulement:`, accesseurs suffixés de même,
+      `_mark_quota_exhausted` supprimée ; 10 tests neufs (tests/contract/test_105_compteur_local.py)
+      dont un qui verrouille l'ABSENCE d'alias — un nom neutre qui marche encore inviterait à se
+      retromper. ⚠ CORRECTION D'UN FAIT ANNONCÉ DANS CE TICKET : il Y A deux lecteurs de
+      production, `balancer/router.py` (statut lu par le tableau de bord) et `api/metrics.py`
+      (jauges Prometheus) — mon premier relevé, tronqué, les avait manqués. Aucun ne DÉCIDE, les
+      deux affichent ; leurs appels sont renommés mais les NOMS DE CHAMP ET DE MÉTRIQUE restent
+      stables, casser Grafana n'apprendrait rien à personne. (B) `restaurer_si_demande` écarte les
+      sorties par trajet sur LES DEUX branches ; 7 tests (test_105_reprise_sans_doublon.py), dont
+      quatre qui verrouillent ce qui ne doit pas bouger — run neuf intact, gel posé, point le plus
+      récent qui gagne, point sans description invalide. (C) Repli journalisé en ERROR `[ALARME]
+      [repli]` avec agent/instant/consécutifs ; section « Replis autour de l'événement » dans
+      `make report`, 8 tests (scripts/tests/test_105_replis_autour_evenement.py). VÉRIFIÉE SUR LE
+      RUN RÉEL : 0/52 avant, 4/35 = 11,4 % après, alarme levée — reproduit à la main ce qu'il
+      avait fallu fouiller. (A) Compteur `_replis_consecutifs`, remis à zéro par toute décision
+      prise ; seuil `settings.agent.replis_consecutifs_max` = 3 ; verrou renommé
+      `EXPERIMENT_STOP_ON_FALLBACK` avec `EXPERIMENT_HIBERNATE_ON_QUOTA` en alias, les deux
+      transmis par compose ; `_declencher_hibernation_propre` prend un `motif` et un `resume_at`
+      devenu optionnel (une saturation n'annonce aucune heure de réouverture : le marqueur porte
+      `resume_at: null` plutôt que la chaîne "None", et le compte de replis) ; 21 tests
+      (test_105_repli_interdit.py). QUESTION §7 TRANCHÉE : un repli n'est PAS mémorisé dans la
+      trace de rejeu — `rejeu_decisions.tracer` n'est appelé que là où un `chosen_plan` existe.
+      Un rejeu traversant une fenêtre contaminée redemande donc au modèle, et la divergence est
+      comptée puis alarmée au-delà de 20 % de clés manquées. C'est le bon comportement : tracer un
+      repli le graverait dans toutes les reprises ultérieures. PREUVES : suite llm-agents 2033
+      passés / 6 ignorés / 0 échec (2030 avant, +46 neufs, dont 3 corrigés dans le mannequin du
+      077 — `SimpleNamespace` ne portait pas le compteur neuf, et un `getattr` défensif côté
+      production aurait masqué un vrai AttributeError) ; passerelle 432 passés. ⚠ scripts/tests
+      porte 94 échecs dont 32 ne sont PAS de ce ticket : vérifié par comparaison de noms contre un
+      worktree HEAD, puis en retirant le ticket 105 du YAML (32 échecs à l'identique des deux
+      côtés). Ils viennent de `scripts/dashboard/experiences.py`, modifié et non commité par la
+      session du ticket 103. DOC : docs/arch/llm-inference.md (section quotas journaliers corrigée
+      — elle décrivait encore le compteur local comme ce qui ferme une clé, périmé depuis le 097 —
+      et section neuve sur le garde-fou), docs/setup/quickstart.md (mise de côté des mesures,
+      et comment reprendre à un jour antérieur en déplaçant les points postérieurs).
+      VALIDÉ EN CONDITIONS RÉELLES le 2026-09-23 à 19:41, neuf minutes après la relance de la
+      campagne c3 (v5, experiments/archive/2026-09-23_19_32). Google était PLUS saturé que
+      l'après-midi — 11 HTTP 503 « high demand » en 6 minutes, soit ~2/min contre un pic à 1,5/min
+      sur toute la journée. Trois replis consécutifs (16 mars 05:00, 07:48, puis le troisième),
+      chacun sur un `Timeout expiré` de 120 s avec `genre_erreur=aucun`, exactement le cas que le
+      garde-fou du 077 ne pouvait pas voir. Le contrôleur s'est arrêté au JOUR 1 au lieu de
+      laisser des choix par défaut entrer dans la mesure, et `en_attente_quota.json` porte
+      `{"motif": "replis_consecutifs", "resume_at": null, "replis_consecutifs": 3}` — null et non
+      la chaîne "None". Comparaison : le v4 avait laissé quatre décisions par défaut entrer dans
+      la fenêtre de mesure sur 2 h 22, découvertes à la main.
+      RESTE : le triage, qui appartient à l'auteur.
+
+  ticket_106_le_souvenir_injecte_doit_atteindre_la_memoire_longue:
+    status: en cours
+    category: Ingénierie & Système
+    note: >-
+      Ouvert le 2026-09-23 en instruisant la reprise de la campagne c3 v4 : en vérifiant que le
+      point jour_017 portait bien le choc, on a découvert qu'AUCUN jour du run ne le portait. Le
+      choc a été injecté le 27 mars à 14:02 et jugé GRAVE par l'agent (0,75, RETENU 0,75) ; la
+      consolidation couvrante de 19:30 a écrit « Today went very smoothly overall, with all my
+      trips adhering closely to schedule » à importance 0,10 ; sur les 123 documents de mémoire
+      longue du run, ZÉRO parle de métro, d'éclairage, d'annonce ou de rame. Le run a continué
+      2 h 22 à mesurer l'effet d'un souvenir qui n'existait pas. CAUSE MÉCANIQUE : le texte de
+      l'événement est JOINT à l'observation d'arrivée (ticket 100, délibéré), et cette arrivée
+      disait « On time. » — arrive_at 1774620168 contre expected_arrive_at 1774620367, soit 199 s
+      d'AVANCE, parce que retard_injecte_s (1680 s) ne remonte qu'au GamaArrivalsLogger. La
+      journée offerte à la synthèse avait donc pour ligne dominante « tout s'est bien passé ».
+      Faire porter le retard injecté à l'arrivée a été examiné et ÉCARTÉ PAR L'AUTEUR le
+      2026-09-23 : ce ticket ne change pas ce qui est injecté, il rend visible ce qui en sort.
+      POURQUOI AUCUN CONTRÔLE N'EXISTAIT : la consolidation est une synthèse REFORMULÉE, pas une
+      copie, et aucun identifiant ne relie une entrée de mémoire courte à sa réflexion longue —
+      vérifier suppose de comparer des textes, ce qu'aucun code ne faisait.
+      LIVRÉ le 2026-09-23. (1) Module neuf `llm/evenements/temoin.py` : l'ancrage est le PRÉFIXE
+      de l'entrée courte (`[ INCIDENT ]`, `[ PRESSE ]`), pas le registre — le texte est déjà dans
+      l'entrée, le faire redescendre du contrôleur ajouterait un chemin qui peut diverger. Les
+      mots distinctifs du texte injecté sont cherchés dans ce qui vient d'être écrit en mémoire
+      longue ; seuil `settings.agent.temoin_souvenir_mots_min` = 2. (2) Branché dans
+      `reflect_on_short_term_memory` APRÈS la boucle `aadd_long_term_memory` : avant, il
+      interrogerait une intention et non ce qui a été écrit. Rien pendant un rejeu (gel), rien
+      sur une consolidation ordinaire, ne lève jamais vers l'appelant. (3) Alarme
+      `[ALARME] [temoin]` nommant agent, mots cherchés et mots retrouvés ; le SUCCÈS est
+      journalisé aussi. Trace `temoin_souvenir.jsonl` portant les deux verdicts, et section
+      « Témoin du souvenir injecté » dans `make report` avec une alarme rouge par perte.
+      DÉCISION DE CONCEPTION : le témoin ALARME et N'ARRÊTE PAS, à la différence du ticket 105
+      livré le même jour. Le 105 constate un FAIT (un repli est un repli) ; celui-ci est
+      heuristique, et une paraphrase légitime — « the underground » pour « metro » — produirait
+      une fausse alarme qui tuerait un bon run. On observe d'abord le taux de fausses alarmes sur
+      des runs réels ; brancher l'arrêt est ensuite une ligne à changer (§ 7 du ticket dit où).
+      CALIBRATION sur les 15 runs archivés portant une injection : deux n'ont AUCUNE consolidation
+      après l'injection (run arrêté avant) et sortent du champ. Sur les 13 observables, 11 gardent
+      le souvenir et 2 le perdent — `2026-09-23_09_31` et `2026-09-23_13_54`, tous deux c3 sur
+      861500. Séparation FRANCHE : 3 à 81 mots retrouvés côté sain, 0 et 1 côté perdu, aucun run
+      au voisinage du seuil. ⚠ DEUX CHIFFRES ANNONCÉS LA VEILLE ÉTAIENT FAUX, corrigés ici : le
+      run 09_31 avait été compté comme GARDANT le choc sur la foi de deux mots (« lighting »,
+      « missed ») alors qu'il en retrouve ZÉRO avec la liste d'exclusion calibrée — ses six
+      réflexions disent « Today went entirely according to schedule with no complications » ; et
+      le taux de perte annoncé (1 sur 15, 7 %) est en réalité 2 sur 13 = 15 %, et 2 sur 4 = 50 %
+      sur le seul événement c3. Le défaut est donc PLUS fréquent qu'annoncé et le témoin PLUS
+      net : les deux poussent vers l'arrêt, mais la décision reste à l'auteur. PIÈGES DE LA LISTE
+      D'EXCLUSION, tous deux silencieux : « incident » correspondait à la phrase « without any
+      unexpected incidents », qui dit le CONTRAIRE de ce que le témoin cherche ; « between » était
+      le seul mot que le run v4 retrouvait, dans « a short walk between errands », et suffisait à
+      le faire passer pour sain. Règle d'admission : ce mot apparaîtrait-il dans la réflexion d'un
+      jour ORDINAIRE ? Si oui, il sort. PISTE FERMÉE PAR LA MESURE : le témoin par l'IMPORTANCE
+      (« la consolidation produit-elle une entrée d'importance comparable à l'importance
+      retenue ? ») est rejeté — le run 11_10, qui garde parfaitement le choc, plafonne à 0,10 en
+      mémoire longue, plus BAS que le run 13_54 qui le perd (0,15) ; sur 13 runs lisibles, 7 ont
+      une importance maximale inférieure à l'importance retenue. L'importance ne se propage pas
+      de la mémoire courte à la longue. PREUVES : 22 tests neufs
+      (services/llm-agents/tests/test_106_temoin_souvenir.py, sur les VRAIS textes de c3 et les
+      réflexions réellement écrites par 11_10 et 13_54) et 7 tests de rapport
+      (scripts/tests/test_106_rapport_temoin.py). DOC : docs/arch/memory-stm-ltm.md, section
+      neuve ; docs/changelog.md. DÉPEND DE : aucun ticket. PROLONGE le ticket 105 (même geste, un
+      cran de moins) et le ticket 100 (canal unique d'événement).
+      PAS ENCORE EXERCÉ EN CONDITIONS RÉELLES : la relance du 2026-09-23 19:32 est morte au
+      jour 1 sur la saturation Google (garde-fou du 105), et l'injection est au jour 12. Le témoin
+      reste donc vérifié sur ARCHIVE seulement — rendu du rapport reproduit sur les runs 11_10
+      (retrouvé, 9 mots sur 9) et 13_54 (PERDU, 1 mot), avec l'alarme levée sur le second.
+      RESTE : le triage, qui appartient à l'auteur ; l'arbitrage du § 7 — armer l'arrêt
+      maintenant, ou attendre d'avoir observé le taux de fausses alarmes ; et une campagne qui
+      atteigne le jour 12 pour l'exercer.
+      EXERCÉ EN CONDITIONS RÉELLES le 2026-09-23 à 23:42, et VERT. Run
+      `experiments/archive/2026-09-23_20_35` (186 min, 33 jours simulés, 178 trajets, zéro
+      repli, 13 saturations Google réparties sur les 186 minutes contre 11 en 6 minutes au
+      v5). L'injection tombe au jour simulé 15, le 2026-03-30 à 05:32:55, gravité 0,8427 ;
+      le contrôle post-consolidation retrouve 15 mots distinctifs sur 23 (engine, stalled,
+      expressway, middle, lane, lorry, behind, hard, metres, bumper, shoulder, waited,
+      roadside, assistance, restart) pour un seuil de 2. `temoin_souvenir.jsonl` : une ligne,
+      zéro perte ; la section de `make report` rend le verdict sans alarme. La marge est celle
+      qu'annonçait la calibration, pas un passage de justesse. ⚠ L'événement joué est
+      `c6_voiture_suspecte` et non c3 — la commande a tourné sans `--evenement` — et seul le
+      bras traité a été lancé : le témoin est donc exercé, l'attribution ne l'est pas. DEUX
+      MANQUES VUS À CETTE OCCASION. (a) La trace porte `evenement_id` vide parce que
+      `llm_agent.py` ne passe pas l'identifiant à `temoin.controler` : le verdict est juste,
+      mais la ligne ne dit pas de quel choc elle parle. CORRIGÉ le 2026-09-24, mais PAS au
+      site d'appel : la consolidation du soir ne connaît pas l'événement joint à une arrivée
+      du matin, l'identifiant ne vit que dans le registre du run. `temoin._evenement_declare`
+      le lit donc depuis `evenements.registre().evenement.evenement_id`, ce que l'appelant
+      passe explicitement l'emportant toujours. Exact tant qu'un run ne déclare QU'UN
+      événement, ce qui est la forme actuelle de `evenement.yaml` ; la limite est écrite dans
+      la docstring et couverte par trois tests neufs (32 au total sur le ticket). (b) L'`evenement.yaml` déclarait DEUX jours d'injection (15 et 16) et un
+      seul a été consigné : l'exposition est restreinte au mode `car`, que l'agent ne choisit
+      plus après le choc, donc la seconde injection ne s'est pas produite. Le témoin ne
+      contrôle que ce qui est injecté ; une injection qui n'a pas lieu ne laisse aucune trace
+      chez lui, et rien ailleurs ne le signale — c'est l'objet du TICKET 108, ouvert le
+      2026-09-24 pour rapprocher les injections déclarées des injections produites.
+      DEUXIÈME EXERCICE RÉEL le 2026-09-24 à 06:41, sur c3 cette fois, campagne v7 à DEUX
+      bras (traité `experiments/archive/2026-09-24_00_15`, témoin `2026-09-24_03_28`).
+      Verdict « retrouvé », 4 mots sur 9 (lighting, announcement, appointment, fourth), et la
+      trace porte enfin `evenement_id: c3_panne_reseau`. Le bras témoin n'écrit aucun
+      `temoin_souvenir.jsonl` : sans injection le contrôle ne se déclenche pas, c'est le
+      contrôle négatif du témoin et il passe. ⚠ MAIS LA MESURE OBLIGE À NUANCER CE QUE LE
+      TÉMOIN PROUVE. Le choc c3 a bien atteint la mémoire longue — une entrée, importance
+      0,75, récit complet, avec une intention explicite (« I need to keep in mind the
+      unreliability of the metro when scheduling important appointments ») — et n'a RIEN
+      changé : part des transports collectifs décidée 21,7 % avant et 38/26/31 % après, contre
+      21,4 % puis 32/24/28 % pour le témoin, soit six points d'écart au plus et dans le sens
+      inverse de l'évitement. La cause est lisible dans les métadonnées de mémoire : c3 pose
+      UNE entrée sur 353 et elle est rappelée UNE fois, le lendemain matin, puis plus jamais
+      en quatre semaines ; c6, qui fait effondrer la voiture pendant vingt jours, pose 31
+      entrées sur 307 dont 2 concepts, et cumule 52 RAPPELS. « Retrouvé » répond à « le texte
+      a-t-il survécu à la consolidation », pas à « l'agent construit-il quelque chose dessus »
+      — un souvenir retrouvé et rappelé une fois est opérationnellement équivalent à un
+      souvenir perdu. Le témoin reste NÉCESSAIRE et n'est pas SUFFISANT ; un témoin du RAPPEL
+      (combien de fois l'entrée du choc est-elle ressortie ?) semblait le prolongement naturel.
+      ⚠ CETTE PISTE A ÉTÉ MESURÉE ET ÉCARTÉE LE JOUR MÊME, quelques heures après avoir été
+      écrite ici : `rappels` ne mesure pas ce qui est servi au modèle. Le run
+      `2026-09-19_18_09` totalise ZÉRO rappel et fait chuter la voiture décidée de 95 % à
+      48 %, son effet passant par le bloc « ce qui a changé récemment », qui ne consomme
+      aucun rappel. La mesure qui tient est la présence du souvenir dans le PROMPT DE
+      DÉCISION, tous canaux confondus : c'est l'objet du TICKET 110, ouvert le 2026-09-24.
+      Ce même ticket montre par ailleurs qu'un verdict PERDU du témoin 106 ne signifie pas
+      que l'agent a décidé sans le souvenir — le run `09_31`, déclaré PERDU, le sert
+      pourtant dans 3 de ses 9 décisions postérieures.
+  ticket_107_tracer_le_jour_meteo_de_chaque_decision:
+    status: à faire
+    category: Ingénierie & Système
+    note: >-
+      Ouvert le 2026-09-23 pendant la relecture de la remarque 8 de l'article court, à la demande
+      de l'auteur. Une décision de banc porte trois dates qu'aucune sortie ne trace : le jour de
+      l'offre (jeu gelé, 2026-03-16), le jour météo tiré (mois-jour parmi les jours ouvrés de la
+      fenêtre EMC² 2022-09-20 → 2023-02-18) et le relevé réellement lu (CSV indexé par mois-jour,
+      couvrant mai 2025 → avril 2026). Seul un booléen `meteo_par_agent` figure dans
+      identite_run.json. À livrer : trois champs par décision + source de la date, empreinte du
+      CSV, compteur de dates distinctes avec alarme. DÉPEND DE : aucun ticket.
+  ticket_108_une_injection_declaree_qui_ne_se_produit_pas_doit_se_voir:
+    status: à faire
+    category: Ingénierie & Système
+    note: >-
+      Ouvert le 2026-09-24 à la demande de l'auteur, en relisant le run
+      `experiments/archive/2026-09-23_20_35` avec le témoin du ticket 106. Son `evenement.yaml`
+      déclare DEUX jours d'injection pour `c6_voiture_suspecte` (jours 15 et 16) et
+      `evenements.jsonl` n'en porte QU'UNE, celle du jour 15. Rien ne l'a dit : ni alarme, ni
+      ligne de journal, ni section de rapport — l'écart a été trouvé à la main en comparant les
+      deux fichiers. La cause est un effet de bord du protocole et non une panne : l'exposition
+      est restreinte au mode `car` (`exposition.modes`), et après le choc du jour 15 l'agent ne
+      choisit plus la voiture ; le choc a supprimé la condition de sa propre répétition. MÊME
+      CLASSE DE DÉFAUT QUE LE 106, DE L'AUTRE CÔTÉ : le 106 demande si le souvenir injecté est
+      ressorti de la consolidation, celui-ci demande si le texte a seulement été injecté. Le
+      témoin du 106 ne peut pas y répondre — une injection qui n'a pas lieu ne le réveille
+      jamais, et les deux trous produisent la même conséquence, une mesure qui porte sur rien
+      sans le dire. À LIVRER : rapprochement déclaré/produit en fin de run par agent exposé,
+      alarme nommant agent, événement, jour déclaré et raison plausible, section de `make
+      report` rendant les DEUX sens (un rapport muet quand tout va bien ne se distingue pas
+      d'un rapport mort). ⚠ La forme B du canal `lu` (`calendrier:`, une date tirée par cible)
+      ne se rapproche pas comme la forme A (`jours:`) : traiter la forme A d'abord et déclarer
+      la forme B hors champ dans la sortie plutôt que de la compter à zéro en silence. RECETTE :
+      rejouer `2026-09-23_20_35` et signaler l'injection manquante du jour 16. N'ARRÊTE AUCUN
+      RUN — même geste que le 106 : une injection manquante se découvre en fin de run, quand il
+      n'y a plus rien à sauver. DÉPEND DE : aucun ticket. PROLONGE les tickets 106 (témoin en
+      aval) et 100 (canal unique d'événement).
+      SECONDE OCCURRENCE le 2026-09-24, sur un run indépendant : le bras traité de la campagne
+      c3 v7 (`experiments/archive/2026-09-24_00_15`) déclare les jours 12 et 13 et ne produit
+      que le jour 12. La cause est PLUS GÉNÉRALE que celle décrite à l'ouverture. Ici le choc
+      n'a pas supprimé la condition de sa propre répétition — l'agent continue d'emprunter les
+      transports collectifs après le 27 mars — et le jour 13 (2026-03-28) est simplement un
+      jour où il n'a pris que la voiture. La règle à retenir : une injection conditionnée à un
+      MODE et posée sur un JOUR FIXE manque chaque fois que l'agent n'emprunte pas ce mode ce
+      jour-là, choc ou pas. Deux runs sur deux sont concernés, ce qui fait du cas la norme et
+      non l'exception. RECETTE ÉLARGIE : les deux runs `2026-09-23_20_35` et
+      `2026-09-24_00_15` doivent chacun signaler leur injection manquante.
+  ticket_109_page_pilotage_experiences_memoire:
+    status: terminé
+    category: Expériences & Cognition
+    note: >-
+      Livré le 2026-09-24. Page de pilotage Streamlit dédiée aux expériences de mémoire
+      (onglet `🧠 Expériences Mémoire`), avec catalogue d'événements, routage des 5 fonctions cognitives
+      (instances admises), mémorisation des formulaires, nom canonique calculé, orchestration A/B
+      contrefactuelle consécutive (`orchestrateur_memoire.py`, cibles make), suivi des runs et réconciliation
+      Ticket 108 / témoin LTM Ticket 106. Testé unitairement et bout-en-bout (9 tests dans test_109_dashboard_memoire.py).
+      DÉCISIONS D1-D5 VALIDÉES LE 2026-09-24. PROLONGE les tickets 100, 095, 077, 106 et 108.
+
+  ticket_110_le_souvenir_injecte_doit_atteindre_le_prompt_de_decision:
+    status: à faire
+    category: Ingénierie & Système
+    note: >-
+      Ouvert le 2026-09-24 après la campagne c3 v7 à deux bras. NUMÉROTÉ 110 ET NON 109 : une
+      autre session a posé `ticket_109_page_pilotage_experiences_memoire` pendant la rédaction,
+      la collision a été vue à l'écriture du YAML. Le ticket 106 vérifie que le souvenir
+      injecté atteint la MÉMOIRE LONGUE ; celui-ci vérifie qu'il atteint le MODÈLE AU MOMENT DE
+      DÉCIDER, seul endroit où il peut produire un effet. DEUX INSTRUMENTS ESSAYÉS ET ÉCARTÉS,
+      mesurés sur les 17 runs archivés portant une injection. (a) Le témoin du 106 ne voit qu'un
+      canal : le run `2026-09-23_09_31` est déclaré PERDU — aucune de ses 112 entrées de mémoire
+      longue ne porte le choc — et 3 de ses 9 décisions postérieures reçoivent pourtant le récit
+      dans leur prompt, par le bloc « ce qui a changé récemment ». Un « PERDU » ne veut donc pas
+      dire que l'agent a décidé sans le souvenir. (b) Le compte des RAPPELS de mémoire longue
+      (`rappels`, `dernier_rappel`) a été proposé puis MESURÉ ET ÉCARTÉ le jour même :
+      `2026-09-19_18_09` totalise ZÉRO rappel et fait chuter la voiture décidée de 95 % à 48 %,
+      son effet passant par un bloc de prompt qui ne consomme aucun rappel. Un témoin bâti
+      là-dessus aurait classé « dormant » le run qui porte le résultat du § 7.2 de l'article.
+      CE QUI TIENT : la présence du souvenir dans le PROMPT DE DÉCISION, tous canaux confondus,
+      avec un ancrage AUTO-CALIBRÉ — les mots du texte injecté absents de tout prompt d'avant le
+      choc. Cela règle sans arbitrage le défaut de liste d'exclusion du 106 (sur le run c6 du
+      23/09, `speed`, `hard`, `short` et `restart` sortent d'eux-mêmes, le prompt système les
+      contenant déjà). CONTRÔLE DE VALIDITÉ : sur `2026-09-21_15_13`, le run dont le § 7.2.1 est
+      tiré, ce compte rend 75 prompts porteurs, le chiffre publié, obtenu indépendamment. CE QUE
+      LA MESURE DONNE : DEUX runs ayant une vraie fenêtre n'ont servi le souvenir à AUCUNE
+      décision — `2026-09-18_19_27` (27 décisions postérieures) et `2026-09-23_13_54` (36) —
+      et rien ne le disait ; un seul des deux est attrapé par le témoin du 106. Trois autres
+      rendent 0 % avec 9, 2 et 5 décisions seulement et sortent du champ. Les dix restants
+      vont de 23 % à 100 %. ⚠ PIÈGE MÉTHODOLOGIQUE À NE PAS MANQUER : `llm_exchanges.jsonl`
+      est écrit côté worker et GROUPE les décisions par lot, jusqu'à douze agents par appel
+      sur `21_15_13`. Compter le prompt entier attribue à tout le lot le souvenir d'un seul —
+      mesuré des deux façons, `2026-09-17_07_18` passe de 0 à 8 décisions porteuses. Le
+      message utilisateur délimite les agents par `--- agent_id=<id> | … ---` : il faut
+      segmenter et ne tester que le bloc de l'agent exposé. Le défaut est INVISIBLE sur un
+      run à un persona, donc la recette doit porter sur au moins un run de cohorte. ⚠ SERVIR N'EST PAS AGIR, et ce ticket ne traite pas cela : le run c3 du 24/09
+      sert le souvenir dans 55 % de ses décisions et jusqu'au dernier jour simulé, sans que sa
+      part de transports collectifs décidée s'écarte de plus de six points de son bras témoin.
+      Le résultat est COMPORTEMENTAL ; ce ticket fournit l'instrument qui permet de le
+      distinguer d'une panne de plomberie. À VÉRIFIER AVANT DE BRANCHER : `llm_exchanges.jsonl`
+      pèse 5,2 Mo pour 201 décisions et n'est PAS du JSONL (objets JSON indentés concaténés,
+      illisibles ligne à ligne) ; relire tout le fichier en fin de run passe à cette taille, pas
+      à l'échelle d'une cohorte de mille agents. N'ARRÊTE AUCUN RUN. DÉPEND DE : aucun ticket.
+      PROLONGE le 106 (canal unique, en amont) et le 108 (l'injection a-t-elle eu lieu, encore
+      en amont).

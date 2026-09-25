@@ -1,0 +1,75 @@
+% =====================================================================
+% chapters/06_Non_tabulated.tex — rendu LaTeX de ../traductions/06_non_tabulated.en_brut.txt (23 septembre 2026)
+% Section 6 de la VERSION FRANÇAISE de l'article court. \input depuis main.tex, après 05_Results.tex.
+% Ce fichier DÉFINIT \label{sec:nontabulated} et \label{sec:mechanism}.
+% Figure : une, \columnwidth (ch7_propension_quotidienne.png), légende AU-DESSOUS.
+% Tableau : un, tab:offered, \columnwidth, légende AU-DESSUS, booktabs.
+% Rendu mot pour mot de la traduction fournie par l'auteur.
+% =====================================================================
+
+\section{Le régime non tabulé : un événement impliquant un seul agent et retracé jusqu'à la décision}
+\label{sec:nontabulated}
+
+Cette section décrit un événement pour lequel aucune variable n’est enregistrée, chez un agent donné, depuis son entrée en mémoire jusqu’aux décisions qu’il a influencées.
+
+\subsection{Ce que les 21 variables ne contiennent pas}
+\label{sec:variables-gap}
+
+Aucune des 21 variables n’enregistre ce qu’une personne a vécu la veille, ni ce qu’elle a lu ce matin. Un décideur qui ne reçoit que ces informations ne peut répondre à aucune autre question. Sa prédiction le lendemain matin d’un incident est identique à celle de la veille, par identité plutôt que par mesure.
+
+\subsection{Le mécanisme}
+\label{sec:mechanism}
+
+Un événement entre dans la mémoire de l’agent à deux moments différents. Un événement vécu y entre après le voyage qui l’a produit, et un événement lu y entre au réveil. À l’entrée, l’agent évalue l’événement sur une échelle de gravité à cinq niveaux et lui attribue une valence : subi ou bienvenu. L’évaluation est propre à l’agent et comparée à son profil ; ainsi, un même incident n’a pas le même impact sur deux agents. La gravité détermine à elle seule la durée de fonctionnement de la mémoire.
+
+Un événement évalué se propage au-delà de son propriétaire, à travers le foyer, le soir.
+
+Un effet prend fin de deux manières, que la mesure permet de distinguer. Il prend fin par contradiction lorsque l'agent effectue à nouveau le trajet et qu'aucun événement ne se reproduit, et par usure lorsque la mémoire cesse d'être utilisée.
+
+Deux maillons de cette chaîne sont la génération de texte. L'un consiste à consigner la trace de ce qui vient de se produire, et l'autre à maintenir la croyance qui en découle. Le modèle de langage évalue également la gravité, et ce maillon ne relève pas de la génération de texte. L'évaluation constitue un niveau dans une grille fermée, qu'un classificateur typé peut renvoyer. La question de savoir s'il pourrait également produire les deux maillons écrits reste ouverte et une étude approfondie permettrait de trancher.
+
+\subsection{Configuration}
+\label{sec:setup}
+
+Nous jouons un agent deux fois, en tant qu'agent exposé et agent témoin, et nous mesurons l'écart entre les deux exécutions. L'incident est une panne de moteur qui impose un retard d'une demi-heure à un trajet en voiture. Les deux exécutions maintiennent la mémoire activée. La voiture reste proposée le lendemain matin ; ce que nous mesurons ici est donc un arbitrage. \textbf{[À confirmer --- Campagne en cours]}
+
+Les avis sont recueillis en dehors de toute prise de décision, selon six critères définis, à quatre étapes clés. Le critère relatif à l'environnement, qui n'est concerné par aucun incident, sert de question de contrôle.
+
+\subsection{Résultats}
+\label{sec:traced-results}
+
+Bien que la voiture soit proposée aussi souvent qu'avant la panne, elle n'est plus prise. L'agent exposé la prend neuf fois sur dix avant la panne, et trois fois sur dix après. L'agent de contrôle maintient son taux tout au long de la période.
+
+\begin{table}[tbp]
+  \caption{Voiture prise lorsqu'elle est proposée, agent exposé et agent de contrôle.}
+  \label{tab:offered}
+  \begin{tabular}{@{}lrr@{}}
+    \toprule
+    Période & Agent exposé & Agent de contrôle \\
+    \midrule
+    Avant la panne  & 94\,\% (34/36) & 90\,\% (28/31) \\
+    Après la panne  & 32\,\% (12/38) & 92\,\% (45/49) \\
+    Après le retour & 88\,\% (35/40) & 87\,\% (40/46) \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+La propension quotidienne à utiliser la voiture chute le jour de l'incident et remonte quinze jours plus tard (Figure~\ref{fig:propensity}). Elle passe de 90\,\% la veille à 40\,\% ce jour-là, puis oscille entre 5\,\% et 52\,\%. Elle rejoint la plage de l'agent de contrôle, qui se situe toujours entre 65\,\% et 90\,\%, le 15 avril.
+
+\begin{figure}[tbp]
+  \centering
+  \includegraphics[width=\columnwidth]{images/ch7_propension_quotidienne.png}
+  \caption{L'effet dure exactement aussi longtemps que le souvenir reste dans l'invite.}
+  \Description{Deux séries temporelles quotidiennes de la probabilité attribuée par l'agent à la voiture, en pourcentage, sur environ six semaines de mi-mars à fin avril. L'agent exposé et le témoin évoluent ensemble au-dessus de 65 pour cent jusqu'au jour de la panne, marqué par une ligne verticale en tiretés. La série exposée s'effondre alors entre 5 et 52 pour cent pendant quinze jours, tandis que le témoin continue d'osciller entre 65 et 90 pour cent. Une ligne verticale en pointillés marque le jour où le récit de la panne quitte le contexte de décision, et la série exposée rejoint la bande témoin deux jours plus tard, le 15 avril, et y reste.}
+  \label{fig:propensity}
+\end{figure}
+
+Les quatre voies par lesquelles le passé influence une décision peuvent être distinguées, et la trace indique celle qui a produit cet effet. Le compte rendu de l'incident apparaît dans le bloc des changements récents, dans 75 des 376 invites de décision. Il y reste du jour de l'incident jusqu'au quinzième jour suivant. Cette durée découle de la gravité. \textbf{[À confirmer --- La campagne en cours indique le contenu des trois autres itinéraires.]}
+
+La mesure distingue les deux manières dont un effet peut prendre fin, et celui-ci a pris fin par usure. L'agent a pris la voiture douze fois pendant la période. \textbf{[À confirmer --- à ce stade, aucune contradiction avec la croyance née de l'échec. Ajouter une expérience ?]} Le compte quitte les invites de décision après le 13 avril, et la propension rejoint la bande de contrôle le 15 avril. Deux sources indépendantes fournissent ces dates, le texte envoyé au modèle et les probabilités qu'il a renvoyées.
+
+Les opinions déclarées diminuent après l'échec et reviennent. Cinq des six critères relatifs à la voiture chutent à l'étape suivante, la sécurité passant de 8 à 3 sur une échelle de dix. Les cinq ont retrouvé leur valeur initiale aux deux étapes suivantes. Le critère environnemental reste à 3 tout au long de la période, et l'agent de contrôle ne modifie aucun des six critères. Les deux agents dérivent sur les quatre autres modes sans schéma commun, la voiture étant le seul mode qui les distingue.
+
+\textbf{Une seconde expérience utilise le même canal pour transmettre des informations qui ne sont que lues. Actuellement en cours, elle oppose cinq articles de presse toulousains datés à vingt panneaux écrits avant tout appel au modèle (Annexe E).}
+
+Le chemin tracé ici repose sur un agent et un événement. Nous nous intéressons au chemin plutôt qu'à son amplitude.

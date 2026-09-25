@@ -376,7 +376,27 @@ de se deviner du nom. Voir `specs/hygiene-prompts-et-plateforme-experiences.md`.
 
 Les tâches soumises via `POST /tasks` sont insérées dans un **Sorted Set Redis** (clé `batch:{batch_key}`) trié par `priority_score = min(departure_time)` des agents. Les agents dont le départ est imminent remontent en tête de file.
 
-La clé de hachage est : `MD5(Catégorie + Paramètres + Fournisseur_Forcé)` — les agents avec le même contexte de décision sont regroupés dans le même batch.
+La clé de hachage est : `MD5(Catégorie + Paramètres + Fournisseur_Forcé + TPM_min + Instances_admises + Origine)` — les agents avec le même contexte de décision **et le même émetteur** sont regroupés dans le même batch.
+
+**Origine d'une requête (2026-09-24).** `LLMRequest.origine` porte le nom du run émetteur ; le
+client llm-agents le pose sur **tous** ses appels (`LLMGatewayClient(origine=…)`, nom du
+workdir). Le journal `llm_exchanges.jsonl` est écrit par le **worker**, commun à tous les
+clients : il y inscrit l'origine de chaque lot, et `make report`, `make capacity` et le rapport
+mémoire ne comptent que les échanges de leur run (ou non signés, antérieurs). Sans ce champ,
+un bras de 20 agents a lu 97 échanges d'une population de 1 000 agents servie en même temps.
+Deux origines ne partagent jamais un lot. ⚠ Le champ n'existe côté serveur qu'après
+redémarrage de l'`api` et du `worker`.
+
+**Tâches en vol et taille des lots (2026-09-24).** Côté contrôleur, `world.worker_concurrency`
+(défaut 8) borne les tâches de planification en vol, donc le nombre d'agents qu'un lot peut
+réunir : à 8, un lot plafonnait à 8 agents quelle que soit la population. Le passe-plat
+`WORLD__WORKER_CONCURRENCY` atteint désormais le conteneur, l'orchestrateur mémoire le pose à la
+taille de la population (plancher 8), et la valeur entre dans `identite_run.json`
+(`taches_en_vol`) : deux bras qui ne fusionnent pas autant d'agents par prompt ne posent pas les
+mêmes questions au modèle. Les **enquêtes d'affinité** partent, elles aussi, groupées : tous
+les personas ciblés pour un mode ensemble, les modes l'un après l'autre — un lot ne mêle jamais
+deux modes. Les réflexions du soir (STM), déclenchées personne par personne au seuil de cinq
+entrées, restent étalées dans la journée et se groupent peu (~1,8 agent par requête mesuré).
 
 ```text
 [POST /tasks reçu]
@@ -1023,13 +1043,22 @@ le pipeline dégénérait (cascade de timeouts → décisions par défaut). Ces 
 désormais **appliqués** (`infra/*/rate_limiter.py`) :
 
 - chaque réservation incrémente un compteur journalier daté dans le fuseau du fournisseur
-  (`rpd:{provider}:{jour}`) ; les tokens réellement consommés sont comptés après l'appel
-  (`record_tokens` → `tpd:{provider}:{jour}`) ;
-- au premier dépassement, un flag `quota_exhausted:{provider}` (TTL = secondes jusqu'au reset
-  du fournisseur) écarte le provider de la rotation **sans re-sollicitation** toutes les
-  `disable_timeout` secondes ;
+  (`rpd_local_seulement:{provider}:{jour}`) ; les tokens réellement consommés sont comptés après
+  l'appel (`record_tokens` → `tpd_local_seulement:{provider}:{jour}`) ;
+- un flag `quota_exhausted:{provider}` (TTL = secondes jusqu'au reset du fournisseur) écarte le
+  provider de la rotation **sans re-sollicitation**. Depuis le ticket 097, **seul un 429 du
+  fournisseur** le pose : le compteur local ne ferme plus rien (voir ci-dessous) ;
 - `/health` (`get_status`) expose `daily_requests`, `daily_tokens`, `rpd_limit`,
-  `tpd_limit` et `quota_exhausted` par provider.
+  `tpd_limit` et `quota_exhausted` par provider — noms de champ inchangés, valeurs indicatives.
+
+> ⚠ **`local_seulement` est dans le nom de la clé, et c'est voulu** (ticket 105). Ces compteurs
+> ne voient que le trafic de cette passerelle, alors que la même clé d'API sert aussi à
+> `scripts/synthesis/*` et à `prompt_calibration` : ils **sous-comptent par construction**. Le
+> 2026-09-23, `redis-cli GET rpd:…` a été lu comme un budget restant et a fait reporter une
+> relance d'une journée, pour rien. La docstring qui le disait déjà n'avait pas suffi, parce
+> qu'elle n'est pas là où on lit le chiffre. Les accesseurs portent le même suffixe
+> (`daily_requests_local_seulement`, `daily_tokens_local_seulement`), et la variante qui
+> décidait depuis ce compteur (`_mark_quota_exhausted`) a été supprimée.
 
 #### Le fuseau du reset, et qui fait autorité — 2026-09-08
 
@@ -1058,6 +1087,47 @@ Il reste utilisé pour un 429 de **débit par minute**, où il est juste.
 reformulé par le worker — « Providers saturés ou indisponibles » — était classé « passerelle
 occupée » côté expériences, qui attendait indéfiniment. Une instance épinglée sans alternative
 fait donc remonter l'heure de réouverture au lieu d'une saturation générique.
+
+### Un repli par défaut n'est pas une décision — ticket 105
+
+Quand toutes les tentatives échouent, le contrôleur prenait le premier itinéraire de la liste
+(`plan_index = 0`, colonne `Méthode de sélection` = `LLM Error (Default index)`) et **le trajet
+avait lieu**. Ce n'est pas une mesure manquante qu'on laisserait en blanc : l'agent part, arrive,
+s'en souvient, et le mode emprunté entre dans la statistique habitude/rupture que les expériences
+sur la mémoire mesurent. Écarter ces lignes après coup ne retire pas leurs effets en aval.
+
+**Dans une expérience, le run s'arrête** plutôt que de servir une décision qui n'en est pas une.
+Deux motifs, armés par le même verrou `EXPERIMENT_STOP_ON_FALLBACK` (alias historique :
+`EXPERIMENT_HIBERNATE_ON_QUOTA`), que `run_sequential_cohort.py` pose sur **toute** campagne :
+
+| Motif | Déclencheur | Reprise |
+|---|---|---|
+| `quota_journalier` (077) | `error_kind` du fournisseur | datée — `resume_at` porte l'heure de réouverture |
+| `replis_consecutifs` (105) | `settings.agent.replis_consecutifs_max` replis d'affilée (3) | à la main, après vérification de l'amont |
+
+Le critère du 105 compte les **replis**, pas les motifs : une saturation amont ne renvoie aucun
+`error_kind` (le 2026-09-23 : 54 × `HTTP 503 — high demand`, zéro `RESOURCE_EXHAUSTED`), et un
+motif qui n'existe pas encore sera couvert sans qu'on ait à le prévoir. Le seuil n'est pas 1 :
+un 503 isolé est absorbé par les tentatives et ne produit aucun repli — ce qu'on attrape est un
+régime, pas un incident.
+
+Hors expérience, rien ne change : le verrou n'est pas armé et le run se rabat comme avant.
+
+**L'arrêt ne se déclenche qu'une fois** (front montant, 2026-09-24). Huit consommateurs en repli
+l'appelaient chacun à leur tour et leurs points de reprise concurrents se marchaient dessus
+(`Errno 39`) ; seul le premier appel agit, les suivants sont comptés et journalisés en INFO.
+Une ligne de repli porte `Origine de la décision = repli` dans `moves.csv` (elle valait
+`direct`, calculé avant de savoir qu'on repliait).
+
+**Côté cohorte, un bras arrêté est SUSPENDU** : `run_sequential_cohort.py` relit le marqueur
+`en_attente_quota.json` écrit pendant ce bras, pose `reprise.json` (nom du run) dans le dossier du
+bras et rend le code 7 ; la relance reprend ce run par `REPRISE=<nom>`. Voir
+[`evenements.md`](evenements.md) pour l'orchestrateur mémoire.
+
+**Le repli se voit** : il est journalisé en `ERROR` avec le préfixe `[ALARME] [repli]` (donc
+visible par `make error`), et `make report` rend le taux de replis **séparément avant et après
+l'événement**. Un taux global cachait exactement ce qui compte — le 2026-09-23, une ligne de base
+à 0/48 et une fenêtre de mesure à 4/39.
 
 ---
 

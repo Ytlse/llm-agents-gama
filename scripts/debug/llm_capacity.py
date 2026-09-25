@@ -92,7 +92,11 @@ def load_exchanges(run: Path):
     batch_sizes: list[int] = []
     if not path.exists():
         return prompts, agents, tok_in, batch_sizes
+    run_name = run.resolve().name
     for o in _iter_json_concat(path):
+        # Échange d'un autre client, servi par le même worker pendant ce run : hors mesure.
+        if o.get("origine") not in (None, run_name):
+            continue
         m = _minute(o.get("time", ""))
         if not m:
             continue

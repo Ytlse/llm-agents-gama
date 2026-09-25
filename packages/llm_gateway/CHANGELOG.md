@@ -4,6 +4,17 @@ Format : `## [version] - AAAA-MM-JJ`, entrées les plus récentes en tête. Le t
 l'usage : ce que le changement permet ou modifie pour qui s'en sert. Les fichiers touchés
 sont dans git.
 
+## [Non publié] - 2026-09-24
+
+### Une requête dit qui l'a émise
+
+`LLMRequest.origine` (optionnel) nomme le client émetteur ; `LLMGatewayClient(origine=…)` le
+pose sur tous ses appels, comme `instances_admises`. Le worker l'inscrit dans chaque
+enregistrement de `llm_exchanges.jsonl` (champ `origine`), ce qui permet à un client de n'y lire
+que ses échanges quand plusieurs partagent le même worker. L'origine entre dans la clé de lot :
+deux clients ne sont jamais fusionnés dans un même prompt. Un client qui ne la pose pas garde
+exactement le comportement antérieur.
+
 ## [1.3.0] - 2026-09-07 (itération 2, lots B à E)
 
 ### Lot B — les paramètres d'inférence se résolvent en cascade

@@ -41,8 +41,10 @@ garde, pas une dépense.
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import os
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -391,65 +393,81 @@ async def executer_enquetes_jalon(
     lignes: list[dict[str, Any]] = []
     horodatage = wall_clock(timestamp).strftime("%Y-%m-%d %H:%M")
 
-    for person in cibles:
-        pid = str(person.person_id)
-        perception = perception_de(agent, person, timestamp)
-        rendus = 0
-        # Les quatre (ou six) modes, puis les priorités. `None` = le prompt de priorités.
-        for mode in (*modes, None):
-            etiquette = mode or MODE_PRIORITES
-            try:
-                res = await _interroger(llm_client, pid, perception, mode)
-            except Exception as err:  # noqa: BLE001
-                # Un prompt en échec n'emporte pas les quatre autres : l'enquête est partielle
-                # et le dit, plutôt que muette.
-                logger.error(
-                    f"[ALARME] [enquete] appel en échec | persona={pid} jour=J{jour} "
-                    f"mode={etiquette} : {err}"
-                )
-                continue
-            if res is None:
-                logger.error(
-                    f"[ALARME] [enquete] réponse vide | persona={pid} jour=J{jour} "
-                    f"mode={etiquette}"
-                )
-                continue
-            contenu, provider, modele = res
-            scores = _scores_valides(pid, jour, etiquette, contenu["scores"])
-            if not scores:
-                continue
-            rendus += 1
-            for critere, score in scores.items():
-                lignes.append(
-                    {
-                        "sim_timestamp": timestamp,
-                        "date_simulee": horodatage,
-                        "jour_simule": jour,
-                        "persona_id": pid,
-                        "mode": etiquette,
-                        "critere": critere,
-                        "score": score,
-                        "justification": contenu["justification"],
-                        "provider": provider,
-                        "model": modele,
-                    }
-                )
-            logger.info(
-                f"[enquete] J{jour} {pid} · {etiquette} : "
-                + ", ".join(f"{c}={scores.get(c)}" for c in CRITERES)
-                + f" | {provider}/{modele} | étanchéité mémoire : RESPECTÉE."
-            )
+    # 2026-09-24 — les personas s'interrogent ENSEMBLE, mode par mode. Le micro-batching du
+    # gateway fusionne alors une vague en un seul prompt multi-agent ; la boucle personne par
+    # personne ne lui présentait jamais qu'un agent à la fois. Les modes, eux, restent
+    # SÉQUENTIELS : un lot ne réunit ainsi que des questions sur le même mode, et le prompt
+    # fusionné n'en cite jamais qu'un.
+    perceptions = {str(p.person_id): perception_de(agent, p, timestamp) for p in cibles}
+    rendus: dict[str, int] = {pid: 0 for pid in perceptions}
+    par_persona: dict[str, list[dict[str, Any]]] = {pid: [] for pid in perceptions}
 
-        if rendus == 0:
+    async def _une_question(pid: str, mode: str | None) -> None:
+        etiquette = mode or MODE_PRIORITES
+        try:
+            res = await _interroger(llm_client, pid, perceptions[pid], mode)
+        except Exception as err:  # noqa: BLE001
+            # Un prompt en échec n'emporte pas les quatre autres : l'enquête est partielle
+            # et le dit, plutôt que muette.
+            logger.error(
+                f"[ALARME] [enquete] appel en échec | persona={pid} jour=J{jour} "
+                f"mode={etiquette} : {err}"
+            )
+            return
+        if res is None:
+            logger.error(
+                f"[ALARME] [enquete] réponse vide | persona={pid} jour=J{jour} "
+                f"mode={etiquette}"
+            )
+            return
+        contenu, provider, modele = res
+        scores = _scores_valides(pid, jour, etiquette, contenu["scores"])
+        if not scores:
+            return
+        rendus[pid] += 1
+        for critere, score in scores.items():
+            par_persona[pid].append(
+                {
+                    "sim_timestamp": timestamp,
+                    "date_simulee": horodatage,
+                    "jour_simule": jour,
+                    "persona_id": pid,
+                    "mode": etiquette,
+                    "critere": critere,
+                    "score": score,
+                    "justification": contenu["justification"],
+                    "provider": provider,
+                    "model": modele,
+                }
+            )
+        logger.info(
+            f"[enquete] J{jour} {pid} · {etiquette} : "
+            + ", ".join(f"{c}={scores.get(c)}" for c in CRITERES)
+            + f" | {provider}/{modele} | étanchéité mémoire : RESPECTÉE."
+        )
+
+    # Les quatre (ou six) modes, puis les priorités. `None` = le prompt de priorités.
+    for mode in (*modes, None):
+        debut_mode = time.monotonic()
+        await asyncio.gather(*(_une_question(pid, mode) for pid in perceptions))
+        logger.info(
+            f"[enquete] J{jour} · {mode or MODE_PRIORITES} : {len(perceptions)} persona(s) "
+            f"interrogé(s) ensemble en {time.monotonic() - debut_mode:.1f}s."
+        )
+
+    for pid in perceptions:
+        # Même ordre qu'avant le regroupement : persona, puis mode dans l'ordre des questions.
+        lignes.extend(par_persona[pid])
+        if rendus[pid] == 0:
             # Un jalon muet ne se distingue pas d'un jalon sans effet : c'est exactement le
             # silence qui aurait été lu comme « rien n'a bougé » sur la campagne du 077.
             logger.error(
                 f"[ALARME] [enquete] jalon J{jour} passé SANS AUCUNE réponse pour le persona "
                 f"{pid} — aucune mesure de croyance n'existera pour ce jalon."
             )
-        elif rendus < attendus:
+        elif rendus[pid] < attendus:
             logger.error(
-                f"[ALARME] [enquete] jalon J{jour} incomplet pour {pid} : {rendus}/{attendus} "
+                f"[ALARME] [enquete] jalon J{jour} incomplet pour {pid} : {rendus[pid]}/{attendus} "
                 f"prompts rendus. La formule de score sera incalculable si les priorités "
                 f"manquent."
             )

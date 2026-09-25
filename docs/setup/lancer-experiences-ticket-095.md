@@ -403,6 +403,25 @@ payé pour rien. Sur la campagne du 2026-09-21 : arrêt vers le 22 avril au lieu
 en affiche 52 %, une bande étroite déclencherait au gré du bruit. L'extinction journalisée est un
 événement daté, pas une statistique.
 
+### Choisir l'événement joué
+
+`run_sequential_cohort.py --evenement <nom>` désigne la déclaration du bras traité, cherchée dans
+`config/evenements/` puis `config/chocs/`. Sans ce drapeau, c'est `c6_voiture_suspecte` — la
+commande du ticket 077 rend donc le même run qu'avant.
+
+La dérivation par persona **force `exposition.regle` à `agents`** et conserve les `modes`
+déclarés : l'agent désigné n'est exposé que sur ses trajets dans ces modes. Sur une population
+d'un seul habitant, laisser `regle: mode` aurait donné le bon résultat par accident, en écrivant
+une déclaration qui dit autre chose que ce qu'elle fait.
+
+⚠ **Vérifier la `cadence` avant de jouer un cas.** Non déclarée, elle vaut `trajet` : l'événement
+frappe chacun des trajets éligibles de la journée. Seuls `c6` et `c3` portent `cadence: jour` ;
+`c1`, `c2`, `c4` et `c5` ne l'ont pas.
+
+⚠ **Vérifier que le persona utilise le mode exposé.** Le J16 de c6 ne s'est jamais appliqué faute
+de trajet en voiture ce jour-là. Se lit dans les `moves.csv` archivés, colonne « Mode de transport
+Choisi ».
+
 **Depuis le 2026-09-22, l'orchestrateur le fait lui-même.** `run_sequential_cohort.py` prend
 `--arret-sur-extinction` (et `--jours-apres-extinction`, 7 par défaut) : il lit la date simulée de
 la **dernière** application de l'événement dans `evenements.jsonl`, surveille la sortie de ce

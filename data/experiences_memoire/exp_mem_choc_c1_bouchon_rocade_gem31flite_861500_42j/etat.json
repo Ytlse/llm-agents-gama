@@ -1,0 +1,25 @@
+{
+  "nom": "exp_mem_choc_c1_bouchon_rocade_gem31flite_861500_42j",
+  "etat": "terminee",
+  "cree_le": "2026-09-24T19:48:21.420522+00:00",
+  "traite": {
+    "etat": "ok",
+    "debut": "2026-09-24T22:08:58.841727+00:00",
+    "fin": "2026-09-25T01:16:59.238639+00:00"
+  },
+  "temoin": {
+    "etat": "ok",
+    "debut": "2026-09-25T01:16:59.239315+00:00",
+    "fin": "2026-09-25T04:21:29.304711+00:00"
+  },
+  "debut": "2026-09-24T22:08:58.840512+00:00",
+  "branche_active": "control",
+  "fin": "2026-09-25T04:21:29.307823+00:00",
+  "rapprochement_ticket108": {
+    "evenement_id": "c1_bouchon_rocade",
+    "declarees": 3,
+    "produites": 1,
+    "manquantes": 2,
+    "conforme": false
+  }
+}

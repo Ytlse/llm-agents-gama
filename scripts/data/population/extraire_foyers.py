@@ -18,9 +18,13 @@ Des foyers de TAILLE 2 dont les deux membres sont mobiles, répartis en deux gro
   ticket 095 n'est pas nul (1 écart de mode sur 31 décisions appariées) : comparer à un run
   témoin lancé séparément ferait entrer ce plancher dans l'effet mesuré.
 
-Taille 2 uniquement, et c'est un choix de mise au point : un lecteur, un co-résident, rien
+Taille 2 par défaut, et c'est un choix de mise au point : un lecteur, un co-résident, rien
 d'autre à démêler. Les foyers de quatre ou cinq disent si un énoncé atteint tout le monde ou
-s'arrête au premier — question des paliers P2 et P3, pas de la plomberie.
+s'arrête au premier — question des paliers P2 et P3, pas de la plomberie. `--taille` et
+`--adultes` ouvrent ces paliers (2026-09-24 : famille de quatre, deux adultes, deux enfants —
+le lecteur se tire parmi les adultes, cf. `llm/evenements/exposition.py`). `--menage` désigne
+un foyer par son identifiant plutôt que par tirage, quand le choix a été raisonné (profils de
+mobilité adaptés à l'article joué) : il reste soumis aux mêmes critères d'éligibilité.
 
 DÉTERMINISME
 ------------
@@ -34,6 +38,12 @@ USAGE
         --source data/population/population_1000_AAMAS_v6/population.json \
         --sortie data/population/population_20_foyers_059 \
         --exposes 6 --temoins 4 --abonnement-tc
+
+    # Un foyer désigné, famille de quatre dont deux adultes, sans foyer témoin :
+    services/llm-agents/.venv/bin/python -m scripts.data.population.extraire_foyers \
+        --source data/population/population_1000_AAMAS_v6/population.json \
+        --sortie data/population/population_4_foyer_133048 \
+        --taille 4 --adultes 2 --menage 133048 --temoins 0
 """
 
 from __future__ import annotations
@@ -47,6 +57,7 @@ from pathlib import Path
 from typing import Any
 
 TAILLE_FOYER = 2
+AGE_ADULTE = 18   # le même seuil que le tirage des lecteurs (llm/evenements/exposition.py)
 
 
 def _traits(personne: dict) -> dict:
@@ -77,8 +88,22 @@ def _rang(graine: int, household_id: str) -> float:
     return int(brut, 16) / 0xFFFFFFFF
 
 
-def foyers_eligibles(population: list[dict], *, abonnement_tc: bool) -> dict[str, list[dict]]:
-    """Les foyers de taille 2 dont les deux membres sont mobiles, triés par identifiant."""
+def _adulte(personne: dict) -> bool:
+    try:
+        return int(_traits(personne).get("age")) >= AGE_ADULTE
+    except (TypeError, ValueError):
+        return False
+
+
+def foyers_eligibles(
+    population: list[dict],
+    *,
+    abonnement_tc: bool,
+    taille: int = TAILLE_FOYER,
+    adultes: int | None = None,
+) -> dict[str, list[dict]]:
+    """Les foyers de `taille` membres, tous mobiles (et `adultes` adultes exactement si
+    demandé), triés par identifiant."""
     par_menage: dict[str, list[dict]] = defaultdict(list)
     for personne in population:
         menage = (personne.get("household") or {}).get("id")
@@ -87,9 +112,11 @@ def foyers_eligibles(population: list[dict], *, abonnement_tc: bool) -> dict[str
 
     retenus: dict[str, list[dict]] = {}
     for menage, membres in par_menage.items():
-        if len(membres) != TAILLE_FOYER:
+        if len(membres) != taille:
             continue
         if not all(_mobile(m) for m in membres):
+            continue
+        if adultes is not None and sum(_adulte(m) for m in membres) != adultes:
             continue
         if abonnement_tc and not any(_traits(m).get("has_pt_subscription") for m in membres):
             # L'article joué en premier vise les transports collectifs : un foyer où personne
@@ -100,9 +127,35 @@ def foyers_eligibles(population: list[dict], *, abonnement_tc: bool) -> dict[str
 
 
 def choisir(
-    population: list[dict], *, exposes: int, temoins: int, graine: int, abonnement_tc: bool
+    population: list[dict],
+    *,
+    exposes: int,
+    temoins: int,
+    graine: int,
+    abonnement_tc: bool,
+    taille: int = TAILLE_FOYER,
+    adultes: int | None = None,
+    menages: list[str] | None = None,
 ) -> tuple[list[str], list[str], dict[str, list[dict]]]:
-    eligibles = foyers_eligibles(population, abonnement_tc=abonnement_tc)
+    eligibles = foyers_eligibles(
+        population, abonnement_tc=abonnement_tc, taille=taille, adultes=adultes
+    )
+    if menages:
+        # Foyers DÉSIGNÉS : ils sont les exposés ; les témoins se tirent parmi le reste.
+        refuses = [m for m in menages if m not in eligibles]
+        if refuses:
+            raise SystemExit(
+                f"REFUS : foyer(s) {refuses} non éligible(s) (taille {taille}, "
+                f"{'adultes ' + str(adultes) + ', ' if adultes is not None else ''}tous mobiles"
+                f"{', abonné TC' if abonnement_tc else ''}). Désigner un foyer ne dispense pas "
+                f"des critères : la population dirait autre chose que son manifeste."
+            )
+        reste = sorted(
+            (m for m in eligibles if m not in menages), key=lambda m: (_rang(graine, m), _cle_de_tri(m))
+        )
+        if len(reste) < temoins:
+            raise SystemExit(f"REFUS : {len(reste)} foyers témoins possibles pour {temoins} demandés.")
+        return list(menages), reste[:temoins], eligibles
     besoin = exposes + temoins
     if len(eligibles) < besoin:
         raise SystemExit(
@@ -121,6 +174,19 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--exposes", type=int, default=6, help="foyers qui recevront l'article")
     p.add_argument("--temoins", type=int, default=4, help="foyers qui ne recevront rien")
     p.add_argument("--graine", type=int, default=59)
+    p.add_argument("--taille", type=int, default=TAILLE_FOYER, help="membres par foyer")
+    p.add_argument(
+        "--adultes", type=int, default=None,
+        help=f"nombre EXACT d'adultes (≥ {AGE_ADULTE} ans) par foyer ; libre si absent",
+    )
+    p.add_argument(
+        "--menage", action="append", default=None,
+        help="foyer désigné (répétable) : devient exposé à la place du tirage",
+    )
+    p.add_argument(
+        "--motif", default=None,
+        help="pourquoi ces foyers ont été désignés (écrit au manifeste) ; exigé avec --menage",
+    )
     p.add_argument(
         "--abonnement-tc",
         action="store_true",
@@ -128,6 +194,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
 
+    if args.menage and not args.motif:
+        p.error("--menage exige --motif : un choix raisonné qui ne dit pas sa raison est un tirage caché")
     population = json.loads(args.source.read_text(encoding="utf-8"))
     exposes, temoins, eligibles = choisir(
         population,
@@ -135,6 +203,9 @@ def main(argv: list[str] | None = None) -> int:
         temoins=args.temoins,
         graine=args.graine,
         abonnement_tc=args.abonnement_tc,
+        taille=args.taille,
+        adultes=args.adultes,
+        menages=args.menage,
     )
 
     agents: list[dict] = []
@@ -171,10 +242,17 @@ def main(argv: list[str] | None = None) -> int:
         f"  n: {len(agents)}",
         "selection:",
         "  methode: >-",
-        "    Foyers de taille 2 dont les deux membres sont mobiles, triés par rang stable",
+        f"    Foyers de taille {args.taille} dont tous les membres sont mobiles"
+        + (f", dont {args.adultes} adultes (≥ {AGE_ADULTE} ans)" if args.adultes is not None else "")
+        + ("; exposés DÉSIGNÉS par --menage, témoins" if args.menage else ";")
+        + " triés par rang stable",
         "    sha256(graine:household_id). Aucun tirage dépendant de l'ordre d'exécution.",
         "    Reproductible par scripts/data/population/extraire_foyers.py.",
         f"  graine: {args.graine}",
+        f"  taille: {args.taille}",
+        f"  adultes_exiges: {args.adultes if args.adultes is not None else 'null'}",
+        f"  menages_designes: {json.dumps(args.menage or [])}",
+        f"  motif: {json.dumps(args.motif or '', ensure_ascii=False)}",
         f"  abonnement_tc_exige: {bool(args.abonnement_tc)}",
         f"  foyers_eligibles: {len(eligibles)}",
         "groupes:",

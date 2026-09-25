@@ -42,6 +42,11 @@ try:  # même double chemin que `lmstudio` ci-dessus, et pour la même raison
 except ImportError:  # pragma: no cover
     from tickets_par_experience import ticket_par_experience  # type: ignore
 
+try:  # idem — spec `espaces-de-travail-experiences`
+    from scripts.dashboard import espaces as ESP
+except ImportError:  # pragma: no cover
+    import espaces as ESP  # type: ignore
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Le fichier compose vit dans infra/ (ticket 039) : `-f` le désigne et
@@ -137,7 +142,7 @@ ETAT_FORMULAIRE = REPO_ROOT / "experiments" / ".dashboard" / "formulaire_experie
 
 # L'ordre canonique du tableau. Une colonne rappelée au sélecteur reprend sa place ici :
 # elle n'est jamais recollée en bout de ligne.
-COLONNES_REGISTRE = ("scores", "experience", "ticket", "execution", "etat", "decideur", "fournisseur",
+COLONNES_REGISTRE = ("scores", "phase", "experience", "ticket", "execution", "etat", "decideur", "fournisseur",
                      "prompt", "jeu", "jeu_etat", "mode", "chaine", "couverture",
                      "journal", "choix_forces", "part_forces", "choix_forces_score",
                      "composite_emd", "composite_emd_hors_forces",
@@ -161,7 +166,9 @@ COLONNES_REGISTRE = ("scores", "experience", "ticket", "execution", "etat", "dec
 # colonne que personne ne rappelle.
 # Partitionnement par jeu de test : le nom du jeu figure dans le titre de chaque tableau,
 # la colonne `jeu` n'a donc plus besoin d'être affichée dans les colonnes par défaut.
-COLONNES_REGISTRE_DEFAUT = ("experience", "ticket", "execution", "etat", "decideur", "fournisseur",
+# `phase` n'existe que sous un espace de travail actif (spec `espaces-de-travail-experiences`,
+# R6a) : sous « Toutes les expériences » la colonne n'est pas calculée, donc pas proposée.
+COLONNES_REGISTRE_DEFAUT = ("phase", "experience", "ticket", "execution", "etat", "decideur", "fournisseur",
                             "prompt", "mode", "couverture", "choix_forces",
                             "composite_emd", "composite_emd_hors_forces", "composite_l1")
 
@@ -180,6 +187,15 @@ VALEUR_VIDE = "(vide)"
 # du formulaire et pour la même raison : reposer six filtres à chaque `make dashboard` est
 # le genre de friction qui fait renoncer. `experiments/` est ignoré par git.
 ETAT_VUE_REGISTRE = REPO_ROOT / "experiments" / ".dashboard" / "vue_tableau_experiences.yaml"
+
+# R5 — l'espace de travail actif survit au rechargement ET au redémarrage. Même dossier et
+# même raison que les deux fichiers ci-dessus : rechoisir son espace à chaque `make dashboard`
+# est le genre de friction qui fait renoncer à la fonctionnalité.
+ETAT_ESPACE_ACTIF = REPO_ROOT / "experiments" / ".dashboard" / "espace_actif.txt"
+CLE_ESPACE = "espace_experiences_actif"
+
+# Exécutions terminées avec succès déjà purgées de l'affichage dans « Activités en cours ».
+ETAT_TERMINEES_PURGEES = REPO_ROOT / "experiments" / ".dashboard" / "terminees_purgees.json"
 
 
 # Une construction de jeu écrit sa progression toutes les 5 s. Au-delà de cette marge plus
@@ -2496,6 +2512,152 @@ def interrompues() -> dict:
     return {"lignes": lignes, "obsoletes": obsoletes}
 
 
+def formater_date_heure(chaine: Optional[str]) -> str:
+    """Formate une date ISO en date et heure locale, ex: '16/09/2026 à 15:36:44'."""
+    if not chaine or not isinstance(chaine, str):
+        return "date inconnue"
+    try:
+        dt = datetime.fromisoformat(chaine)
+        if dt.tzinfo is not None:
+            dt = dt.astimezone()
+        return dt.strftime("%d/%m/%Y à %H:%M:%S")
+    except Exception:
+        return "date inconnue"
+
+
+def _cles_terminees_purgees() -> set[tuple[str, str]]:
+    """Les paires (expérience, exécution) purgées de l'affichage."""
+    if not ETAT_TERMINEES_PURGEES.is_file():
+        return set()
+    try:
+        data = json.loads(ETAT_TERMINEES_PURGEES.read_text(encoding="utf-8"))
+        if isinstance(data, list):
+            res = set()
+            for x in data:
+                if isinstance(x, (list, tuple)) and len(x) >= 2:
+                    res.add((str(x[0]), str(x[1])))
+                elif isinstance(x, str) and "/" in x:
+                    p = x.split("/", 1)
+                    res.add((p[0], p[1]))
+            return res
+    except Exception:
+        return set()
+    return set()
+
+
+def terminees(dossier: Optional[Path] = None) -> list[dict]:
+    """Les exécutions terminées avec succès relevées sur le disque, non encore purgées."""
+    purgees = _cles_terminees_purgees()
+    brutes = lister(dossier=dossier) if dossier is not None else lister()
+    lignes = []
+    for l in brutes:
+        if not l.get("execution") or not est_terminee(l):
+            continue
+        cle = (str(l["experience"]), str(l["execution"]))
+        if cle in purgees:
+            continue
+        d = Path(l["dossier"])
+        etat = _json(d / "etat.json")
+        maj = etat.get("terminee_le") or etat.get("maj") or l.get("date")
+        compteurs = _json(d / "compteurs.json")
+        couv = compteurs.get("couverture") or {}
+        taux_couv = l.get("couverture")
+        if taux_couv is None:
+            taux_couv = couv.get("taux")
+        lignes.append({
+            **l,
+            "date_heure_texte": formater_date_heure(maj),
+            "date_fin": maj or "",
+            "decisions": decisions_archivees(d),
+            "couverture": taux_couv,
+        })
+    lignes.sort(key=lambda x: str(x.get("date_fin") or x.get("execution") or ""), reverse=True)
+    return lignes
+
+
+def purger_terminees(dossier: Optional[Path] = None) -> int:
+    """Retire les exécutions terminées de l'affichage en mémorisant leurs clés."""
+    lignes = terminees(dossier=dossier) if dossier is not None else terminees()
+    if not lignes:
+        return 0
+    deja = _cles_terminees_purgees()
+    nouvelles = {(str(e["experience"]), str(e["execution"])) for e in lignes}
+    toutes = deja | nouvelles
+    ETAT_TERMINEES_PURGEES.parent.mkdir(parents=True, exist_ok=True)
+    provisoire = ETAT_TERMINEES_PURGEES.with_name(ETAT_TERMINEES_PURGEES.name + ".tmp")
+    provisoire.write_text(json.dumps([list(c) for c in sorted(toutes)], ensure_ascii=False, indent=1), encoding="utf-8")
+    os.replace(provisoire, ETAT_TERMINEES_PURGEES)
+    return len(nouvelles - deja)
+
+
+def tokens_cumules_executions() -> dict[str, int]:
+    """Tokens cumulés lus dans les compteurs.json des exécutions en cours (classiques + mémoire).
+
+    Retourne {'sources': int, 'total': int, 'tokens_in': int, 'tokens_out': int}.
+    """
+    total_in = 0
+    total_out = 0
+    sources = 0
+
+    # 1. Exécutions classiques en cours
+    for l in lister():
+        if l.get("etat") == ETAT_EN_COURS and execution_vivante(l.get("dossier")):
+            p_compteurs = Path(l["dossier"]) / "compteurs.json"
+            if p_compteurs.is_file():
+                try:
+                    c = json.loads(p_compteurs.read_text(encoding="utf-8"))
+                    tin = int(c.get("tokens_in") or (c.get("tokens") or {}).get("in") or 0)
+                    tout = int(c.get("tokens_out") or (c.get("tokens") or {}).get("out") or 0)
+                    if not tin and not tout:
+                        jetons = sum(int(q.get("jetons_jour") or 0) for q in c.get("quota", []) if isinstance(q, dict))
+                        if jetons > 0:
+                            tin = jetons
+                    if tin > 0 or tout > 0:
+                        total_in += tin
+                        total_out += tout
+                        sources += 1
+                except Exception:
+                    pass
+
+    # 2. Exécutions mémoire en cours (data/experiences_memoire/)
+    dossier_mem = REPO_ROOT / "data" / "experiences_memoire"
+    if dossier_mem.is_dir():
+        for exp_dir in dossier_mem.iterdir():
+            if not exp_dir.is_dir():
+                continue
+            for bras in ("traite", "temoin"):
+                p_bras = exp_dir / bras
+                if not p_bras.is_dir():
+                    continue
+                p_etat = p_bras / "etat.json"
+                etat_str = ""
+                if p_etat.is_file():
+                    try:
+                        etat_str = json.loads(p_etat.read_text(encoding="utf-8")).get("etat", "")
+                    except Exception:
+                        pass
+                if etat_str == ETAT_EN_COURS or execution_vivante(p_bras):
+                    p_compteurs = p_bras / "compteurs.json"
+                    if p_compteurs.is_file():
+                        try:
+                            c = json.loads(p_compteurs.read_text(encoding="utf-8"))
+                            tin = int(c.get("tokens_in") or (c.get("tokens") or {}).get("in") or 0)
+                            tout = int(c.get("tokens_out") or (c.get("tokens") or {}).get("out") or 0)
+                            if tin > 0 or tout > 0:
+                                total_in += tin
+                                total_out += tout
+                                sources += 1
+                        except Exception:
+                            pass
+
+    return {
+        "sources": sources,
+        "total": total_in + total_out,
+        "tokens_in": total_in,
+        "tokens_out": total_out,
+    }
+
+
 def concurrents(jobs: Optional[Callable[[], list]] = None) -> dict:
     """Ce qui tourne et entrerait en concurrence avec un lancement (R1, R2, R9).
 
@@ -3018,7 +3180,21 @@ def _qui(e: dict) -> str:
     return f"{f} / " if f and f != SANS_FOURNISSEUR else ""
 
 
-def rendre_activites(st, act: dict, *, compact: bool = False) -> None:
+def tail_texte(p: Path, n: int = 40) -> str:
+    """Queue d'un fichier texte en UTF-8 sans le relire en entier."""
+    try:
+        with open(p, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            taille = f.tell()
+            f.seek(max(0, taille - 16384))
+            queue = f.read().decode("utf-8", errors="replace")
+        lignes = queue.splitlines()
+        return "\n".join(lignes[-n:]) if lignes else ""
+    except OSError:
+        return ""
+
+
+def rendre_activites(st, act: dict, *, compact: bool = False, afficher_vide: bool = True) -> None:
     """Les barres d'avancement de ce qui tourne.
 
     Même présentation dans la vue d'ensemble et dans l'onglet Activités en cours : deux
@@ -3026,8 +3202,9 @@ def rendre_activites(st, act: dict, *, compact: bool = False) -> None:
     """
     executions, en_preparation = act["executions"], act["jeux"]
     if not executions and not en_preparation:
-        st.markdown(f"⚪ Aucune expérience en cours · **{act['definies']}** définie(s) · "
-                    f"**{act['terminees']}** exécution(s) terminée(s)")
+        if afficher_vide:
+            st.markdown(f"⚪ Aucune expérience en cours · **{act['definies']}** définie(s) · "
+                        f"**{act['terminees']}** exécution(s) terminée(s)")
         return
     for index, e in enumerate(executions):
         texte = (f"🧪 **{_qui(e)}{e['experience']} / {e['execution']}** — {_n(e['faits'])} / {_n(e['total'])} déplacements"
@@ -3064,6 +3241,17 @@ def rendre_activites(st, act: dict, *, compact: bool = False) -> None:
             if e.get("conditions"):
                 st.caption(f"🧾 {e['conditions']}")
             _boutons_arret(st, e, index)
+            # Log de l'exécution en direct
+            p_log = Path(e["dossier"]) / "execution.log"
+            cle_log = f"log-classique-{e['experience']}-{e['execution']}-{index}"
+            with st.expander("📜 Journal d'exécution (log en direct)", expanded=False, key=cle_log):
+                txt = tail_texte(p_log, 35) if p_log.is_file() else ""
+                if txt:
+                    st.code(txt, language="log")
+                    rel = p_log.relative_to(REPO_ROOT) if p_log.is_relative_to(REPO_ROOT) else p_log
+                    st.caption(f"Fichier : `{rel}`")
+                else:
+                    st.caption("Journal `execution.log` non encore disponible pour cette exécution.")
     for j in en_preparation:
         _ligne_jeu(st, j, compact=compact)
 
@@ -3127,7 +3315,7 @@ def services_requis_de(nom_experience: str) -> list[str]:
     return services_requis(exp) if exp else [SERVICE_PLATEFORME]
 
 
-def rendre_reprenables(st, act: dict, *, lancer: Optional[Callable[[str, dict], None]] = None) -> None:
+def rendre_reprenables(st, act: dict, *, lancer: Optional[Callable[[str, dict], None]] = None, afficher_vide: bool = True) -> None:
     """Les exécutions arrêtées et leur cause, chacune avec son bouton de reprise.
 
     Elles ne s'affichaient nulle part dans « Activités en cours » : une exécution qui s'arrête
@@ -3136,8 +3324,9 @@ def rendre_reprenables(st, act: dict, *, lancer: Optional[Callable[[str, dict], 
     """
     lignes, obsoletes = act["lignes"], act["obsoletes"]
     if not lignes:
-        st.markdown("⚪ Aucune exécution arrêtée à relancer"
-                    + (f" · **{obsoletes}** obsolète(s) laissée(s) de côté" if obsoletes else ""))
+        if afficher_vide:
+            st.markdown("⚪ Aucune exécution arrêtée à relancer"
+                        + (f" · **{obsoletes}** obsolète(s) laissée(s) de côté" if obsoletes else ""))
         return
     st.markdown(f"**⏹ {len(lignes)} exécution(s) arrêtée(s), reprenable(s)**")
     for e in lignes:
@@ -3162,6 +3351,34 @@ def rendre_reprenables(st, act: dict, *, lancer: Optional[Callable[[str, dict], 
         st.caption(f"🙈 {obsoletes} exécution(s) arrêtée(s) non listée(s) : une exécution plus "
                    "récente de la même expérience existe, et la reprise ne porte que sur la "
                    "dernière. Elles sont marquées « obsolète » dans le registre de 🧪 Expériences.")
+
+
+def rendre_terminees(st, lignes: list[dict], *, afficher_vide: bool = True) -> None:
+    """Affiche les exécutions terminées avec succès relevées sur le disque."""
+    if not lignes:
+        if afficher_vide:
+            st.markdown("⚪ Aucune exécution terminée récente")
+        return
+
+
+    st.markdown(f"**✅ {len(lignes)} exécution(s) terminée(s) avec succès**")
+    gauche, bouton = st.columns([5, 1], vertical_alignment="center")
+    gauche.caption("Ces exécutions restent affichées jusqu'à leur purge.")
+    if bouton.button("🧹 Vider la liste", key="vider-terminees", width="stretch",
+                     help="Retire ces exécutions de la liste (sans rien effacer sur le disque)"):
+        purger_terminees()
+        st.rerun()
+
+    for e in lignes:
+        texte = (
+            f"✅ **{_qui(e)}{e['experience']} / {e['execution']}** — "
+            f"terminée avec succès le {e['date_heure_texte']} · "
+            f"{_n(e['decisions'])} décisions archivées"
+        )
+        if e.get("couverture") is not None:
+            texte += f" (couverture {e['couverture'] * 100:.1f} %)"
+        with st.expander(f"✅ {e['experience']} / {e['execution']} · terminée le {e['date_heure_texte']}"):
+            st.markdown(texte)
 
 
 def _ligne_jeu(st, j: dict, *, compact: bool = False) -> None:
@@ -3582,6 +3799,16 @@ def _panneau_colonnes_et_filtres(st, candidates: list[dict], presentes: list[str
             memoire.get("exclues") or memoire.get("bornes") or memoire.get("texte"))
     else:  # une colonne peut avoir disparu du registre entre deux dessins
         st.session_state[cle_cols] = [c for c in st.session_state[cle_cols] if c in presentes]
+    # `phase` n'existe QUE sous un espace de travail actif (spec `espaces-de-travail-experiences`,
+    # R6a). Elle apparaît donc en cours de session, après que la liste des colonnes a été figée
+    # au premier dessin — et le rattrapage ci-dessous est ce qui la fait entrer. Sans lui,
+    # changer d'espace filtrait bien le tableau mais n'affichait jamais la colonne : constaté à
+    # l'écran le 2026-09-22, alors que les tests du module passaient tous.
+    # `retirees` ne retient que les colonnes qui étaient OFFERTES et décochées : une colonne
+    # jamais proposée n'y figure pas, donc ce rattrapage ne ressuscite pas un choix de l'usager.
+    if ("phase" in presentes and "phase" not in st.session_state[cle_cols]
+            and "phase" not in (memoire.get("retirees") or ())):
+        st.session_state[cle_cols] = ["phase", *st.session_state[cle_cols]]
 
     actifs = []  # les colonnes effectivement filtrées, pour le bandeau de rappel (R19)
     with st.expander("🔎 Colonnes et filtres", expanded=False):
@@ -3653,6 +3880,112 @@ def _panneau_colonnes_et_filtres(st, candidates: list[dict], presentes: list[str
     return {"colonnes": colonnes, "retenues": retenues, "bornes": bornes, "actifs": actifs}
 
 
+# ── Espaces de travail (spec `espaces-de-travail-experiences`) ───────────────────────────
+
+
+def charger_espace_actif() -> str:
+    """L'espace retenu du dernier passage, ramené à `TOUTES` s'il n'existe plus (R5, R14).
+
+    Un fichier illisible n'est pas une erreur : on repart de « Toutes les expériences », comme
+    le formulaire repart de ses défauts.
+    """
+    try:
+        nom = ETAT_ESPACE_ACTIF.read_text(encoding="utf-8").strip() if ETAT_ESPACE_ACTIF.is_file() else ""
+    except OSError as e:
+        logger.warning("[espaces] espace actif illisible (%s) : %s", ETAT_ESPACE_ACTIF, e)
+        nom = ""
+    return ESP.actif_valide(nom or None)
+
+
+def sauver_espace_actif(nom: str) -> bool:
+    """Retient l'espace pour le prochain démarrage. True si le fichier a changé.
+
+    Échec ouvert : ne pas pouvoir écrire ce confort ne doit pas casser le rendu du registre.
+    """
+    valeur = (nom or ESP.TOUTES).strip()
+    try:
+        if ETAT_ESPACE_ACTIF.is_file() and ETAT_ESPACE_ACTIF.read_text(encoding="utf-8").strip() == valeur:
+            return False
+        ETAT_ESPACE_ACTIF.parent.mkdir(parents=True, exist_ok=True)
+        provisoire = ETAT_ESPACE_ACTIF.with_name(ETAT_ESPACE_ACTIF.name + ".tmp")
+        provisoire.write_text(valeur, encoding="utf-8")
+        os.replace(provisoire, ETAT_ESPACE_ACTIF)
+        return True
+    except OSError as e:
+        logger.warning("[espaces] espace actif non retenu (%s) : %s", ETAT_ESPACE_ACTIF, e)
+        return False
+
+
+def espace_actif(st) -> str:
+    """L'espace actif de CE rendu, lu une fois par run Streamlit puis mémorisé en session."""
+    if CLE_ESPACE not in st.session_state:
+        st.session_state[CLE_ESPACE] = charger_espace_actif()
+    return ESP.actif_valide(st.session_state.get(CLE_ESPACE))
+
+
+def _sur_changement_espace(st) -> None:
+    sauver_espace_actif(st.session_state.get(CLE_ESPACE) or ESP.TOUTES)
+    # Les filtres et le tri du tableau portent sur l'ancien sous-ensemble : la signature du
+    # registre doit repartir de zéro, sinon le fragment croit à un changement d'état et
+    # recharge la page une fois pour rien.
+    st.session_state.pop("_registre_signature", None)
+
+
+def _selecteur_espace(st) -> str:
+    """Le menu déroulant, en tête du registre (R2). Rend l'espace actif après choix."""
+    options = ESP.noms()
+    courant = espace_actif(st)
+    if courant not in options:            # l'espace a disparu du fichier depuis le dernier run
+        courant = ESP.TOUTES
+    st.session_state[CLE_ESPACE] = courant
+    if len(options) == 1:
+        # Aucun espace défini : un menu à un seul choix est du bruit. On ne dessine rien et
+        # le registre se comporte comme avant la fonctionnalité (R3).
+        return ESP.TOUTES
+    col_menu, col_note = st.columns([1, 2], vertical_alignment="center")
+    choisi = col_menu.selectbox(
+        "Espace de travail", options, key=CLE_ESPACE, on_change=_sur_changement_espace, args=(st,),
+        help="restreint le registre et « s'inspirer de » aux expériences de cet espace. "
+             "C'est une VUE : rien n'est déplacé, renommé ni supprimé.")
+    espace = ESP.espace(choisi)
+    if espace and espace.get("note"):
+        col_note.caption(espace["note"])
+    return choisi
+
+
+def _annoter_espace(lignes: list[dict], nom: str) -> list[dict]:
+    """Ajoute `phase` à chaque ligne retenue (R6a) et marque les entrées optionnelles (R6b)."""
+    if not nom or nom == ESP.TOUTES:
+        return lignes
+    dedans = ESP.index(nom)
+    for l in lignes:
+        e = dedans.get(l.get("experience")) or {}
+        phase = e.get("phase") or "—"
+        l["phase"] = f"{phase} · optionnel" if e.get("optionnel") else phase
+    return lignes
+
+
+def _panneau_espace(st, nom: str, presentes: set[str]) -> None:
+    """Ce que l'espace annonce et que le disque ne porte pas encore (R9), et le cas vide (R11)."""
+    if not nom or nom == ESP.TOUTES:
+        return
+    total = len(ESP.entrees(nom))
+    if not total:
+        st.info(f"L'espace « {nom} » ne cite aucune expérience. Choisissez « {ESP.TOUTES} » "
+                "pour revoir le registre entier.")
+        return
+    absentes = ESP.manquantes(presentes, nom)
+    if absentes:
+        # Pas une erreur : l'espace se remplit avant les dossiers. Mais le nombre se dit, et
+        # les noms avec — le jour où un dossier DISPARAÎT, c'est ici qu'on le verra.
+        with st.expander(f"🕐 {len(absentes)} expérience(s) de l'espace « {nom} » pas encore sur le disque "
+                         f"(sur {total})", expanded=False):
+            st.caption("Attendues : l'espace peut citer une expérience avant qu'elle soit déclarée. "
+                       "Si l'une d'elles existait hier, c'est que son dossier a disparu.")
+            for n in absentes:
+                st.write(f"- `{n}`")
+
+
 def _suivi_du_registre(st, pd) -> None:
     """Le registre et les exécutions en cours, vivants tant que quelque chose tourne.
 
@@ -3669,7 +4002,12 @@ def _suivi_du_registre(st, pd) -> None:
         # `lister()` de « Mes expériences » ne sert qu'au test de vacuité — filtrer là-bas
         # laissait les archivées et les invalidées dans le tableau, exactement ce que le
         # retrait devait éviter.
-        lignes = [l for l in lister() if not masquee(l)]
+        # L'espace de travail restreint d'abord (R4), le masquage par statut agit ensuite sur
+        # ce sous-ensemble (R12) : l'ordre compte, l'inverse compterait des archivées qui ne
+        # sont pas dans l'espace. `TOUTES` ne filtre rien (R3).
+        espace = espace_actif(st)
+        lignes = [l for l in ESP.filtrer(lister(), espace) if not masquee(l)]
+        _annoter_espace(lignes, espace)
         signature = tuple(sorted(
             (l.get("experience") or "", l.get("execution") or "", l.get("etat") or "") for l in lignes))
         connue = st.session_state.get(cle)
@@ -3720,7 +4058,8 @@ def _suivi_du_registre(st, pd) -> None:
             help="retire les exécutions qu'une plus récente de la même expérience a "
                  "remplacées ; la dernière exécution de chaque expérience reste toujours "
                  "visible. Le nombre de lignes masquées est dit sous le tableau.")
-        df = df.sort_values(tri, ascending=False, na_position="last").reset_index(drop=True)
+        if tri and tri in df.columns:
+            df = df.sort_values(tri, ascending=False, na_position="last").reset_index(drop=True)
         # Les obsolètes sortent AVANT que les valeurs filtrables soient calculées (R11) : un
         # fournisseur qui n'apparaît que sur des lignes obsolètes n'a pas à peupler le
         # sélecteur d'une colonne quand la case est cochée.
@@ -4685,11 +5024,20 @@ def render(st, pd, *, lancer: Optional[Callable[[str, dict], None]] = None, inli
     # Les expériences archivées ou invalidées (gabarit obsolète) sortent du tableau : elles ne
     # portent rien sur quoi s'appuyer. Rien n'est supprimé — le panneau ci-dessous les compte,
     # dit pourquoi, et permet de les revoir (spec hygiène §3.2, §5).
-    toutes = lister()
+    # Le sélecteur d'espace se dessine AVANT toute lecture du registre : c'est lui qui dit
+    # sur quel sous-ensemble portent le tableau, ses compteurs et le panneau de statuts.
+    espace = _selecteur_espace(st)
+    toutes_du_disque = lister()
+    toutes = ESP.filtrer(toutes_du_disque, espace)
     lignes = [l for l in toutes if not masquee(l)]
     _panneau_statuts(st, toutes)
+    _panneau_espace(st, espace, {l.get("experience") for l in toutes_du_disque})
     if not lignes:
-        st.info("Aucune expérience enregistrée. Remplissez le formulaire ci-dessous, puis « Enregistrer » ou « Lancer ».")
+        if espace != ESP.TOUTES:
+            st.info(f"Aucune expérience visible dans l'espace « {espace} ». "
+                    f"Choisissez « {ESP.TOUTES} » pour revoir le registre entier.")
+        else:
+            st.info("Aucune expérience enregistrée. Remplissez le formulaire ci-dessous, puis « Enregistrer » ou « Lancer ».")
         _panneau_masques(st, vide=True)
     else:
         _suivi_du_registre(st, pd)
@@ -4709,7 +5057,11 @@ def render(st, pd, *, lancer: Optional[Callable[[str, dict], None]] = None, inli
                    "d'une configuration, lui, n'attend pas Docker et ne le sollicite pas.")
     _panneau_lancements(st, jobs)
     _panneau_file_reservations(st, lancer, jobs)
-    existantes = experiences()
+    # R15 — le formulaire propose les mêmes expériences que le registre : deux listes qui
+    # divergeraient feraient croire que l'espace a perdu une expérience qu'il contient.
+    toutes_proposables = experiences()
+    existantes = ({n: e for n, e in toutes_proposables.items() if n in ESP.index(espace)}
+                  if espace != ESP.TOUTES else toutes_proposables)
     # La source recopiée a pu être supprimée du disque APRÈS avoir été choisie (R10) : le dire une
     # fois, et remettre la liste d'aplomb AVANT de la dessiner — Streamlit la rabattrait en silence.
     recopiee = st.session_state.get("exp_source_recopiee")

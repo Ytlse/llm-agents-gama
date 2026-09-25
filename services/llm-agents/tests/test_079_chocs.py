@@ -46,9 +46,36 @@ def _ecrire(tmp_path: Path, declaration: dict) -> Path:
 
 @pytest.fixture(autouse=True)
 def _registre_propre():
+    """Registre remis à zéro, ET LES DEUX BLOCS DE CONFIGURATION NEUTRALISÉS.
+
+    ⚠ Ces tests posent `settings.chocs.*`, la clé du ticket 079. Depuis le ticket 100,
+    `_declaration_demandee()` regarde `settings.evenements` D'ABORD et ne descend sur `chocs`
+    que si le premier bloc est éteint. Tant que le `config.yaml` du dépôt portait encore
+    l'ancienne clé, `settings.evenements.enabled` était faux et ces tests passaient — pour la
+    mauvaise raison. Le 2026-09-22, une campagne a écrit la clé neuve dans ce fichier et cinq
+    d'entre eux sont tombés d'un coup, en cherchant une déclaration à un chemin de conteneur.
+
+    Un test qui dépend de l'état d'un fichier de configuration que chaque run réécrit ne teste
+    pas ce qu'il croit. Les deux blocs sont donc éteints à l'entrée et rendus à leur valeur
+    d'origine à la sortie : ce fichier ne lit plus `config.yaml` du tout.
+    """
+    garde = {}
+    for bloc in ("chocs", "evenements"):
+        config = getattr(settings, bloc, None)
+        if config is None:
+            continue
+        garde[bloc] = (getattr(config, "enabled", False), getattr(config, "fichier", None))
+        config.enabled = False
+        config.fichier = None
+
     chocs_module.reinitialiser()
     yield
     chocs_module.reinitialiser()
+
+    for bloc, (enabled, fichier) in garde.items():
+        config = getattr(settings, bloc)
+        config.enabled = enabled
+        config.fichier = fichier
 
 
 # ── A. Lecture et refus (lot 1) ──────────────────────────────────────────────────────────

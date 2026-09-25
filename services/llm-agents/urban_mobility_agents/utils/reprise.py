@@ -304,6 +304,14 @@ def restaurer_si_demande(
         )
         return None
 
+    # Ticket 105 — LES DEUX BRANCHES écartent les sorties par trajet, pas seulement celle sans
+    # point. Un point valide ne dispense de rien : GAMA repart quand même de son t0 et rejoue les
+    # jours déjà vécus, et `move_logger` n'a AUCUNE connaissance du gel — les trajets rejoués
+    # s'ajoutaient donc à `moves.csv`, indiscernables des originaux. C'est exactement le défaut
+    # qui avait dédoublé 84 trajets sur le run du ticket 075 ; la fonction écrite pour l'empêcher
+    # n'était appelée que dans le cas où aucun point n'était trouvé.
+    ecarter_les_sorties_du_rejeu(workdir)
+
     if meta.get("ancre_run"):
         # L'ancre AVANT tout : elle doit être posée avant que le rejeu ne fasse observer son
         # premier timestamp, sinon la progression météo de tous les agents rembobine.

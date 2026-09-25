@@ -1,0 +1,11 @@
+{
+  "nom": "exp_mem_presse_a09_vent_autan_gem31flite_population_4_foy_15j_foyer_2",
+  "etat": "en_attente",
+  "cree_le": "2026-09-25T05:19:02.269183+00:00",
+  "traite": {
+    "etat": "en_attente"
+  },
+  "temoin": {
+    "etat": "en_attente"
+  }
+}

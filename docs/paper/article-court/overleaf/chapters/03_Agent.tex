@@ -1,0 +1,166 @@
+% =====================================================================
+% chapters/03_Agent.tex — LaTeX rendering of ../sections/03_agent.en.md (2026-09-24 00:12:49)
+% CARRIED BY HAND, 24 September 2026 (no generator: outils/md_vers_tex.py was deleted on
+%   23 September 2026). Whole chapter re-carried against the master: new opening paragraph on
+%   the agent's three parts; 3.1 extended (GAMA, OpenTripPlanner, OSMnx cited, edge weights,
+%   trip and itinerary defined, the Vu et al. paragraph, the five changes); 3.2 gains the
+%   paragraph on the draw and discrete choice; 3.3 gains its opening paragraph, the 2.8-day
+%   constant, the Park et al. filiation and the retrieval score with its glosses. Sentences no
+%   longer in the master were removed (the section roadmap, "The specific influence of each
+%   module ...", "The measurements of an ordinary day ...", "The next section states ...").
+%   Checked sentence by sentence against the master.
+% PARTIAL CARRY, 24 September 2026, 11:00: only the 3.1 paragraph on the five call points and
+%   the Figure 1 caption, validated by the author. The date above stays at 00:12:49 on
+%   purpose: the master has moved elsewhere since (3.2 profile, 3.3 opening paragraph removed,
+%   Sumers et al. and MemoryBank, cosine distance in the retrieval score), not carried here.
+% Section 3 of the SHORT paper. \input from main.tex, after 02_Related_work.tex.
+% This file DEFINES \label{sec:agent}, referenced by the reading map of Section 1.4, and
+%   \label{sec:memory}, referenced from Section 6.
+% Figure: one, figure* across both columns (../PLAN.md § 9, figure 1, full width), caption
+%   BELOW and a mandatory \Description{} (plain text, 2000 characters at most, not printed).
+%   FILE: images/architecture_GAMA_Agents.jpg, the same JPG the long paper uses; the
+%   \Description is carried over from it unchanged, the image being identical. Placed where
+%   the master holds its caption, at the end of 3.1.
+% Display equation: one, unnumbered (\[ ... \]), as in 04_Bench.tex.
+% Tables: none.
+% Citations: taillandier2019gama, opentripplanner2025, boeing2025osmnx, vu2025modeling,
+%   mcfadden1974conditional, park2023generative (all in ../sample.bib).
+% Derived file: re-carry by hand after every validated pass of ../sections/03_agent.en.md.
+% =====================================================================
+
+\section{The agent under evaluation}
+\label{sec:agent}
+
+An agent is one simulated person, in three parts. Its body lives in the simulation: a
+position, a daily schedule, the household's vehicles and the trips it physically executes.
+Its state, its memory and where its vehicles stand, lives in the controller. Its
+decision-maker turns one trip description into a probability over the options offered. The
+comparison of Section~\ref{sec:bench} swaps only the decision-maker, and we name an agent
+after it.
+
+\subsection{The loop}
+\label{sec:loop}
+
+Three components carry the simulation. The world runs on GAMA, a multi-agent simulation
+platform \citep{taillandier2019gama}. It carries the real geography of the study area, the
+networks, the clock and the physical execution of every trip. OpenTripPlanner, an
+open-source multimodal router \citep{opentripplanner2025}, produces the public transport
+itineraries on the real timetables. A fastest-path search with OSMnx \citep{boeing2025osmnx}
+on the OpenStreetMap graph produces the direct itineraries by foot, bicycle and car. Each
+edge is weighted by its free-flow travel time, at a speed set per mode and road class.
+Signal delays and, for the car, hourly congestion are added to the path found. A trip is one
+move of a persona, from an origin to a destination, for one activity at one hour. An
+itinerary is one physical way to make it, with its mode, its lines and its path. The two
+engines turn each trip into several itineraries, six at most. The options are those the
+vehicle chain allows (Section~\ref{sec:chain}).
+
+A controller carries the agent lifecycle, holds each agent's state and builds the options
+available at the departure hour. A decision module hosts the decision-maker. The language
+model is called at five points of the loop. It makes the decision, rates an event as it
+enters memory, consolidates memory in the evening and runs a multi-day self-reflection. If
+required, it also answers an opinion survey held outside any decision.
+Section~\ref{sec:results} tests the decision alone, from a blank memory.
+Section~\ref{sec:nontabulated} follows one event from its rating to the decisions of the days
+after, and reads the opinions the agent declares.
+
+The loop closes on the simulation's returns. When a body is due to leave, the controller
+requests the itineraries from the routing engines and writes the trip description. The
+decision-maker spreads its preference over those itineraries, and the controller draws the
+option the body will take. The simulation executes the trip and returns what happened, the
+transfers, the waits, the arrival time. Those returns feed the memory that weighs on the
+next decision.
+
+The loop comes from \citet{vu2025modeling}. They coupled GAMA to a separate Python server of
+generative agents, over HTTP for the clock and agent positions, and WebSocket for actions
+and returns. OpenTripPlanner routed their public transport, and a reflection at the end of
+each day wrote short-term memory into a long-term store. Five agents rode the Toulouse
+transit network for one month. The study scored how quickly the chosen itineraries
+stabilised and how late agents arrived, and left validation against survey data to future
+work.
+
+This paper changes five things in that loop. The original agents chose among transit
+itineraries only. Walking, cycling and driving now enter through the OpenStreetMap search
+above, bound by the vehicle chain of Section~\ref{sec:chain}. The decision returns a
+probability mass over the options instead of one itinerary (Section~\ref{sec:receives}). The
+long-term memory gives each belief a confidence that observations move, and lets a household
+member's day reach the others (Section~\ref{sec:memory}). Retrieval ranks the traces on five
+terms instead of three, adding severity and the match with the current trip
+(Section~\ref{sec:memory}). Lastly, the decision module accepts decision-makers that are not
+language models, which the bench of Section~\ref{sec:bench} needs.
+
+\begin{figure*}[tp]
+  \centering
+  \includegraphics[width=\textwidth]{images/architecture_GAMA_Agents.jpg}
+  \caption{The three components of the loop. Section~\ref{sec:results} tests the decision
+    module, Section~\ref{sec:nontabulated} the memory that feeds it.}
+  \Description{Block diagram of the device, on three horizontal bands. Top band, the generative agent: a group of agent icons connected on the left to an LLM gateway box (provider rotation, cache), on the right to two boxes, daily activity planning and travel planning, and below to two memory stores, short-term memory and long-term memory, linked by an arrow labelled reflection; a double arrow between the agents and the memories is labelled memory read and write. Two dashed boxes feed the agent from above: population data (personal identity, daily activities) and environment (weather, traffic). Middle band, a horizontal bar labelled data exchange pipeline, with Python services above and GAMA in Java below; perception data goes up over HTTP to the short-term memory, actions come down over WebSocket. Bottom band, the GAMA platform simulation: a map of the Toulouse network and icons for bus, train, tram, cable car, bicycle, pedestrian and car, fed from the right by GTFS and OSM map data. On the right of the figure, a dashed box named routing engines contains OpenTripPlanner for public transport and OSMnx for walking, cycling and car, with results cached; it receives requests from travel planning and returns itineraries. At the foot, two summary boxes: simulation, Agent GAMA, physical body, position, network; and cognition, Python server with the language model, memory, reasoning, decision; between them the two channels, HTTP for state and WebSocket for action and perception.}
+  \label{fig:architecture}
+\end{figure*}
+
+\subsection{What the agent receives, and what it returns}
+\label{sec:receives}
+
+The agent receives one trip description and returns one probability per option. The
+description carries a short profile of the person and household, the destination, the
+departure time and the weather ahead. It also carries the trips left before returning home,
+the relevant memories, and the numbered list of options.
+
+The model spreads a probability mass over that list, one entry per option. Probability mass
+is the share of preference placed on an option. The entries of one decision sum to one. The
+decision played is a random draw from that vector, and not the option ranked first.
+
+That draw is a modelling hypothesis, and discrete choice models already make it. A logit
+also returns one probability per option. Drawing from it amounts to maximising a utility
+whose unobserved part follows an independent extreme-value law \citep{mcfadden1974conditional}.
+The draw thus carries what the trip description does not say about the person. Playing the
+first-ranked option would send every persona of one profile into the same mode. The spread
+the survey records within that profile would vanish. The options are listed in a random
+order, so that rank does not become preference. A decision-maker that returns a vector can
+then be scored against a distribution, as Section~\ref{sec:bench} does.
+
+\subsection{Two memory registers}
+\label{sec:memory}
+
+Section~\ref{sec:results} scores one day, and a one-day run has almost nothing to recall. The
+first consolidation comes in the evening, after most of the day's trips. Its measurements
+therefore run with memory switched off, and no result there depends on the constants below.
+Section~\ref{sec:nontabulated} turns memory on, over the days that follow an incident.
+
+Two registers hold what an agent has been through. A short-term buffer receives the decisions
+and the physical experience the simulation returns. A consolidation pass writes from that
+buffer into the long-term register each evening. An episodic trace says what happened and
+when, with a weight that decays on a 2.8-day time constant. A belief says what the agent holds
+true, does not decay, and lives on a confidence that observations move. The 2.8-day constant
+is a design choice, not a fitted value. It leaves the trace of an uneventful trip less than a
+tenth of its weight after a week. The evening pass adapts the reflection of
+\citet{park2023generative}, which fires when recent events pass an importance threshold. In
+the evening each household member tells the others their day, and that account enters the
+hearers' reflection.
+
+The prompt carries the past in four blocks. They hold the agent's habits, its beliefs, its
+recent events, and three episodic traces. A score ranks the traces, with weights set by
+design and not fitted.
+\[
+  s = 0.3\,\cos(q, x) + 0.2\,e^{-\Delta t/\tau} + 0.2\,g + 0.2\,a + 0.1\,m
+\]
+Here $\cos(q, x)$ compares the sentence embeddings of the trip description and of the trace.
+The trace was last retrieved $\Delta t$ days ago, and $\tau$ is its time constant. The term
+$g$ is its severity, and $a \in [0, 1]$ its match with the current mode, place, time slot and
+purpose. The term $m$ is one when the weather matches, zero otherwise. Not every candidate
+comes from similarity. Traces that bear an offered mode, and the most severe ones, enter the
+ranking whatever their text.
+
+The `recent events' block contains occurrences that remain active within a time window
+determined by their initial severity.
+
+\subsection{The vehicle chain}
+\label{sec:chain}
+
+Deciding each trip on its own produces physically impossible days. An agent who cycled to
+work has no car at the office in the evening. The controller therefore tracks where each
+personal vehicle stands. A vehicle is offered only from where it is parked, after which it
+follows its user. On a return trip, a vehicle left at the start restricts that trip to its
+mode.
+
+These rules bind every decision-maker we compare, tabular models included, since without
+them we would compare decisions taken in different worlds.

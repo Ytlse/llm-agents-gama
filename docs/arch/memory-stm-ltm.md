@@ -28,7 +28,7 @@ décision de conception d'un accident d'implémentation — et les deux existent
 |---|---|---|
 | Flux d'expériences, réflexion, récupération pondérée | Park et al. (2023) | en service, via Vu et al. |
 | Deux niveaux STM / LTM, concepts vs réflexions | Vu, Gaudou & Oberoi (2025) | en service |
-| Score = sémantique + BLEU-2 + décroissance | Vu, Gaudou & Oberoi (2025) | en service |
+| Score = sémantique + BLEU-2 + décroissance | Vu, Gaudou & Oberoi (2025) | remplacé le 2026-09-14 par un score à cinq composantes (ticket 071, lot 2) ; le BLEU-2 n'y figure plus |
 | Réflexion **à la fin de chaque jour simulé** | Vu, Gaudou & Oberoi (2025) | restauré le 2026-09-11, ticket 048 |
 | Pertinence contextuelle par lieu et heure | Vu, Gaudou & Oberoi (2025) | **spécifié chez eux, non implémenté ici** → partie III |
 | Score d'importance du souvenir | Park et al. (2023) | **absent**, écarté par Vu et al. → partie III |
@@ -51,9 +51,11 @@ entière de 1 à 10 sur une échelle ancrée par deux exemples, « 1 purement ba
 dents » et « 10 extrêmement marquant, une rupture ». Le mot *importance* n'apparaît **nulle
 part** chez Vu et al., qui lui substituent un score lexical BLEU-2 sur les mots-clés, destiné à
 capter la pertinence saisonnière. Notre champ `long_term_retrieval__default_reflection_importance_score`
-est le vestige de cette substitution : son nom dit *importance*, son rôle est d'être la valeur
-de repli du BLEU pour les entrées sans mots-clés. Conséquence en service : un retard de
-quarante-cinq minutes et un trajet nominal sont conservés et rappelés du même poids.
+est le vestige de cette substitution : son nom dit *importance*, mais il servait de valeur de
+repli au BLEU pour les entrées sans mots-clés. Un retard de quarante-cinq minutes et un trajet
+nominal étaient donc conservés et rappelés du même poids. **L'écart est résorbé depuis le
+ticket 071** : la gravité revient au classement au lot 2, avec un poids de 0,20, et le BLEU-2 en
+sort (partie II, étape 2).
 
 **2. La réflexion se déclenche sur un compte, pas sur une gravité cumulée.** Park et al.
 déclenchent quand *la somme des importances* des derniers événements perçus dépasse un seuil,
@@ -65,9 +67,11 @@ n'en déclenche aucune.
 
 **3. La décroissance part de la création, non du dernier rappel.** Park et al. font décroître
 la fraîcheur « depuis le dernier rappel du souvenir », avec un facteur de 0,995 par heure de
-jeu. Chez nous elle part de l'écriture. Un souvenir relu chaque matin reste frais chez eux et
-s'efface chez nous. C'est le renforcement au rappel, que MemoryBank formalise et que la
-partie III réintroduit. L'écart d'échelle est par ailleurs important :
+jeu. Chez nous elle partait de l'écriture : un souvenir relu chaque matin restait frais chez eux
+et s'effaçait chez nous. **Le lot 1 du ticket 071 résorbe cet écart.** Le Δt se compte depuis
+le dernier rappel, et chaque rappel allonge la durée de vie d'un jour, selon le renforcement
+que MemoryBank formalise (partie II, étape 2, composante 2). L'écart d'échelle demeure pour un
+trajet banal :
 
 | Ancienneté | Park et al. (0,995 / h) | Ici (constante 2,8 j) |
 |---|---|---|
@@ -92,7 +96,8 @@ exigences supplémentaires s'y opposent. Les scores doivent être **comparables 
 l'autre**, puisque l'article confronte des distributions entre bras. Et la constante de temps
 doit **déplacer la courbe**, puisqu'un critère de réfutation pré-enregistré en dépend — or sous
 min-max l'ordre par ancienneté est invariant au paramètre, la décroissance étant monotone.
-Nos poids valent en outre 0,4 / 0,3 / 0,3 et non 1 / 1 / 1.
+Nos poids ne valent pas non plus 1 / 1 / 1 : 0,4 / 0,3 / 0,3 jusqu'au ticket 071, puis, depuis
+le lot 2, 0,30 / 0,20 / 0,20 / 0,20 / 0,10 sur cinq composantes (partie II, étape 2).
 
 ## Ce qui a été lu en entier, et ce qui ne l'a pas été
 
@@ -127,7 +132,7 @@ Chaque agent dispose d'une mémoire organisée en trois niveaux fonctionnels :
 │  LTM — ChromaDB (MultiUserLongTermMemory)                                │
 │  Index vectoriel partagé (cosine HNSW), métadonnées JSON shardées        │
 │  sur disque. Contient réflexions, concepts, résumés. Requêté via         │
-│  score composite (similarité + BLEU + décroissance temporelle).          │
+│  score composite : similarité, temps, gravité, axes, météo.              │
 └────────────────────────────┬─────────────────────────────────────────────┘
                              │  tous les long_term_self_reflect_interval_days
                              │  Appel LLM → consolidation de patterns
@@ -167,7 +172,7 @@ class MemoryEntry:
     memory_type: MemoryType   # CONVERSATION | REFLECTION | CONCEPT | SUMMARY
     person_id: str
     activity_id: Optional[str]   # UUID de l'activité GAMA (clé de partition)
-    tags: Optional[str]          # mots-clés pour le scoring BLEU en LTM
+    tags: Optional[str]          # mots-clés ; plus lus par le classement LTM depuis le ticket 071, lot 2
     valence: str = "neutre"      # negative | neutral | positive
     origine: Optional[str] = None  # vecu | lu | entendu  (ticket 100)
 ```
@@ -641,20 +646,23 @@ jour de semaine que la requête. Le défaut était dormant, l'option étant à f
 
 ```python
 combined_score = (
-    _sim_score       × sim_score_weight    +   # 0.4
-    _imp_score       × keyword_weight      +   # 0.3
-    _time_decay_score × time_decay_weight      # 0.3
-)
+    _sim   × sim_weight         +   # 0.30  similarité sémantique
+    _temps × time_weight        +   # 0.20  poids temporel (confiance, pour un concept)
+    _grav  × importance_weight  +   # 0.20  gravité du souvenir
+    _axes  × affinite_weight    +   # 0.20  affinité d'axes : objet, lieu, créneau, motif
+    _cat   × keyword_weight         # 0.10  météo seule
+)                                   # somme des poids : 1.00
 ```
 
-Les trois composantes sont celles de Vu, Gaudou & Oberoi (2025) : un score sémantique par
-cosinus sur l'embedding, un score BLEU-2 sur les mots-clés qui tient lieu de pertinence
-saisonnière, et une décroissance temporelle. Elles remplacent le triplet
-`recency + importance + relevance` de Park et al. (2023), dont la composante d'importance a été
-écartée — voir la partie I, écart n° 1.
+Les poids sont les `settings.agent.long_term_retrieval__{sim,time,importance,affinite,keyword}_weight`.
+Le score a **cinq composantes depuis le ticket 071, lot 2** (2026-09-14). Il en avait trois
+auparavant, pondérées 0,4 / 0,3 / 0,3 : la similarité, un recouvrement lexical dit « BLEU-2 »
+et la décroissance temporelle, soit le triplet de Vu, Gaudou & Oberoi (2025). Le lot 2 y ajoute
+la gravité, que Park et al. (2023) classaient et que Vu et al. avaient écartée, et l'affinité
+d'axes, apport propre. Le terme lexical, lui, ne mesure plus que la météo (composante 5).
 
-Les trois entrent en **valeur absolue** sur [0, 1]. Le score de similarité, qui vient du vector
-store et peut sortir de l'intervalle, y est borné ; les deux autres le sont par construction.
+Les cinq entrent en **valeur absolue** et restent dans [0, 1] par construction. La similarité
+ne descend jamais sous e⁻² ≈ 0,135 (composante 1).
 
 ⚠ **La normalisation min-max par composante a été supprimée le 2026-09-11** (ticket 048), ce
 qui est une divergence assumée vis-à-vis de Park et al. (2023), qui l'emploient explicitement.
@@ -666,43 +674,75 @@ temps, la décroissance étant monotone, si bien qu'un bras de sensibilité d'ex
 ne rien mesurer pour une raison purement technique. Et deux décisions n'étaient pas comparables
 entre elles, leurs scores étant relatifs à des lots différents.
 
-#### Composante 1 — Similarité cosine (`sim_score`, poids 0.4)
+#### Composante 1 — Similarité sémantique (`_sim`, poids 0,30)
 
-Score brut fourni par ChromaDB (distance cosine dans l'espace 384-dim de `all-MiniLM-L6-v2`).
+`rank_nodes` ne reçoit **ni un cosinus ni une distance**. Il reçoit `exp(-d)`. La collection
+ChromaDB est créée en `hnsw:space: cosine` (`create_chroma_store`, `llm/longterm.py`). ChromaDB
+renvoie donc la distance cosinus `d = 1 − cos`, sur [0, 2], calculée dans l'espace à 384
+dimensions de `all-MiniLM-L6-v2`. L'adaptateur `llama-index-vector-stores-chroma` 0.4.2 la
+convertit en `similarity_score = math.exp(-distance)` (`llama_index/vector_stores/chroma/base.py`,
+ligne 432, vérifié dans le conteneur `controller` le 2026-09-24 avec chromadb 1.5.9). Le terme
+effectivement pondéré est :
 
-#### Composante 2 — Recouvrement lexical sur mots-clés (`imp_score`, poids 0.3)
-
-Mesure le chevauchement lexical entre la requête et le champ `tags` de l'entrée mémoire. Utilise des unigrammes (poids 0.7) et des bigrammes (poids 0.3) :
-
-⚠ **Ce n'est pas un BLEU**, contrairement à ce que le nom de la variable et la littérature d'origine laissent croire. Le BLEU de Papineni et al. (2002) est une moyenne géométrique de *précisions* d'n-grammes assortie d'une pénalité de brièveté, conçue pour évaluer une traduction. Ce qui est calculé ici est un **taux de rappel lexical pondéré**. L'appellation vient de Vu, Gaudou & Oberoi (2025), qui écrivent `similarity_score = BLEU-2(C, R)` ; elle est citée comme leur, pas reprise à notre compte.
-
-```python
-def _bleu_score(self, query: str, keyword: str) -> float:
-    kw_tokens  = keyword.lower().split()
-    q_tokens   = query.lower().split()
-
-    unigram_score = |kw_unigrams ∩ q_unigrams| / |kw_unigrams|
-    bigram_score  = |kw_bigrams  ∩ q_bigrams | / |kw_bigrams |
-
-    # Ticket 071 : sans bigrammes, tout le poids revient aux unigrammes
-    return 0.7 * unigram_score + 0.3 * bigram_score  if kw_bigrams else unigram_score
+```text
+_sim = exp(cos − 1)        sur [e⁻², 1] ≈ [0,135 ; 1]
 ```
 
-⚠ **Le repli sur les unigrammes date du 2026-09-14** (ticket 071, défaut D). Une étiquette d'un seul mot n'a aucun bigramme : appliquer le poids 0,3 à un score nul la **plafonnait à 0,70** même en correspondance parfaite, contre 1,00 pour une étiquette de deux mots. La pénalité était arbitraire et permanente.
+| Cosinus | `_sim` | Apport au score (× 0,30) |
+|---|---|---|
+| 1 | 1,000 | 0,300 |
+| 0,5 | 0,607 | 0,182 |
+| 0 | 0,368 | 0,110 |
+| −1 | 0,135 | 0,041 |
 
-**Exemple :** requête `"bus 401 ponctualité matin"`, tags `"bus 401, ponctualité"` → unigramme overlap = 3/3 = 1.0, bigramme overlap = `{(bus,401)} ∩ {(bus,401),(401,ponctualité)} = 1` → score = 0.7 × 1.0 + 0.3 × 0.5 = **0.85**.
+Trois conséquences :
 
-Les entrées sans `tags` (ex. réflexions narratives) reçoivent le score par défaut `long_term_retrieval__default_reflection_importance_score = 0.2`.
+- **Un cosinus nul vaut 0,37, pas 0.** Un candidat du vivier A sans aucun rapport sémantique
+  avec la requête garde 0,11 point de score. Entre un cosinus de 0 et un cosinus de 1, la
+  composante ne varie que de 0,63, soit 0,19 point de score et non 0,30.
+- **Le `np.clip(…, 0, 1)` de `rank_nodes` ne modifie rien** : `exp(-d)` reste dans ]0, 1], à
+  un arrondi flottant près au voisinage de 1.
+- **Les candidats qu'apportent les viviers B et C valent exactement 0** : ils sont construits
+  avec `score=0.0`, sans plongement. Un souvenir déjà remonté par le vivier A garde son score,
+  la déduplication conservant la première occurrence. Face à un candidat sémantique orthogonal
+  à la requête, un souvenir structuré part donc avec 0,11 point de retard, que ses quatre
+  autres composantes doivent combler.
 
-#### Composante 3 — Décroissance temporelle (`time_decay`, poids 0.3)
+#### Composante 2 — Poids temporel (`_temps`, poids 0,20)
+
+Deux régimes, selon le type de l'entrée (ticket 071, lots 1 et 3) :
+
+| Type | Terme | Lecture |
+|---|---|---|
+| Épisodique : `CONVERSATION`, `REFLECTION` | `exp(-Δt / force)` | Δt en jours simulés depuis le **dernier rappel**, à défaut depuis l'écriture |
+| Sémantique : `CONCEPT`, `SUMMARY` | `(obs + 1) / (obs + contre + 2)` | confiance de Laplace, sans horloge ; 0,5 pour un concept jamais observé |
+
+La constante `force` est propre au souvenir. Elle vaut `min(S0 × (1 + k × I), FORCE_MAX)` à
+l'écriture, avec `S0 = long_term_retrieval__force_base_jours = 2,8`,
+`k = memoire__force_k_importance = 6`, `FORCE_MAX = memoire__force_max_jours = 30` et `I` la
+gravité : 2,8 jours pour un trajet banal, 19,6 pour un souvenir `marquant` (I = 1). Chaque
+passage au top-K ajoute `memoire__force_delta_rappel_jours = 1` jour, sous le même plafond.
 
 ```python
-def _time_decay_score(self, timestamp_str, query_at) -> float:
-    force = settings.agent.long_term_retrieval__force_base_jours  # 2.8 jours
+def _time_decay_score(self, timestamp_str, query_at, entree=None) -> float:
+    if query_at is None:
+        return 0.0
+    if entree is not None:
+        if not entree.est_episodique:                 # concept, résumé
+            return float(entree.confiance)
+        reference = entree.horodatage_de_reference    # dernier_rappel, sinon timestamp
+        force = entree.force
+    else:                                             # nœud sans entrée autoritaire
+        reference = datetime.fromisoformat(timestamp_str)
+        force = None                                  # → S0
     # `gama_timestamp` et non `.timestamp()` : les deux côtés sont en heure MURALE
-    time_diff = (query_at - gama_timestamp(timestamp)) / 86400  # en jours
-    return math.exp(-time_diff / force)
+    time_diff = max(0, (query_at - gama_timestamp(reference)) / 86400)  # en jours
+    return poids_temporel(time_diff, force)           # exp(-Δt / force)
 ```
+
+Sans entrée autoritaire, c'est-à-dire une entrée écrite avant le lot 1 ou un test qui ne fournit
+que des nœuds, le calcul retombe sur l'horodatage de l'index et sur `S0`. Sans horloge simulée,
+le terme vaut 0.
 
 Le paramètre est une **constante de temps en jours** depuis le ticket 048, et non plus une
 base d'exponentielle. Le défaut de 2,8 jours reproduit exactement l'ancienne base de 0,7 par
@@ -712,10 +752,10 @@ discute — « un souvenir ordinaire dure trois fois plus longtemps » — là o
 d'exponentielle ne se discute pas ; c'est lui que les bras de sensibilité des expériences
 doivent viser, la conversion depuis un λ déclaré étant `force = 1 / λ`.
 
-Deux limites connues de cette composante, toutes deux traitées en partie III. Elle part de
-la **date d'écriture** et non du dernier rappel, là où Park et al. (2023) font décroître depuis
-le dernier rappel du souvenir : un souvenir relu chaque matin s'efface ici comme s'il n'avait
-jamais servi. Et elle est **uniforme**, indifférente à la gravité de ce qui est mémorisé.
+Le lot 1 du ticket 071 a levé les deux limites que cette composante portait jusque-là. Elle
+partait de la **date d'écriture**, là où Park et al. (2023) font décroître depuis le dernier
+rappel : un souvenir relu chaque matin s'effaçait comme s'il n'avait jamais servi. Et sa
+constante était **uniforme**, indifférente à la gravité de ce qui est mémorisé.
 
 ⚠ Les deux termes de la soustraction doivent porter **la même convention** : `query_at` est
 un horodatage GAMA (heure murale) et `timestamp` un `datetime` naïf aux champs muraux. Avant
@@ -723,15 +763,60 @@ le 2026-09-04, les deux erreurs s'annulaient par construction (le souvenir étai
 relu dans le fuseau du processus) ; corriger l'écriture sans corriger cette lecture aurait
 ajouté une heure d'ancienneté fictive à chaque souvenir.
 
-| Ancienneté | Score brut | Ancienne base 0,7 |
-|-----------|-----------|-----------|
-| 0 jours   | 1.000     | 1.000 |
-| 1 jour    | 0.700     | 0.700 |
-| 3 jours   | 0.343     | 0.343 |
-| 7 jours   | 0.082     | 0.082 |
-| 14 jours  | 0.007     | 0.007 |
+Pour un souvenir épisodique jamais rappelé :
 
-La demi-vie effective est d'environ **1,94 jours** (`ln(2) × 2,8`), inchangée.
+| Ancienneté | Trajet banal, force 2,8 j | Ancienne base 0,7 | `marquant`, force 19,6 j |
+|-----------|-----------|-----------|-----------|
+| 0 jours   | 1.000     | 1.000 | 1.000 |
+| 1 jour    | 0.700     | 0.700 | 0.950 |
+| 3 jours   | 0.343     | 0.343 | 0.858 |
+| 7 jours   | 0.082     | 0.082 | 0.700 |
+| 14 jours  | 0.007     | 0.007 | 0.490 |
+
+La demi-vie est d'environ **1,94 jour** (`ln(2) × 2,8`) pour un trajet banal, inchangée depuis
+le ticket 048, et de **13,6 jours** pour un souvenir `marquant`.
+
+#### Composante 3 — Gravité (`_grav`, poids 0,20)
+
+`entree.importance`, sur [0, 1], lue telle quelle. C'est la composante d'importance de Park et
+al. (2023), restaurée au lot 2. Son calcul, un plancher déterministe tiré de ce que la
+simulation a mesuré puis le jugement du modèle à la réflexion, est décrit en partie III,
+lot 1. Un nœud sans entrée autoritaire vaut 0.
+
+#### Composante 4 — Affinité d'axes (`_axes`, poids 0,20)
+
+`affinite_axes` (`llm/axes.py`) compare les axes du souvenir, normalisés à l'écriture, à ceux
+du contexte de la décision :
+
+```text
+_axes = 0.50 × [axe_objet concorde] + 0.20 × [axe_lieu concorde]
+      + 0.15 × [axe_creneau concorde] + 0.15 × [axe_motif concorde]
+```
+
+C'est un bonus et jamais un veto : un axe discordant contribue zéro. Un axe absent aussi, d'un
+côté comme de l'autre, car `None` ne concorde avec rien, pas même avec `None`. L'objet courant
+est l'ensemble des modes offerts : un souvenir de vélo concorde dès que le vélo figure parmi
+les options. Le contexte de décision (`llm_agent.py`, seul appelant qui en fournit un) porte
+`axe_lieu = None` : le lieu ne concorde donc jamais au rappel, et `_axes` plafonne à 0,80.
+
+#### Composante 5 — Météo (`_cat`, poids 0,10)
+
+`affinite_meteo(entree.axe_meteo, contexte["axe_meteo"])` (`llm/axes.py`) vaut 1 si la météo
+du souvenir concorde avec celle de la décision, 0 sinon ou si l'une des deux manque. Le poids
+garde le nom `keyword_weight` pour ne pas casser les surcharges d'expérience existantes.
+
+⚠ **Ce terme ne mesure plus aucun recouvrement lexical** depuis l'arbitrage du 2026-09-14
+(issue A, `specs/ticket_071/tests_lot2.md` § 8.1). Jusqu'au lot 2, il pesait un taux de rappel
+lexical entre la requête et le champ `tags` de l'entrée, appelé « BLEU-2 » d'après Vu, Gaudou &
+Oberoi (2025) sans en être un : le BLEU de Papineni et al. (2002) est une moyenne géométrique de
+précisions d'n-grammes assortie d'une pénalité de brièveté. Le lot 2 devait le remplacer par
+une affinité catégorielle sur le mode, le créneau, le motif et la météo. Trois de ces quatre
+attributs étant déjà des axes de la composante 4, ils auraient compté deux fois, avec des poids
+différents : seule la météo est restée.
+
+`_bleu_score` existe encore dans `llm/longterm.py`, mais seuls les tests l'appellent. Le
+classement ne lit plus les `tags`, et `long_term_retrieval__default_reflection_importance_score`,
+qui servait de repli aux entrées sans `tags`, n'est plus lu par aucun code.
 
 ### Étape 3 — Top-K final
 
@@ -853,20 +938,23 @@ actives à chaque rappel. Écarté comme disproportionné, consigné pour ne pas
 
 Les réflexions et résumés sont **toujours conservés** indépendamment de leur âge. Seules les entrées CONCEPT ou CONVERSATION antérieures au seuil sont supprimées.
 
-⚠ **Aucune notion d'importance n'existe dans le dispositif.** `MemoryEntry` ne porte pas de
-champ `importance_score` : la rétention ne connaît que l'âge et le type, et le score composite
-ne connaît que la similarité, le recouvrement lexical et l'ancienneté. Un retard de 45 minutes
-et un trajet nominal sont donc conservés et rappelés avec exactement le même poids.
+⚠ **Jusqu'au ticket 071, aucune notion d'importance n'existait dans le dispositif.**
+`MemoryEntry` ne portait pas de champ d'importance : la rétention ne connaissait que l'âge et le
+type, et le score composite que la similarité, le recouvrement lexical et l'ancienneté. Un
+retard de 45 minutes et un trajet nominal étaient conservés et rappelés du même poids. Le champ
+`importance` existe depuis le lot 1 : il fixe la durée de vie du souvenir, et il pèse 0,20 au
+classement depuis le lot 2 (étape 2, composante 3).
 
 **L'origine de cette absence est documentée.** Park et al. (2023) portent une importance,
 demandée au modèle sous forme d'entier de 1 à 10 sur une échelle ancrée par deux exemples, et
 s'en servent à la fois au classement et au déclenchement de la réflexion. Vu, Gaudou & Oberoi
 (2025) ne la reprennent pas — le mot n'apparaît pas dans leur article — et lui substituent le
 score BLEU-2. Le paramètre `long_term_retrieval__default_reflection_importance_score` (0.2)
-est le vestige de cette substitution : son nom dit *importance*, son rôle est d'être la valeur
-de repli du BLEU pour les entrées sans `tags`, c'est-à-dire les réflexions narratives.
+est le vestige de cette substitution : son nom dit *importance*, mais il servait de valeur de
+repli au BLEU pour les entrées sans `tags`, c'est-à-dire les réflexions narratives. Aucun code
+ne le lit depuis le lot 2.
 
-La réintroduction d'une gravité est spécifiée en **partie III, section 1**.
+La gravité réintroduite est décrite en **partie III, lot 1**.
 
 ### Éviction LRU du cache RAM
 
@@ -1100,13 +1188,13 @@ documentation.
 |-----------|--------|-------|
 | `long_term_max_entries_query` | 10 | Top-K renvoyé au LLM |
 | `long_term_max_days_query` | 60 | Fenêtre de look-back en jours. Portée de 30 à 60 au ticket 071, lot 0. Vaut l'**horizon de l'expérience**, plafonné par `memoire__fenetre_age_max_jours` : `experiences/cli.py` l'applique depuis `horizon_jours` au lancement. À 30 jours en dur, un run de soixante perdait son second mois sans qu'aucune ligne ne le dise. |
-| `long_term_retrieval__sim_weight` | 0.4 | Poids similarité cosine. **Passe à 0,30 au lot 2**, pas avant. |
-| `long_term_retrieval__keyword_weight` | 0.3 | Poids score BLEU. Devient l'**affinité catégorielle** et passe à 0,10 au lot 2. |
-| `long_term_retrieval__time_weight` | 0.3 | Poids décroissance temporelle. **Passe à 0,20 au lot 2.** |
-| `long_term_retrieval__importance_weight` | 0.20 | Poids de la gravité. **Déclaré au lot 0, lu par personne** jusqu'au lot 2. |
-| `long_term_retrieval__affinite_weight` | 0.20 | Poids de l'affinité d'axes. **Déclaré au lot 0, lu par personne** jusqu'au lot 2. |
+| `long_term_retrieval__sim_weight` | 0.30 | Poids de la similarité sémantique, qui vaut `exp(cos − 1)` et non le cosinus (étape 2, composante 1). 0,4 avant le lot 2. |
+| `long_term_retrieval__keyword_weight` | 0.10 | Poids de l'appariement de **météo**, et de lui seul (arbitrage du 2026-09-14). Nom conservé pour les surcharges d'expérience : il pesait le score dit BLEU, à 0,3, avant le lot 2. |
+| `long_term_retrieval__time_weight` | 0.20 | Poids du terme temporel : `exp(-Δt / force)` pour un souvenir épisodique, confiance de Laplace pour un concept ou un résumé. 0,3 avant le lot 2. |
+| `long_term_retrieval__importance_weight` | 0.20 | Poids de la gravité du souvenir. Déclaré au lot 0, lu depuis le lot 2. |
+| `long_term_retrieval__affinite_weight` | 0.20 | Poids de l'affinité d'axes (objet, lieu, créneau, motif). Déclaré au lot 0, lu depuis le lot 2. Les cinq poids somment à 1,00. |
 | `long_term_retrieval__force_base_jours` | 2.8 | Constante de temps de l'oubli, en jours |
-| `long_term_retrieval__default_reflection_importance_score` | 0.2 | ⚠ Nom trompeur : valeur de repli du score **BLEU** pour les entrées sans `tags`, pas une importance. |
+| `long_term_retrieval__default_reflection_importance_score` | 0.2 | ⚠ **Lu par aucun code** depuis le lot 2. Nom trompeur : c'était la valeur de repli du score BLEU pour les entrées sans `tags`, pas une importance. |
 | `long_term_memory_filter_by_datetime` | false | Active deux filtres supplémentaires sur le vivier : même classe de jour (ouvré/week-end) et même tranche horaire que la requête. Se **cumule** avec la fenêtre d'âge depuis le ticket 071 ; il l'annulait auparavant. Coupe le vivier, à manier avec la règle de non-exclusion du lot 2 en tête. |
 
 ### Auto-réflexion LTM
@@ -2014,3 +2102,91 @@ Ajoutées le 2026-09-14 à la relecture du ticket 071, notices recoupées sur l'
 - **Diekelmann, S. & Born, J. (2010)** — *The memory function of sleep*, Nature Reviews Neuroscience 11(2), 114–126. La consolidation se fait au repos : fonde le plancher journalier.
 - **McClelland, J. L., McNaughton, B. L. & O'Reilly, R. C. (1995)** — *Why there are complementary learning systems in the hippocampus and neocortex*, Psychological Review 102(3), 419–457. Deux systèmes, épisodique rapide et sémantique lent : fonde la séparation des régimes d'oubli et le rejeu différé.
 - **Verplanken, B. & Aarts, H. (1999)** — *Habit, attitude, and planned behaviour: is habit an empty construct or an interesting case of goal-directed automaticity?*, European Review of Social Psychology 10(1), 101–134. L'habitude comme automatisme dirigé par le but : c'est la source du régime Système 1 / Système 2 évalué puis écarté ci-dessus. ⚠ Notice reprise du ticket 051, **non recoupée** sur l'éditeur — à vérifier avant toute citation dans l'article, où la porte de `CITATIONS.md` exige en outre le PDF dans `docs/paper/sources/etat_de_lart/`.
+
+---
+
+## Le témoin du souvenir injecté (ticket 106)
+
+Une consolidation est une **synthèse reformulée**, pas une copie : aucun identifiant ne relie une
+entrée de mémoire courte à la réflexion qui la consomme. Rien ne garantissait donc qu'un événement
+injecté atteigne la mémoire longue — et le 2026-09-23, un choc jugé **grave (0,75)** a disparu
+sans laisser de trace.
+
+| Run `2026-09-23_13_54` | |
+|---|---|
+| Entrée courte | 27 mars 14:02, importance 0,75 |
+| Consolidation couvrante (19:30) | *« Today went very smoothly overall »*, importance 0,10 |
+| Documents de mémoire longue parlant de métro, éclairage, annonce ou rame | **0 sur 123** |
+
+Cause mécanique : le texte est **joint** à l'observation d'arrivée, et cette arrivée disait
+`On time.` — l'agent était 199 s en avance, `retard_injecte_s` ne remontant qu'au
+`GamaArrivalsLogger`. La journée offerte à la synthèse avait pour ligne dominante « tout s'est
+bien passé ».
+
+### Comment il marche
+
+Après chaque écriture en mémoire longue, `llm.evenements.temoin.controler` cherche dans
+`all_messages` une entrée portant un préfixe d'injection (`[ INCIDENT ]`, `[ PRESSE ]`). S'il n'y
+en a pas — le cas de l'immense majorité des consolidations — il ne fait rien. S'il y en a une, il
+extrait du texte injecté les mots qui ne pourraient pas venir d'une journée ordinaire et les
+cherche dans ce qui vient d'être écrit.
+
+En dessous de `temoin_souvenir_mots_min` mots retrouvés, une ligne `[ALARME] [temoin]` nomme
+l'agent, les mots cherchés et ceux retrouvés. Le succès est journalisé lui aussi.
+
+### Il alarme, il n'arrête pas
+
+C'est le geste du ticket 105 **à un cran de moins**, délibérément. Le témoin du 105 est certain —
+un repli est un fait ; celui-ci est heuristique — une paraphrase légitime (« the underground »
+pour « metro ») produit une fausse alarme. Arrêter un run là-dessus risquerait de tuer un bon run.
+
+`temoin_souvenir.jsonl` porte les **deux** verdicts, pour que le taux de fausses alarmes s'observe
+sur des runs réels avant qu'on envisage l'arrêt. Chaque ligne nomme l'événement du run : la
+consolidation du soir ne connaît pas l'événement joint à une arrivée du matin, l'identifiant est
+donc lu dans le registre — exact tant qu'un run ne déclare qu'un événement, et ce que le site
+d'appel passe explicitement l'emporte.
+
+⚠ Le témoin ne contrôle que ce qui est **injecté**. Une injection déclarée qui ne se produit pas
+ne le réveille jamais et ne laisse aucune trace chez lui : c'est l'objet du ticket 108.
+
+⚠ Et il ne contrôle qu'**un canal**. La décision est nourrie par la mémoire longue, mais aussi
+par le bloc « ce qui a changé récemment », la mémoire courte et les concepts. Un verdict
+`PERDU` ne veut donc pas dire que l'agent a décidé sans le souvenir : le run
+`2026-09-23_09_31`, déclaré PERDU, sert pourtant le récit du choc dans 3 de ses 9 décisions
+postérieures. Mesurer ce qui atteint le prompt de décision est l'objet du ticket 110.
+
+### La liste d'exclusion
+
+Un mot banal du domaine — « trip », « minutes », « late », « station » — ne prouve rien. Deux
+pièges rencontrés en calibrant, tous deux silencieux :
+
+- `incident` correspondait à *« without any unexpected incidents »*, qui dit le contraire de ce
+  que le témoin cherche ;
+- `between` était le seul mot que le run perdu retrouvait, dans *« a short walk between
+  errands »* — il suffisait à le faire passer pour sain.
+
+Règle d'admission : *ce mot apparaîtrait-il dans la réflexion d'un jour ordinaire ?* Si oui,
+il sort. La liste vit dans `llm/evenements/temoin.py`.
+
+### Ce que la calibration a donné
+
+Sur les 15 runs archivés portant une injection, deux n'ont aucune consolidation après l'injection
+(le run s'est arrêté avant) et sortent du champ du témoin.
+
+| | |
+|---|---|
+| Runs observables | 13 |
+| Souvenir retrouvé | 11 |
+| Souvenir perdu | 2 (`09_31`, `13_54`, tous deux c3 sur 861500) |
+| Mots retrouvés, runs sains | 3 à 81 |
+| Mots retrouvés, runs perdus | 0 et 1 |
+
+Aucun run ne se situe au voisinage du seuil : la séparation est franche, et le seuil de 2 n'est
+pas un arbitrage fin. Taux de perte mesuré : **2/13 = 15 %**, et **2/4 = 50 % sur le seul c3**.
+
+### Où le lire
+
+- `make error` — les alarmes.
+- `make report` — la section « Témoin du souvenir injecté », les deux verdicts et une alarme 🔴
+  par perte.
+- `temoin_souvenir.jsonl` dans le répertoire du run — une ligne par consolidation contrôlée.

@@ -1,0 +1,88 @@
+% =====================================================================
+% chapters/02_Related_work.tex — LaTeX rendering of ../sections/02_related_work.en.md (2026-09-24 00:07:47)
+% Section 2 of the SHORT paper. \input from main.tex, after 01_Introduction.tex.
+% This file DEFINES \label{sec:related}, referenced by the reading map of Section 1.4.
+% Citations, in reading order: mcfadden1974conditional, benakiva1985discrete, train2009discrete,
+%   verplanken1997habit, adam2025survey, park2023generative, liu2024toward,
+%   bougie2025citysim, horni2016matsim, lammer2026gta, alves2026evaluating, argyle2023outofone,
+%   meister2024benchmarking, baronchelli2025emergent, bintareaf2026silica, wei2022chain,
+%   sprague2024cot. All seventeen resolve in sample.bib, checked 2026-09-24.
+%   garling2003habitual was removed from the paper and from sample.bib on 2026-09-24.
+% ACM-Reference-Format prints NUMERIC citations, so the author-year forms the Markdown writes
+%   ("Adam & Gaudou, 2025") do not survive into the PDF: \citet gives "Author [12]" and \citep
+%   gives "[12]". The year of sprague2024cot is settled: the entry is ICLR 2025 and the body
+%   says 2025.
+% The entries once flagged as written from memory (verplanken1997habit, wei2022chain,
+%   sprague2024cot) were verified against their Crossref records on 2026-09-23.
+% Derived file: update by hand after every validated pass of ../sections/02_related_work.en.md.
+% =====================================================================
+
+\section{Related work}
+\label{sec:related}
+
+Three literatures meet in this paper, and none of them measures whether verbalised
+deliberation helps agents reproduce the mode shares of a real territory.
+
+\subsection{Discrete choice and perception filters}
+\label{sec:discrete-choice}
+
+Transport research has predicted mode choice for more than fifty years with discrete choice
+models, which are statistically strong and behaviourally rigid. Such a model gives each mode a
+probability computed from travel time, cost and the traveller's attributes
+\citep{mcfadden1974conditional,benakiva1985discrete}. Analysts fit it on travel surveys. With
+one constant per mode, it reproduces their mode shares on the estimation sample
+\citep{train2009discrete}. Its decision rule, however, is a maximisation over fixed
+distributions of taste.
+
+Behavioural research documents departures that no survey records, habit among them.
+Travellers with a strong mode habit acquire less information about the alternatives and choose
+by less elaborate strategies \citep{verplanken1997habit}. \citet{adam2025survey} surveyed 650
+respondents and found that car users rate the car as more affordable than non-users do.
+Because a model fitted on surveys cannot carry such perception filters, generative agents are
+proposed to fill the gap.
+
+\subsection{Generative agents in mobility simulation}
+\label{sec:generative-mobility}
+
+Language models entered mobility simulation as the deliberating part that earlier simulators
+did not have. \citet{park2023generative} place the model inside the agent, with a memory
+stream of its experiences and a reflection step. \citet{liu2024toward} carry the design into
+travel demand, and propose a hybrid with established components as a near-term step. CitySim
+\citep{bougie2025citysim} scales such agents to a city. It validates them against time-use,
+travel, place-popularity and crowd-density data. No experiment there confronts a simulated
+modal split with an observed one. In earlier simulators such as MATSim \citep{horni2016matsim},
+equilibrium comes from iterated scoring and replanning of plans, not from deliberation in
+language.
+
+GTA \citep{lammer2026gta} is the closest published system on the evaluation side, and two of
+its choices bound what it can show. Each of its agents returns one mode per trip rather than a
+distribution, so no distributional metric applies. It also simulates a single day, and its
+authors name multi-day memory as future work. We add a baseline beneath the agents and four
+models fitted on the survey above them. Our metric scores a whole distribution, not one mode
+per trip. Our agents carry events across days.
+
+\citet{alves2026evaluating} stand closest on the platform side, though their evaluation has no
+human ground truth. They couple the GAMA platform to a language-model module with a persistent
+memory, which decides on a disruption whether an agent replans. They set its behaviour beside
+a rule-based baseline, and observed behaviour never enters.
+
+\subsection{Distributional alignment of LLM populations}
+\label{sec:alignment}
+
+A separate literature asks whether populations of language models can stand in for human
+samples. \citet{argyle2023outofone} conditioned a model on sociodemographic attributes and
+recovered response patterns of the matching subpopulation. \citet{meister2024benchmarking}
+found that a model verbalising a distribution aligns better than its token probabilities or
+the samples it writes. Our protocol scores a verbalised distribution for that reason.
+
+The same literature also studies these populations for what they do, not as human stand-ins.
+\citet{baronchelli2025emergent} find that collective biases can emerge in decentralised model
+populations even when no agent is biased individually. Their work does not treat the models as
+proxies for human participants. The SILICA instrument \citep{bintareaf2026silica} grades
+claims about such populations on a ladder of three tiers. Its perturbation library includes
+swapping the order in which actions are listed. We take that control from it, and randomise
+the order of the options.
+
+Whether writing the reasoning before answering helps is debated, with no result settling it for
+a population distribution. The reported gains of written reasoning come from tasks with one
+verifiable answer, chiefly mathematical or symbolic \citep{wei2022chain,sprague2024cot}.

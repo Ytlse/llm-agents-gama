@@ -102,10 +102,12 @@ class InMemoryRateLimiter:
         if tokens > 0:
             self._daily_tok[(provider, quota_day(self._tz(provider)))] += tokens
 
-    def daily_requests(self, provider: str) -> int:
+    def daily_requests_local_seulement(self, provider: str) -> int:
+        """Requêtes du jour VUES D'ICI. Indicatif (ticket 105) — pendant du jumeau Redis."""
         return self._daily_req[(provider, quota_day(self._tz(provider)))]
 
-    def daily_tokens(self, provider: str) -> int:
+    def daily_tokens_local_seulement(self, provider: str) -> int:
+        """Jetons du jour VUS D'ICI. Indicatif (ticket 105) — pendant du jumeau Redis."""
         return self._daily_tok[(provider, quota_day(self._tz(provider)))]
 
     def mark_quota_exhausted_until(

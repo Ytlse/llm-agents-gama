@@ -64,6 +64,7 @@ from prometheus_client import Counter, Gauge, Histogram
 from settings import settings
 from sim_clock import wall_clock
 from text_helper import env_ob_to_text, parse_ob
+from text_helper.models.arrival import retard_d_arrivee
 from trip_helper import accidents as accidents_module
 from llm import evenements as evenements_module
 from llm.memory import MemoryEntry, MemoryType
@@ -325,6 +326,19 @@ _POPULATION_CHECKPOINT_HOUR = 2 * 3600  # 2:00 AM simulation time
 _REPRISE_CHECKPOINT_HOUR = 3 * 3600
 
 
+# Ticket 105 — le verrou qui arme les arrêts d'expérience. `EXPERIMENT_HIBERNATE_ON_QUOTA` est
+# l'ancien nom (ticket 077, quand le quota était le seul motif d'arrêt) ; il reste admis, parce
+# qu'il est écrit dans `infra/docker-compose.yml` et dans des scripts de campagne déjà lancés.
+# `run_sequential_cohort.py` pose ce verrou sur TOUTE campagne : le garde-fou est donc armé
+# d'office dans les expériences et muet dans un run ordinaire, sans levier à penser.
+_VERROUS_ARRET_EXPERIENCE = ("EXPERIMENT_STOP_ON_FALLBACK", "EXPERIMENT_HIBERNATE_ON_QUOTA")
+
+
+def _arret_sur_repli_arme() -> bool:
+    """Le run doit-il s'arrêter plutôt que de servir une décision par défaut ?"""
+    return any(os.getenv(nom) == "1" for nom in _VERROUS_ARRET_EXPERIENCE)
+
+
 def _next_checkpoint_ts(
     after_ts: int, hour_24h: int = _POPULATION_CHECKPOINT_HOUR
 ) -> int:
@@ -582,6 +596,15 @@ class SimulationLoopV1(BaseScenario):
         self._next_reprise_at: int | None = None
         # Ticket 077 — enquêtes d'affinité modale déclarée (jours simulés déjà sondés)
         self._enquetes_menees: set[int] = set()
+        # Ticket 105 — replis CONSÉCUTIFS (index 0 servi à la place d'une décision du modèle).
+        # Remis à zéro par toute décision réellement prise : ce qu'on veut attraper est une
+        # série, pas un incident isolé que les retentatives ont déjà absorbé.
+        self._replis_consecutifs: int = 0
+        # Front montant de l'hibernation : le 2026-09-24, huit consommateurs en repli l'ont
+        # déclenchée chacun à leur tour, et leurs points de reprise concurrents se sont
+        # marché dessus (Errno 39). Seul le premier appel arrête ; les suivants se comptent.
+        self._hibernation_declenchee: bool = False
+        self._hibernations_ignorees: int = 0
         # Suivi temporel : heure réelle franchie à chaque tranche de 24h de temps simulé
         self._sim_start_ts: int | None = None  # premier timestamp simulé observé
         self._sim_real_start: float | None = (
@@ -1565,11 +1588,22 @@ class SimulationLoopV1(BaseScenario):
         if mesures_jour.actif():
             await asyncio.to_thread(mesures_jour.ecrire_mesures_du_jour, settings.workdir)
 
-    async def _declencher_hibernation_propre(self, resume_at: Any, person_id: str) -> None:
-        """Arrêt ordonné du contrôleur sur épuisement du quota journalier (ticket 077, axe 3).
+    async def _declencher_hibernation_propre(
+        self, resume_at: Any, person_id: str, motif: str = "quota_journalier"
+    ) -> None:
+        """Arrêt ordonné du contrôleur plutôt qu'une décision par défaut (077 axe 3, 105).
 
         Garantit qu'aucun repli par défaut (index 0) n'entre dans les résultats : plutôt que de
-        choisir à la place du modèle, le run s'arrête et se reprend après la réouverture du quota.
+        choisir à la place du modèle, le run s'arrête.
+
+        Deux motifs, et ils ne se reprennent PAS de la même façon :
+
+        - `quota_journalier` — le fournisseur annonce l'heure de réouverture ; `resume_at` la
+          porte, et le marqueur permet une reprise datée.
+        - `replis_consecutifs` — série de décisions que le modèle n'a pas prises, quelle qu'en
+          soit la cause (le 2026-09-23 : saturation amont, 54 × HTTP 503, aucun genre_erreur).
+          Aucune heure de réouverture n'existe : `resume_at` vaut None et la reprise se décide à
+          la main, sur le taux de 503 observé.
 
         ⚠ L'arrêt passe par un SIGTERM au processus, et NON par `sys.exit` : cette coroutine est
         servie par l'ASGI, où `SystemExit` se ravale en erreur de requête sans jamais rendre de
@@ -1577,22 +1611,48 @@ class SimulationLoopV1(BaseScenario):
         """
         from urban_mobility_agents.utils import rejeu_decisions
 
-        logger.warning(
-            f"[hibernation] Quota journalier épuisé pour {person_id} (réouverture : {resume_at}). "
-            "Arrêt ordonné du contrôleur."
-        )
+        # Posé AVANT le premier `await` : la boucle asyncio ne peut pas intercaler un second
+        # appelant entre le test et l'affectation.
+        if self._hibernation_declenchee:
+            self._hibernations_ignorees += 1
+            logger.info(
+                f"[hibernation] déjà en cours — appel n° {self._hibernations_ignorees + 1} "
+                f"({motif}, {person_id}) ignoré."
+            )
+            return
+        self._hibernation_declenchee = True
+
+        if motif == "replis_consecutifs":
+            logger.error(
+                f"[ALARME] [hibernation] {self._replis_consecutifs} replis CONSÉCUTIFS "
+                f"(seuil {settings.agent.replis_consecutifs_max}), dernier pour {person_id} : "
+                f"le modèle ne décide plus. Arrêt ordonné du contrôleur plutôt que de remplir la "
+                f"mesure de choix par défaut. Aucune heure de réouverture : vérifier l'amont "
+                f"avant de reprendre."
+            )
+        else:
+            logger.warning(
+                f"[hibernation] Quota journalier épuisé pour {person_id} "
+                f"(réouverture : {resume_at}). Arrêt ordonné du contrôleur."
+            )
 
         # FAIL-OPEN sur le marqueur, et sur lui seul : perdre le marqueur coûte une reprise à
         # nommer à la main, ne PAS s'arrêter coûte le reste du run en replis par défaut.
         try:
             en_attente_path = Path(settings.workdir) / "en_attente_quota.json"
+            # Ticket 105 — `resume_at` est None sur un arrêt pour replis : une saturation
+            # n'annonce aucune heure de réouverture. Écrire "None" ferait croire à une date.
             resume_str = (
-                resume_at.isoformat() if hasattr(resume_at, "isoformat") else str(resume_at)
+                None
+                if resume_at is None
+                else (resume_at.isoformat() if hasattr(resume_at, "isoformat") else str(resume_at))
             )
             en_attente_path.write_text(
                 json.dumps(
                     {
+                        "motif": motif,
                         "resume_at": resume_str,
+                        "replis_consecutifs": self._replis_consecutifs,
                         "person_id": str(person_id),
                         "timestamp": self._current_sim_timestamp,
                         "jour_simule": jours_ecoules(self._current_sim_timestamp) + 1,
@@ -1667,7 +1727,7 @@ class SimulationLoopV1(BaseScenario):
         if entree_courte not in tampon:
             logger.error(
                 f"[ALARME] [evenements] le jugement de {person.person_id} sur "
-                f"« {applique.evenement_id} » est arrivé APRÈS la consolidation du soir : "
+                f"« {applique.evenement_id} » est arrivé APRÈS la consolidation : "
                 f"l'entrée avait déjà été consommée, et l'événement a été qualifié sur le seul "
                 f"fait mesuré ({gravite_mesuree:.2f}) au lieu de {jugement.importance_retenue:.2f}. "
                 f"Ne pas lire ce jour-là comme un jour jugé."
@@ -2282,11 +2342,18 @@ class SimulationLoopV1(BaseScenario):
             # incident réel dans la même entrée.
             if observation.env_ob_code == "arrival":
                 try:
+                    # ⚠ PAS une simple soustraction : `expected_arrive_at` est calculé par GAMA
+                    # depuis le `schedule_at` d'ORIGINE et n'est pas recalculé quand le départ
+                    # est reporté (bouclage J+1, règle `no_weekend_departures`). Un trajet du
+                    # vendredi soir joué le lundi comptait 71,6 h de retard alors qu'il était
+                    # arrivé en avance sur son propre départ. `retard_d_arrivee` retire le
+                    # report et garde le glissement ordinaire. Mesuré le 2026-09-23.
                     _retard_observe_s = float(
-                        max(
-                            0,
-                            int(observation.data.get("arrive_at", 0))
-                            - int(observation.data.get("expected_arrive_at", 0)),
+                        retard_d_arrivee(
+                            int(observation.data.get("arrive_at", 0)),
+                            int(observation.data.get("expected_arrive_at", 0)),
+                            observation.data.get("schedule_at"),
+                            observation.data.get("started_at"),
                         )
                     )
                 except (TypeError, ValueError) as _err:
@@ -2443,28 +2510,31 @@ class SimulationLoopV1(BaseScenario):
             origine="vecu",
         )
 
-        # ── Ticket 100, lot 3 — le jugement de l'agent, DANS LA FILE DU SOIR (Q6) ───────
-        # L'appel ne retarde pas le traitement de l'arrivée : il part en tâche de fond, et son
-        # résultat relève l'importance de l'entrée de mémoire courte qui vient d'être écrite.
+        # ── Ticket 100, lot 3 — le jugement de l'agent, SYNCHRONE À L'INJECTION ────────
+        # Q6 le posait en tâche de fond, pour ne pas retarder le traitement de l'arrivée : la
+        # consolidation devait prendre pour PLANCHER la plus forte importance des entrées
+        # qu'elle consomme, et relever l'entrée courte avant qu'elle soit consommée suffisait.
         #
-        # Pourquoi cela suffit, et pourquoi rien n'est à requalifier : la consolidation du soir
-        # prend pour PLANCHER la plus forte importance des entrées qu'elle consomme, et c'est
-        # elle qui écrit l'entrée durable. Relever l'entrée courte avant qu'elle soit consommée
-        # relève donc la réflexion, sa gravité et sa durée de vie — toutes calculées au moment
-        # de l'écriture, comme il se doit.
+        # ⚠ CE RAISONNEMENT SUPPOSAIT UNE CONSOLIDATION DU SOIR. Il n'y en a pas : la réflexion
+        # part au SEUIL D'ENTRÉES (`stm_reflection_min_entrees`, 10 par défaut). L'entrée de
+        # l'événement est donc souvent celle qui fait franchir le seuil — elle déclenche alors
+        # la consolidation qui la consomme, pendant que son propre jugement est en vol. Mesuré
+        # le 2026-09-23 : injection à 10:24:08, consolidation à 10:24:09, jugement rendu à
+        # 10:24:14. Cinq secondes trop tard, et l'événement qualifié sur le fait mesuré (0,87)
+        # au lieu de la gravité jugée (0,75) — c'est-à-dire sous le régime que D7 a abandonné.
         #
-        # ⚠ Si le jugement arrive APRÈS la consolidation, l'événement aura été qualifié sur le
-        # seul fait mesuré. Ce n'est pas faux, mais ce n'est pas ce qui était déclaré : une
-        # [ALARME] le dit, plutôt que de laisser croire que l'agent a jugé.
+        # La course n'est pas gagnable : elle se joue sur le nombre de trajets qui précèdent
+        # l'événement dans la journée, et le jugement la perd à chaque fois que l'entrée
+        # injectée est la dixième. On l'attend donc, ce que `a_l_injection` annonce de toute
+        # façon, et ce que la prise `reveil` fait déjà (jugement AVANT écriture). Coût : le
+        # traitement de CETTE arrivée-là attend quelques secondes, une à deux fois par run.
         if _jugement_attendu:
             _entree_courte = self.agent.get_short_term_memory(
                 person.person_id
             ).recent_entries[-1]
-            self._spawn(
-                self._juger_evenement_subi(
-                    _registre_chocs, _choc, person, _entree_courte, _gravite,
-                    observation.timestamp, _detail,
-                )
+            await self._juger_evenement_subi(
+                _registre_chocs, _choc, person, _entree_courte, _gravite,
+                observation.timestamp, _detail,
             )
 
         # Ticket 071, lot 4 — le trajet accompli entre au JOURNAL, d'où sortent les habitudes
@@ -3158,8 +3228,12 @@ class SimulationLoopV1(BaseScenario):
         if departure_time < timestamp:
             departure_time += 86400  # activité du lendemain (bouclage J+1)
         # Aucun déplacement ne démarre le week-end : un départ samedi/dimanche est
-        # reporté au lundi suivant à la même heure. L'itinéraire OTP, expected_arrive_at
-        # et le schedule_at côté GAMA découlent tous de departure_time → tout est décalé.
+        # reporté au lundi suivant à la même heure. L'itinéraire OTP et le schedule_at côté
+        # GAMA découlent de departure_time.
+        # ⚠ `expected_arrive_at` NE SUIT PAS — vérifié le 2026-09-23 sur gama_arrivals.csv :
+        # schedule_at vendredi 19:35, started_at lundi 19:15, expected_arrive_at resté au
+        # vendredi 19:50. Le retard d'arrivée valait donc 71,6 h pour un trajet de douze
+        # minutes. Le report se retire à la lecture, dans `retard_d_arrivee` (text_helper).
         if settings.agent.no_weekend_departures:
             shifted = shift_weekend_departure_to_monday(departure_time)
             if shifted != departure_time:
@@ -3452,26 +3526,55 @@ class SimulationLoopV1(BaseScenario):
                 )
                 if isinstance(plan_index, int) and 0 <= plan_index < len(itineraries):
                     selection_method = "LLM"
+                    # Ticket 105 — une décision prise casse la série.
+                    self._replis_consecutifs = 0
                 else:
-                    # Ticket 077, axe 3 — hibernation sur quota journalier, armée par
-                    # EXPERIMENT_HIBERNATE_ON_QUOTA : le run s'arrête plutôt que de laisser
-                    # l'index 0 se faire passer pour une décision du modèle.
-                    if (
-                        os.getenv("EXPERIMENT_HIBERNATE_ON_QUOTA") == "1"
-                        and _trace_decision.get("genre_erreur") == "quota_journalier"
-                    ):
-                        resume_at = _trace_decision.get("reprise_a")
-                        await self._declencher_hibernation_propre(resume_at, person.person_id)
-                        # SIGTERM demandé ; le couple respecte la signature au cas où la
-                        # coroutine reprend la main avant que le processus ne tombe.
-                        return None, None
+                    # Ticket 105 — la série de replis se compte AVANT toute décision d'arrêt :
+                    # c'est elle, et non le motif de l'échec, qui dit qu'on a changé de régime.
+                    self._replis_consecutifs += 1
+
+                    # Ticket 105 — le repli n'était qu'en `debug`, donc invisible : il a fallu
+                    # fouiller `moves.csv` à la main le 2026-09-23 pour découvrir que la fenêtre
+                    # de mesure en portait 10,3 %. Une décision que le modèle n'a pas prise est
+                    # une anomalie de mesure, elle se journalise comme telle.
+                    logger.error(
+                        f"[ALARME] [repli] décision servie par l'index 0, PAS par le modèle | "
+                        f"agent={person.person_id} instant={humanize_date(timestamp)} "
+                        f"destination={next_activity.location} "
+                        f"genre_erreur={_trace_decision.get('genre_erreur') or 'aucun'} "
+                        f"consecutifs={self._replis_consecutifs}"
+                    )
+
+                    # Ticket 077 axe 3, ÉTENDU par le ticket 105 — le run s'arrête plutôt que de
+                    # laisser l'index 0 se faire passer pour une décision du modèle. Deux motifs
+                    # d'arrêt, armés par le même verrou d'expérience :
+                    #   • quota journalier — le fournisseur dit à quelle heure il rouvre ;
+                    #   • replis consécutifs — n'importe quelle cause, y compris une saturation
+                    #     amont qui ne renvoie AUCUN genre_erreur (54 × HTTP 503 « high demand »
+                    #     le 2026-09-23, zéro RESOURCE_EXHAUSTED). C'est le filet qui rattrape
+                    #     les motifs qu'on n'a pas encore rencontrés.
+                    if _arret_sur_repli_arme():
+                        if _trace_decision.get("genre_erreur") == "quota_journalier":
+                            await self._declencher_hibernation_propre(
+                                _trace_decision.get("reprise_a"),
+                                person.person_id,
+                                motif="quota_journalier",
+                            )
+                            # SIGTERM demandé ; le couple respecte la signature au cas où la
+                            # coroutine reprend la main avant que le processus ne tombe.
+                            return None, None
+                        if self._replis_consecutifs >= settings.agent.replis_consecutifs_max:
+                            await self._declencher_hibernation_propre(
+                                None, person.person_id, motif="replis_consecutifs"
+                            )
+                            return None, None
                     plan_index = 0
                     provider_info = ""
                     mode_probabilities = {}
                     selection_method = "LLM Error (Default index)"
-                    logger.debug(
-                        f"[timestamp: {humanize_date(timestamp)}] No suitable plan found for person {person.person_id} to {next_activity.location}"
-                    )
+                    # Le modèle n'a rien décidé : « direct », calculé avant de savoir qu'on
+                    # repliait, faisait passer l'index 0 pour un appel servi (run du 2026-09-24).
+                    _origine_decision = "repli"
 
             plan: TravelPlan = itineraries[plan_index]
             plan.purpose = next_activity.purpose

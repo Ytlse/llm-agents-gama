@@ -1,0 +1,151 @@
+# Espaces de travail du registre d'expériences — spec `espaces-de-travail-experiences.md`.
+#
+# Un espace est une VUE, jamais un rangement : y ajouter ou en retirer une expérience ne
+# déplace, ne renomme et ne supprime rien sur le disque (R7).
+#
+# Le nom d'une expérience se calcule depuis ses paramètres (spec `nommage-canonique-experiences`) :
+# il ne peut donc pas porter sa phase. C'est l'étiquette `phase` ci-dessous qui fait le lien,
+# et elle n'existe que dans cette vue (R6a).
+#
+# Un nom sans dossier sur le disque n'est pas une erreur : la ligne s'affiche comme attendue
+# et le registre compte les manquantes (R9). Ce fichier échoue OUVERT : s'il est illisible,
+# le registre s'ouvre sur « Toutes les expériences » (R13).
+version: espaces1
+espaces:
+  - nom: papier version courte
+    note: >-
+      Ticket 103 — le carré Jev × Gemini hors échantillon sur la cohorte c2, et trois graines
+      par décideur clé sur c1. Les entrées « Acquis (c1) » sont déjà mesurées : elles ne sont
+      pas à rejouer, elles sont là parce que les nouvelles ne se lisent pas sans elles (une
+      mesure c2 ne se compare pas à une bande c1).
+    entrees:
+
+      # ── Phase 1 — l'échelle de c2 ──────────────────────────────────────────────────
+      # Déterministes et gratuites, elles passent EN PREMIER : sans le plafond et le plancher
+      # de c2, aucune ligne des phases 2 et 3 ne se lit (ticket 103, § 1).
+      - experience: exp_mnl_jtir_pop-1000_AAMAS_v6_c2_jeu-20260316_EN_c_nosim
+        phase: Phase 1 — échelle c2
+      - experience: exp_lgbm_jtir_pop-1000_AAMAS_v6_c2_jeu-20260316_EN_c_nosim
+        phase: Phase 1 — échelle c2
+      - experience: exp_klr_jtir_pop-1000_AAMAS_v6_c2_jeu-20260316_EN_c_nosim
+        phase: Phase 1 — échelle c2
+      - experience: exp_rf_jtir_pop-1000_AAMAS_v6_c2_jeu-20260316_EN_c_nosim
+        phase: Phase 1 — échelle c2
+        note: >-
+          Lanceur dédié et chemin de population HÔTE : la forêt a été estimée sous
+          scikit-learn 1.8.0 et le conteneur porte la 1.9.0 (cf. campagne `rejeu_jeu_corrige_v6`).
+      - experience: exp_alea_jtir_pop-1000_AAMAS_v6_c2_jeu-20260316_EN_c_nosim
+        phase: Phase 1 — échelle c2
+      - experience: exp_majvoiture_jtir_pop-1000_AAMAS_v6_c2_jeu-20260316_EN_c_nosim
+        phase: Phase 1 — échelle c2
+      - experience: exp_durmin_jtir_pop-1000_AAMAS_v6_c2_jeu-20260316_EN_c_nosim
+        phase: Phase 1 — échelle c2
+
+      # ── Phase 2 — Jev sur c2 ───────────────────────────────────────────────────────
+      # Cinq minutes et ~0,35 $ pour les trois. `proexp32` est le résultat pivot hors
+      # échantillon : c'est lui que la question Q1 du ticket interroge.
+      - experience: exp_jev-1130_promin02_jtir_pop-1000_AAMAS_v6_c2_jeu-20260316_EN_c_nosim
+        phase: Phase 2 — Jev sur c2
+      - experience: exp_jev-1130_proexp05_jtir_pop-1000_AAMAS_v6_c2_jeu-20260316_EN_c_nosim
+        phase: Phase 2 — Jev sur c2
+      - experience: exp_jev-1130_proexp32_jtir_pop-1000_AAMAS_v6_c2_jeu-20260316_EN_c_nosim
+        phase: Phase 2 — Jev sur c2
+        note: Résultat pivot hors échantillon (Q1).
+
+      # ── Phase 3 — Gemini sur c2 ────────────────────────────────────────────────────
+      # Le seul vrai coût du plan : ~4 h et ~630 requêtes de quota gratuit.
+      - experience: exp_gemini-35-fl_proexp05_jtir_pop-1000_AAMAS_v6_c2_jeu-20260316_EN_c_t0_nosim
+        phase: Phase 3 — Gemini sur c2
+        note: Déclarée le 22/09 à 13 h 42, jamais exécutée.
+      - experience: exp_gemini-35-fl_proexp32_jtir_pop-1000_AAMAS_v6_c2_jeu-20260316_EN_c_t0_nosim
+        phase: Phase 3 — Gemini sur c2
+        note: >-
+          La ligne qui rend le carré carré : le prompt réglé pour Jev, servi à Gemini (Q2).
+          Sans elle on ignore si l'avantage tient au texte ou au modèle qui le lit.
+
+      # ── Phase 4 — trois graines par décideur clé, sur c1 ───────────────────────────
+      # Une graine = `graine_ordre`, `graine_tirage` et `calendrier.graine` à la même valeur.
+      # Mesure au passage le déterminisme de Jev, inconnu (ticket 096).
+      - experience: exp_jev-1130_proexp32_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go123_gt123_gc123_nosim
+        phase: Phase 4 — graines Jev (c1)
+      - experience: exp_jev-1130_proexp32_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go789_gt789_gc789_nosim
+        phase: Phase 4 — graines Jev (c1)
+      - experience: exp_jev-1130_proexp05_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go123_gt123_gc123_nosim
+        phase: Phase 4 — graines Jev (c1)
+      - experience: exp_jev-1130_proexp05_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go789_gt789_gc789_nosim
+        phase: Phase 4 — graines Jev (c1)
+
+      # ── Phase 5 — rejeux inter-graines (c1) ────────────────────────────────────────
+      # Les dix exécutions graines 123 et 789 pour compléter la colonne inter-seed range
+      # du Tableau 1 du papier court (mistral-large, gemini-3.1 et jev promin02).
+      - experience: exp_mistral-l-25_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go123_gt123_gc123_t0_nosim
+        phase: Phase 5 — rejeux inter-graines (c1)
+      - experience: exp_mistral-l-25_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go789_gt789_gc789_t0_nosim
+        phase: Phase 5 — rejeux inter-graines (c1)
+      - experience: exp_jev-1130_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go123_gt123_gc123_nosim
+        phase: Phase 5 — rejeux inter-graines (c1)
+      - experience: exp_jev-1130_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go789_gt789_gc789_nosim
+        phase: Phase 5 — rejeux inter-graines (c1)
+      - experience: exp_gemini-31-fl_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go123_gt123_gc123_t0_nosim
+        phase: Phase 5 — rejeux inter-graines (c1)
+      - experience: exp_gemini-31-fl_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go789_gt789_gc789_t0_nosim
+        phase: Phase 5 — rejeux inter-graines (c1)
+      - experience: exp_gemini-31-fl_proexp05_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go123_gt123_gc123_t0_nosim
+        phase: Phase 5 — rejeux inter-graines (c1)
+      - experience: exp_gemini-31-fl_proexp05_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go789_gt789_gc789_t0_nosim
+        phase: Phase 5 — rejeux inter-graines (c1)
+      - experience: exp_mistral-l-25_proexp05_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go123_gt123_gc123_t0_nosim
+        phase: Phase 5 — rejeux inter-graines (c1)
+      - experience: exp_mistral-l-25_proexp05_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go789_gt789_gc789_t0_nosim
+        phase: Phase 5 — rejeux inter-graines (c1)
+
+      # ── Optionnel — les trois runs Gemini différés ─────────────────────────────────
+      # Proposés à la coupe le 2026-09-22 : ~6 h et une journée de quota pour trois runs que
+      # ni Q1 ni Q2 n'utilisent. Ils restent ici pour que la décision de les couper reste
+      # visible au lieu de disparaître (R6b).
+      - experience: exp_gemini-35-fl_promin02_jtir_pop-1000_AAMAS_v6_c2_jeu-20260316_EN_c_t0_nosim
+        phase: Optionnel — Gemini différé
+        optionnel: true
+        note: Ni Q1 ni Q2 ne l'utilisent ; il ne sert que le récit « le prompt compte ».
+      - experience: exp_gemini-35-fl_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go123_gt123_gc123_t0_nosim
+        phase: Optionnel — Gemini différé
+        optionnel: true
+        note: >-
+          L'écart à défendre vaut 2,16 points, contre une étendue inter-graines mesurée de
+          0,56 et une résolution de cohorte de ±1,3.
+      - experience: exp_gemini-35-fl_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go789_gt789_gc789_t0_nosim
+        phase: Optionnel — Gemini différé
+        optionnel: true
+
+      # ── Acquis (c1) — déjà mesurées, rien à rejouer ────────────────────────────────
+      # La bande de référence, les planchers et les bras publiés de la cohorte c1.
+      - experience: exp_jev-1130_proexp32_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_nosim
+        phase: Acquis (c1)
+        note: Le 3,65 en échantillon, celui que la phase 2 met à l'épreuve.
+      - experience: exp_jev-1130_proexp05_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_nosim
+        phase: Acquis (c1)
+      - experience: exp_jev-1130_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_nosim
+        phase: Acquis (c1)
+      - experience: exp_gemini-35-fl_proexp05_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_t0_nosim
+        phase: Acquis (c1)
+        note: Graine 42 du seul décideur dont les trois graines existent (4,86 / 4,65 / 4,30).
+      - experience: exp_gemini-35-fl_proexp05_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go123_gt123_gc123_t0_nosim
+        phase: Acquis (c1)
+      - experience: exp_gemini-35-fl_proexp05_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_go789_gt789_gc789_t0_nosim
+        phase: Acquis (c1)
+      - experience: exp_gemini-35-fl_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_t0_nosim
+        phase: Acquis (c1)
+      - experience: exp_mnl_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_nosim
+        phase: Acquis (c1)
+      - experience: exp_lgbm_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_nosim
+        phase: Acquis (c1)
+      - experience: exp_klr_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_nosim
+        phase: Acquis (c1)
+      - experience: exp_rf_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_nosim
+        phase: Acquis (c1)
+      - experience: exp_alea_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_nosim
+        phase: Acquis (c1)
+      - experience: exp_majvoiture_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_nosim
+        phase: Acquis (c1)
+      - experience: exp_durmin_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_nosim
+        phase: Acquis (c1)

@@ -17,7 +17,7 @@ gravité, force, durée de service, consolidation, croyance, contradiction.
 | Ce qui change dans le monde | un retard chiffré | **rien** |
 | Ce que l'agent sait en décidant | l'offre nominale, rien d'autre | ce qu'il a lu ce matin |
 | Écriture en mémoire | texte **joint** à l'observation d'arrivée, courte seulement | entrée **autonome**, courte **et longue** |
-| Jugement | dans la file du soir | à l'injection |
+| Jugement | **à l'injection**, attendu | à l'injection |
 | Texte | écrit par nous, jour par jour | **cité**, un seul, avec son empreinte |
 | Qui | `mode`, `tirage`, `agents` | `foyers` — un lecteur par ménage |
 | Quel jour | déclaré, le même pour tous | **tiré par foyer** dans une fenêtre |
@@ -69,6 +69,53 @@ Le retard reste **subi** pour autant : il décale la journée, contraint les tra
 entre dans ce que l'agent raconte le soir. Il cesse seulement de peser sur la gravité. Et
 `jugement: aucun` devient le seul chemin par lequel la gravité déterministe qualifie une entrée.
 
+### Un départ reporté n'est pas un retard subi
+
+`expected_arrive_at` est calculé par GAMA depuis le `schedule_at` **d'origine**, et il n'est pas
+recalculé quand le départ est reporté — ni par le bouclage J+1 (`departure_time += 86400`), ni
+par la règle `agent.no_weekend_departures`. Le retard d'arrivée valait donc le report tout
+entier :
+
+    schedule_at vendredi 19:35 · started_at lundi 19:15 · attendu vendredi 19:50
+    arrivé lundi 19:27  →  71,6 h de « retard »  pour un trajet de douze minutes
+
+Ce trajet est arrivé **en avance sur son propre départ** : douze minutes contre quinze
+planifiées. Il produisait pourtant une gravité de 0,70 et un souvenir « grave » — contre 0,75
+pour un choc c3 déclaré. Une ligne de base ainsi peuplée ne se distingue plus de ce qu'on y
+injecte, et le prompt de l'agent portait un `Late by: 23 hours` qu'il n'avait pas vécu.
+
+`retard_d_arrivee()` (`text_helper/models/arrival.py`) retire le report. Il le **déduit** :
+`started_at - schedule_at` au-delà d'une demi-journée ne peut être qu'un report de calendrier,
+les deux règles déplaçant un départ d'un jour entier ou jusqu'au lundi, là où un glissement
+ordinaire se compte en minutes.
+
+⚠ **Ce qui reste compté**, et doit le rester : un départ qui glisse de vingt minutes parce que
+l'activité précédente a débordé. C'est un retard vécu. Seul le report décidé par le calendrier
+est retiré ; `departure_delay_s` de `gama_arrivals.csv` porte le glissement ordinaire pour qui
+veut le lire à part.
+
+### Le jugement est ATTENDU, il ne part pas en tâche de fond
+
+Le ticket 100 le posait « dans la file du soir » : l'appel partait en arrière-plan et relevait
+l'importance de l'entrée courte avant que la consolidation la consomme. Le raisonnement
+supposait une consolidation **du soir**. Il n'y en a pas : la réflexion part au **seuil
+d'entrées** (`stm_reflection_min_entries`, 10 par défaut), à l'heure où le compte est atteint.
+
+L'entrée d'un événement est donc souvent celle qui fait franchir ce seuil — elle déclenche la
+consolidation qui la consomme, pendant que son propre jugement est encore en vol. Mesuré le
+2026-09-23 : injection à 10:24:08, consolidation à 10:24:09, jugement rendu à 10:24:14. Cinq
+secondes trop tard, et l'événement qualifié sur le fait mesuré (0,87) au lieu de la gravité
+jugée (0,75) — c'est-à-dire sous le régime que D7 a abandonné.
+
+La course n'est pas gagnable : elle se joue sur le nombre de trajets qui précèdent l'événement
+dans la journée, et le jugement la perd chaque fois que l'entrée injectée est la dixième. Il est
+donc **attendu**. Le traitement de cette arrivée-là prend quelques secondes de plus, une à deux
+fois par run.
+
+L'`[ALARME]` du jugement tardif **reste en place**. Elle ne peut plus se déclencher, et c'est
+exactement pourquoi on la garde : quiconque reviendrait au différé retrouverait l'alarme plutôt
+qu'un silence.
+
 Un échelon hors grille est **refusé**, avec `[ALARME]`, et l'exposition est déclarée non avenue.
 Aucun repli, aucune valeur médiane : un repli fabriquerait une exposition non jugée et la
 compterait comme les autres.
@@ -94,6 +141,103 @@ Deux choses circulent, et **un seul saut** :
 Quatre gardes contre la boucle : le repère par receveur (jamais deux fois la même chose),
 `known_beliefs` dans le prompt (c'est là que l'agent reconnaît ce qu'il sait déjà), la
 provenance, et un détecteur de reformulation circulaire qui **alerte sans jamais couper**.
+
+### Jouer une expérience de foyers depuis l'onglet 🧠 Expériences Mémoire
+
+L'onglet (ticket 109) et `make experience-memoire-lancer EXP=…` acceptent une **population
+scellée** comme `population_20_foyers_059`, en plus d'un persona unitaire. Ce qui change alors :
+
+- **L'exposition déclarée est gardée telle quelle.** Sur un persona seul, la règle est forcée à
+  `agents` et restreinte à lui. Sur un jeu de plusieurs agents, seules `foyers` et `agents` sont
+  admises : une règle `mode` ou un tirage est **refusé** avant le lancement, parce que la
+  réécrire désignerait le nom de la population comme un habitant — et personne ne serait exposé.
+  Une règle `agents` dont aucun identifiant n'est dans la population est refusée pour la même
+  raison.
+- **Une population introuvable arrête tout.** Un nom qui n'est ni un dossier de
+  `data/population/` ni un identifiant numérique lève `[ALARME] [population]`. Seul un
+  identifiant numérique garde le repli historique `population_1_<id>`.
+- **Le partage dans le foyer se coche dans le formulaire** (`partage_foyer: true` dans
+  `experience_memoire.yaml`, suffixe `_foyer` dans le nom). L'orchestrateur pose
+  `MEMOIRE__PARTAGE_FOYER_ENABLED` — **à vrai comme à faux** — et le lanceur le retrouve dans
+  `identite_run.json` (champ `partage_foyer`) : un conteneur qui ne l'aurait pas reçu arrête le
+  bras. Coché sur une population sans foyer d'au moins deux membres, l'expérience est refusée :
+  elle tournerait sans rien partager et se lirait « rien ne se transmet ».
+- **L'horizon est celui de l'expérience**, et non plus 42 jours en dur ; le délai de garde du bras
+  suit le volume (90 s par agent et par jour simulé, jamais moins de 6 h).
+- **Le fournisseur peut être imposé** (`adaptateur: groq`). Un même nom de modèle peut être servi
+  par deux fournisseurs — Groq et LM Studio servent tous deux `qwen/qwen3.8-27b` — et sans ce
+  filtre une partie des appels partirait ailleurs. Un modèle qu'aucune instance du fournisseur ne
+  sert fait refuser le bras.
+- **« Bras à jouer »** : `A — traité seul (debug)` laisse l'expérience à l'état `traite_ok`,
+  jamais `terminee` — un bras seul ne passe pas pour une mesure A/B. L'état final se lit sur les
+  **bras**, pas sur l'invocation : un témoin joué seul après un traité abouti termine l'A/B.
+- **Un bras coupé par le garde-fou (ticket 105) est SUSPENDU, pas réussi.** Quota journalier ou
+  replis consécutifs : le contrôleur pose `en_attente_quota.json` puis s'arrête en code 0. La
+  cohorte relit ce marqueur (s'il date de ce bras), écrit `reprise.json` dans le dossier du bras
+  (nom du run à reprendre) et rend le code 7. L'orchestrateur marque le bras `suspendu`,
+  l'expérience `suspendue` (badge ⏸ dans l'onglet), et **ne lance pas le témoin** sur un quota
+  vide. Relancer la même expérience (bouton « ⏯ Reprendre le bras suspendu ») reprend le bras
+  par son nom (`make run … REPRISE=<run>`, ticket 091) ; un bras déjà `ok` n'est jamais rejoué.
+- **Les foyers exposés viennent du MANIFEST quand la déclaration vise une autre population.**
+  `a09_vent_autan` déclare les six foyers de `population_20_foyers_059` : sur une autre
+  population, aucun ne serait présent et personne ne lirait. La cohorte prend alors
+  `groupes.expose` du `MANIFEST.yaml` de la population, et refuse le bras s'il n'y en a pas.
+- **Le contrôle d'injections (ticket 108) compte un lecteur par foyer exposé**
+  (`foyers × lecteurs_par_foyer`), sur l'événement DÉRIVÉ réellement joué ; un écart lève
+  `[ALARME] [108]` en fin d'expérience.
+- **L'essai à blanc (`DRY_RUN=1`) ne touche ni à l'état ni aux bras** (2026-09-24). Il vérifie le
+  routage des modèles et le refus du partage sans foyer, sans simulation ni appel, et range ses
+  traces synthétiques sous `essai_a_blanc/`. Jusque-là il écrivait `etat.json` et un faux
+  `moves.csv` dans `traite/` et `temoin/` : le c6 s'affichait « Terminée » après 50 ms, et une
+  vraie relance aurait sauté les deux bras.
+- **Enchaîner plusieurs expériences sans surveillance :** `make experience-memoire-nuit` joue,
+  une par une et en arrière-plan, toutes les expériences déclarées non terminées, dans l'ordre de
+  création, ou `EXP="a b c"` dans cet ordre. Un bras suspendu pour saturation (503) est relancé
+  toutes les 30 min (`ATTENTE_S`), au plus 6 fois sans jour simulé gagné (`ESSAIS_MAX`). Un quota
+  épuisé fait passer à l'expérience suivante. La commande refuse de partir si une campagne tourne
+  déjà et empêche la mise en veille du Mac (`caffeinate`). Le journal
+  `experiments/enchainement_nuit_<date>.log` se termine par un bilan : terminées, suspendues à
+  relancer, en échec.
+
+**Les jours 13 et 14 sont un week-end.** Le run démarre le lundi 16 mars 2026 ; le jour 12 est
+un vendredi, et le dépôt tourne sous `NO_WEEKEND_DEPARTURES` : aucun départ le week-end, pour
+aucun agent. c1 (jours 12 à 14), c2 et c3 (12 et 13) ne s'appliquent donc qu'au jour 12, et
+l'`[ALARME] [108]` le dira en fin d'expérience. Le jour 12, 861500 ne prend que la voiture et
+les transports collectifs (bras c3 du 24/09) : **c4 (train) et c5 (marche, vélo, deux-roues) ne
+l'exposeraient pas**. Il leur faut un persona qui emprunte ces modes ce jour-là.
+
+**Seuls les adultes lisent l'article** (2026-09-24). Le tirage des lecteurs d'un foyer
+(`lecteurs_par_foyer`) se fait parmi ses membres mobiles d'au moins 18 ans : dans une famille de
+quatre à deux adultes, un lecteur est tiré parmi les deux parents ; l'autre parent et les enfants
+sont les témoins internes. Un âge absent n'exclut pas (il est signalé en WARNING) ; un foyer
+exposé sans adulte mobile lève `[ALARME]` et n'a pas de lecteur.
+
+Population de mise au point : `population_4_foyer_133048` — un foyer de quatre (Arthur, 40 ans,
+et sa conjointe, 42 ans, cyclistes réguliers qui prennent aussi voiture, TC et marche ; deux
+enfants de 6 et 9 ans, surtout conduits). Extraite par
+`extraire_foyers.py --taille 4 --adultes 2 --menage 133048 --temoins 0 --motif …` ; le motif est
+écrit au manifeste.
+
+Répartition Gemini par défaut (2026-09-24), mesurée sur 861500 (111 agents-jours) :
+
+| Fonction | Part des requêtes | Modèle |
+|---|---|---|
+| Réflexion du soir (STM) | 49 % | `gemini-3.5-flash-lite` |
+| Décision | 43 % | `gemini-3.1-flash-lite` |
+| Enquête d'affinité | 5 % | `gemini-3.1-flash-lite` |
+| Auto-réflexion (LTM) | 3 % | `gemini-3.1-flash-lite` |
+| Jugement de l'article | < 1 % | `gemini-3.1-flash-lite` |
+
+Configuration de debug du 2026-09-24, tout Groq (hors quota Gemini) :
+
+| Fonction | Modèle | Pourquoi |
+|---|---|---|
+| Décision | `openai/gpt-oss-120b` | le plus gros volume ; modèle *Production*, sans plafond de sortie |
+| Jugement de l'article | `qwen/qwen3.8-27b` | 6 appels courts, du J9 au J13 : le seul rôle qui tient sous 1 000 tokens de sortie/min |
+| Réflexion du soir, auto-réflexion, enquête | `openai/gpt-oss-20b` | ~26 appels par jour simulé, plus le jalon du J12 |
+
+⚠ Le quota de `gpt-oss-120b` (1 000 requêtes/jour) couvre une quinzaine de jours simulés pour
+vingt agents : au-delà, le garde-fou du ticket 105 coupe le bras.
 
 ## Ce qui se mesure
 
@@ -157,9 +301,11 @@ make run OFFLINE=1 CACHE=0 CHOC=c3_panne_reseau
 make run OFFLINE=1 CHOC=0          # retirer le choc
 ```
 
-Les cas livrés sont dans [`services/llm-agents/config/chocs/`](../../services/llm-agents/config/chocs/) :
-`c1_bouchon_rocade`, `c2_crevaison`, `c3_panne_reseau`, `c4_train_supprime`, `c5_orage_grele`. Ils
-couvrent les six modes du dépôt.
+Les cas livrés sont dans [`services/llm-agents/config/evenements/`](../../services/llm-agents/config/evenements/) :
+`c1_bouchon_rocade`, `c2_crevaison`, `c3_panne_reseau`, `c4_train_supprime`, `c5_orage_grele`,
+`c6_voiture_suspecte`. Ils couvrent les six modes du dépôt. Les copies de `config/chocs/` sont
+l'ancien format du ticket 079, lues seulement quand `config/evenements/` n'a pas le fichier.
+Depuis le 2026-09-24, les six déclarent `cadence: jour` (voir « Cadence »), dans les deux répertoires.
 
 ⚠ **Coupez le cache.** Sa clé ne porte aucune durée : une décision prise avant le choc peut être
 resservie pendant. Une `[ALARME]` se lève si on l'oublie, mais elle ne corrige rien.
@@ -339,6 +485,12 @@ une règle d'exposition inconnue.
 trente minutes, et l'agent faisait quatre trajets en voiture ce jour-là : `chocs.jsonl` porte
 **quatre** applications, quatre dépannages, quatre fois le même récit. Le protocole en comptait
 un. L'intensité réelle valait quatre fois l'intensité annoncée, et rien ne le disait.
+
+**Les six chocs livrés déclarent `cadence: jour`** (c3 et c6 depuis le 23/09, c1, c2, c4 et c5
+depuis le 2026-09-24). Le texte de chaque jour raconte **un** trajet et porte **un** retard
+(« arrived 60 minutes after the time I had planned ») : en `trajet`, ce même retard de soixante
+minutes frappait chaque trajet en voiture de la journée. Un bouchon qui dure vraiment toute la
+journée se déclarerait en `trajet` avec un texte écrit pour être revécu à chaque trajet.
 
 Les arrivées non touchées parce que l'agent l'avait déjà été le jour même sont comptées **à
 part** dans le journal : ni exposées, ni épargnées. Les confondre ferait passer un choc appliqué

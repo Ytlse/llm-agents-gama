@@ -114,15 +114,15 @@ class TestRateLimiterContract:
     def test_quotas_journaliers(self, ports):
         lim = ports.limiter
         lim.record_tokens("p3", 1234)
-        assert lim.daily_tokens("p3") == 1234
+        assert lim.daily_tokens_local_seulement("p3") == 1234
         for _ in range(3):
             time.sleep(0.002)   # au-delà de l'intervalle de lissage de p3 (60 µs)
             assert lim.try_reserve("p3") is True
-        assert lim.daily_requests("p3") == 3
+        assert lim.daily_requests_local_seulement("p3") == 3
         # rpd_limit=3 est déclaratif/informatif : on continue de réserver et mesurer au-delà
         time.sleep(0.002)
         assert lim.try_reserve("p3") is True
-        assert lim.daily_requests("p3") == 4
+        assert lim.daily_requests_local_seulement("p3") == 4
         assert lim.is_quota_exhausted("p3") is False
         # Seul un 429 effectif (via mark_quota_exhausted_until) écarte le provider
         lim.mark_quota_exhausted_until("p3")

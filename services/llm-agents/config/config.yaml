@@ -159,6 +159,6 @@ data:
   #   car: heure
   #   transit: {pas_min: 10}
   #   rail: {pas_min: 10}
-chocs:
+evenements:
   enabled: true
-  fichier: /app/config/chocs/c6_voiture_suspecte__861500.yaml
+  fichier: /app/config/evenements/c2_crevaison__861500.yaml

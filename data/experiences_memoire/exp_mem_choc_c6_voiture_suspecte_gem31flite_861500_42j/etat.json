@@ -1,0 +1,11 @@
+{
+  "nom": "exp_mem_choc_c6_voiture_suspecte_gem31flite_861500_42j",
+  "etat": "en_attente",
+  "cree_le": "2026-09-24T19:48:21.426538+00:00",
+  "traite": {
+    "etat": "en_attente"
+  },
+  "temoin": {
+    "etat": "en_attente"
+  }
+}

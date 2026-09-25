@@ -1,0 +1,200 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%% LaTeX Template for AAMAS-2027 (based on sigconf.tex)
+%%% Prepared by the AAMAS-2027 Publication Chairs based on the version from AAMAS-2026. 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%% Start your document with the \documentclass command.
+%%%
+%%% VERSION FRANCAISE de l'article court, AAMAS 2027. Gabarit officiel AAMAS-2027 fourni par
+%%%   l'auteur le 22 septembre 2026, avec quatre changements et rien d'autre :
+%%%   1. titre et mots-cles de l'article court, en francais ;
+%%%   2. babel french et emergencystretch (voir plus bas) ;
+%%%   3. le \section{Citations and References} d'exemple est retire : il s'imprimerait en
+%%%      section vide apres le 7 ;
+%%%   4. le texte d'exemple des acks est commente (consigne R14).
+%%%
+%%% L'ANGLAIS FAIT FOI (consigne R17, decision de l'auteur du 22 septembre 2026). Cette
+%%%   version est un rendu : les chapitres viennent de ../sections/*.fr.md, qui se
+%%%   realignent eux-memes sur les *.en.md. Une correction de fond se fait en anglais.
+
+
+%%% == IMPORTANT ==
+%%% Use the first variant below to anonymize your submission (no author information shown).
+%%% Use the second variant below for the final paper (including author information).
+%%% For further information on anonymity and double-blind reviewing, 
+%%% please consult the call for paper information
+%%% https://warwick.ac.uk/fac/sci/dcs/aamas2027/calls/
+
+%%%% For anonymized submission, use this
+\documentclass[sigconf,anonymous]{aamas} 
+\renewcommand{\texttt}[1]{{\ttfamily\hyphenchar\font=`\-\relax\hyphenpenalty=10000\relax #1}}
+%%%% For camera-ready, use this
+%\documentclass[sigconf]{aamas} 
+
+
+%%% Load required packages here (note that many are included already).
+
+\usepackage{balance}  % for balancing columns on the final page
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric}
+\usepackage{array}    % >{...} column prefixes, needed by the L column below
+\usepackage{tabularx} % width-constrained tables
+\usepackage{afterpage}% deferred \clearpage, float flushing at chapter boundaries
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\newcommand{\todo}[1]{\textbf{[#1]}}
+
+%%% LANGUE. babel french charge sans conflit sous aamas.cls : il pose seul l'espace fine
+%%%   insécable devant ; : ! ?, gère les guillemets et traduit References en Références.
+%%%   Ne pas doubler l'espace à la main dans les chapitres.
+\usepackage[french]{babel}
+
+%%% JUSTIFICATION. Le français fait des mots plus longs : cinq paragraphes débordaient dans
+%%%   la gouttière, jusqu'à 18,5 pt. \emergencystretch laisse TeX détendre ces lignes-là.
+%%%   Ne touche ni les marges, ni le corps, ni l'interligne.
+\emergencystretch=1.5em
+
+\setcounter{topnumber}{3}
+\setcounter{bottomnumber}{2}
+\setcounter{totalnumber}{4}
+\setcounter{dbltopnumber}{2}
+\renewcommand{\topfraction}{0.85}
+\renewcommand{\dbltopfraction}{0.85}
+\renewcommand{\bottomfraction}{0.5}
+\renewcommand{\textfraction}{0.1}
+\renewcommand{\floatpagefraction}{0.75}
+\renewcommand{\dblfloatpagefraction}{0.75}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%% AAMAS-2027 copyright block (do not change!)
+
+\makeatletter
+\gdef\@copyrightpermission{
+  \begin{minipage}{0.2\columnwidth}
+   \href{https://creativecommons.org/licenses/by/4.0/}{\includegraphics[width=0.90\textwidth]{by}}
+  \end{minipage}\hfill
+  \begin{minipage}{0.8\columnwidth}
+   \href{https://creativecommons.org/licenses/by/4.0/}{This work is licensed under a Creative Commons Attribution International 4.0 License.}
+  \end{minipage}
+  \vspace{5pt}
+}
+\makeatother
+
+\setcopyright{ifaamas}
+\acmConference[AAMAS 2027]{Proc.\@ of the 26th International Conference
+on Autonomous Agents and Multiagent Systems (AAMAS 2027)}{3--7 May 2027}{Hanoi, Vietnam}{M.~Baldoni, F.~Fang, W.~Yeoh, N.~Yorke-Smith (eds.)}
+\copyrightyear{2027}
+\acmYear{2027}
+\acmDOI{}
+%\acmPrice{}
+\acmISBN{}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%% == IMPORTANT ==
+%%% Use this command to specify your OpenReview submission number.
+%%% In anonymous mode, it will be printed on the first page.
+
+\acmSubmissionID{<<OpenReview submission id>>}
+
+%%% Use this command to specify the track you want to submit your paper to.
+
+\submissionType{Research Paper Track}
+%\submissionType{AAAI Track}
+%\submissionType{Demonstration Track}
+%\submissionType{Blue Sky Ideas Track}
+%\submissionType{JAAMAS Track}
+%\submissionType{Doctoral Consortium}
+
+%%% Use this command to specify the title of your paper.
+
+\title[Là où le chain-of-thought mérite sa place]{Là où le chain-of-thought mérite sa
+place : des agents génératifs de mobilité face à une enquête ménages déplacements réelle}
+
+%%% Provide names, affiliations, and email addresses for all authors.
+
+\author{Yves Bru}
+\affiliation{
+  \institution{UMR IRIT, Université Toulouse Capitole}
+  \city{Toulouse}
+  \country{France}}
+\email{yves.bru@gmail.com}
+
+\author{Benoit Gaudou}
+\affiliation{
+  \institution{UMR IRIT, Université Toulouse Capitole}
+  \city{Toulouse}
+  \country{France}}
+\email{benoit.gaudou@ut-capitole.fr}
+
+\author{Kamaldeep Singh Oberoi}
+\affiliation{
+  \institution{CESI, CESI LINEACT}
+  \city{Toulouse}
+  \country{France}}
+\email{ksoberoi@cesi.fr}
+
+%%% Use this environment to specify a short abstract for your paper.
+
+\input{chapters/00_Abstract}
+
+%%% Use this command to specify a few keywords describing your work.
+%%% Keywords should be separated by commas.
+
+\keywords{Agents génératifs ; Modèles de langue ; Simulation multi-agents ;
+Mobilité urbaine ; Choix modal ; Calage sur enquête déplacements}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%% Include any author-defined commands here.
+         
+\newcommand{\BibTeX}{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em\TeX}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+%%% The following commands remove the headers in your paper. For final 
+%%% papers, these will be inserted during the pagination process.
+
+%\pagestyle{fancy}
+%\fancyhead{}
+
+%%% The next command prints the information defined in the preamble.
+
+\maketitle 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CHAPTERS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\input{chapters/01_Introduction}
+\input{chapters/02_Related_work}
+\input{chapters/03_Agent}
+\input{chapters/04_Bench}
+\input{chapters/05_Results}
+\input{chapters/06_Non_tabulated}
+\input{chapters/07_Implications}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ANNEXES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%% Remerciements : a remplir avant la version non anonyme. Le gabarit livrait ici un
+%%% texte d'exemple ; il est retire (consigne R14, aucun placeholder dans le texte livre).
+%%% \begin{acks} ... \end{acks}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%% The next two lines define, first, the bibliography style to be 
+%%% applied, and, second, the bibliography file to be used.
+
+\bibliographystyle{ACM-Reference-Format} 
+\bibliography{sample}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\end{document}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+

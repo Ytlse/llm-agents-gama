@@ -45,6 +45,13 @@ def _boucle(timestamp: int = T0) -> SimpleNamespace:
         agent=None,
         population=_PopulationDouble(),
         _current_sim_timestamp=timestamp,
+        # Ticket 105 — le marqueur d'arrêt porte désormais le compteur de replis consécutifs.
+        # Le mannequin doit refléter la classe : un `getattr` défensif côté production
+        # masquerait un vrai AttributeError le jour où le compteur disparaîtrait.
+        _replis_consecutifs=0,
+        # Front montant de l'hibernation (2026-09-24).
+        _hibernation_declenchee=False,
+        _hibernations_ignorees=0,
     )
 
 
@@ -185,6 +192,33 @@ def test_G5_un_marqueur_impossible_n_annule_pas_l_arret(monkeypatch, tmp_path, c
     boucle, signaux = _armer_hibernation(monkeypatch, tmp_path / "chemin" / "inexistant")
     asyncio.run(sc.SimulationLoopV1._declencher_hibernation_propre(boucle, "2026-09-19T12:00", "899549"))
     assert len(signaux) == 1, "l'arrêt n'a pas été demandé alors que le marqueur a échoué"
+
+
+def test_G5b_des_declenchements_concurrents_n_arretent_qu_une_fois(monkeypatch, tmp_path):
+    """2026-09-24 : huit consommateurs en repli ont chacun déclenché l'arrêt, et leurs points
+    de reprise concurrents se sont marché dessus (Errno 39). Seul le premier agit."""
+    boucle, signaux = _armer_hibernation(monkeypatch, tmp_path)
+    points: list[int] = []
+
+    async def _point_lent(ts):
+        points.append(ts)
+        await asyncio.sleep(0.01)   # laisse aux autres appelants le temps d'entrer
+
+    boucle._ecrire_point_de_reprise = _point_lent
+
+    async def _huit():
+        await asyncio.gather(*(
+            sc.SimulationLoopV1._declencher_hibernation_propre(
+                boucle, "2026-09-25T00:00", str(i)
+            )
+            for i in range(8)
+        ))
+
+    asyncio.run(_huit())
+    assert len(signaux) == 1
+    assert len(points) == 1
+    assert boucle._hibernations_ignorees == 7
+    assert json.loads((tmp_path / "en_attente_quota.json").read_text())["person_id"] == "0"
 
 
 # ══════════════════════════ G6 — la forme du retour ═════════════════════════════
