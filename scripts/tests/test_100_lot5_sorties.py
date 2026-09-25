@@ -25,7 +25,7 @@ TEXTE = "The engine made a grinding noise and the car stalled on the expressway.
 
 
 def _moves(dossier: Path, lignes: list[dict], avec_role: bool = True) -> Path:
-    entetes = ["Référence", "Heure de départ", "P(Voiture Privée) %", "Choc",
+    entetes = ["Référence", "ID Personne", "Heure de départ", "P(Voiture Privée) %", "Choc",
                "Jour relatif au choc"] + (["Rôle"] if avec_role else [])
     chemin = dossier / "moves.csv"
     with chemin.open("w", encoding="utf-8", newline="") as f:
@@ -155,7 +155,9 @@ def _run_complet(dossier: Path) -> Path:
     (dossier / "evenements.jsonl").write_text(json.dumps({
         "person_id": "899549", "canal": "vecu", "texte": TEXTE, "evenement_id": "c6",
     }) + "\n", encoding="utf-8")
-    _moves(dossier, [{"Référence": "899549", "Heure de départ": "2026-03-16 08:00",
+    # Comme le journal réel : `Référence` porte le nom du run, l'agent est dans `ID Personne`.
+    _moves(dossier, [{"Référence": "2026-09-24_17_50", "ID Personne": "899549",
+                      "Heure de départ": "2026-03-16 08:00",
                       "P(Voiture Privée) %": 30, "Choc": "c6",
                       "Jour relatif au choc": 1, "Rôle": "expose"}])
     return dossier
@@ -220,6 +222,95 @@ def test_une_reflexion_nocturne_nest_pas_une_decision(tmp_path):
         "messages": f"--- agent_id=899549 ---\nCe que je sais\n- {TEXTE}",
     }) + "\n", encoding="utf-8")
     assert not quatre.depouiller(tmp_path)["decisions"]
+
+
+def test_le_role_se_lit_dans_ID_Personne_et_non_dans_Reference(tmp_path):
+    """`Référence` porte le nom du run (`experiences/journal.py`). Lue comme identifiant
+    d'agent, elle faisait sortir le rôle `?` sur toutes les lignes du run 2026-09-24_17_50."""
+    _moves(tmp_path, [
+        {"Référence": "2026-09-24_17_50", "ID Personne": "286920", "Rôle": "expose"},
+        {"Référence": "2026-09-24_17_50", "ID Personne": "286921", "Rôle": "co_resident"},
+    ])
+    assert quatre.roles_du_run(tmp_path) == {"286920": "expose", "286921": "co_resident"}
+
+
+# ── Les échanges tels que la passerelle les écrit ────────────────────────────────────────
+def _echanges_passerelle(dossier: Path, objets: list[dict], separateur: str = "\n") -> None:
+    """Un objet JSON INDENTÉ par échange, comme `llm_gateway/telemetry/exchanges.py` : ce
+    n'est pas du JSONL malgré l'extension."""
+    (dossier / "llm_exchanges.jsonl").write_text(
+        "".join(json.dumps(o, ensure_ascii=False, indent=2) + separateur for o in objets),
+        encoding="utf-8",
+    )
+
+
+def _echanges_de_forme(origine: str) -> list[dict]:
+    """`origine` est le nom du run qui a signé l'échange : `lire_echanges` écarte les autres."""
+    return [
+        {"origine": origine, "category": "itinary_multi_agent", "task_id": "t1",
+         "messages": [
+             {"role": "system", "content": "Select the optimal travel mode."},
+             {"role": "user", "content": "--- agent_id=899549 ---\nMes habitudes\n- la voiture\n"
+                                         f"Ce qui a changé récemment\n- {TEXTE}\n"},
+         ],
+         # Une liste de chaînes : indentée, chacune tient seule sur sa ligne et se décode,
+         # lue ligne à ligne, en chaîne nue — c'est elle qui faisait tomber `.get()`.
+         "response": {"modes_touches": ["walking", "car"]}},
+        {"origine": origine, "category": "stm_reflection", "task_id": "t2",
+         "messages": [{"role": "user", "content": f"--- agent_id=899549 ---\n{TEXTE}"}],
+         "response": ["walking"]},
+    ]
+
+
+@pytest.mark.parametrize("separateur", ["\n\n", "\n"], ids=["ligne_vide", "saut_de_ligne"])
+def test_les_echanges_indentes_de_la_passerelle_se_lisent(tmp_path, separateur):
+    """La docstring de la passerelle annonce une ligne vide entre objets ; le run
+    2026-09-24_17_50 n'en porte aucune. Les deux se lisent."""
+    _run_complet(tmp_path)
+    _echanges_passerelle(tmp_path, _echanges_de_forme(tmp_path.name), separateur)
+    resultat = quatre.depouiller(tmp_path)
+    assert resultat["echanges"] == 2
+    assert resultat["decisions"][("vecu", "expose")] == 1
+    assert resultat["compte"][("vecu", "expose", "changements")]["exact"] == 1
+    assert not resultat["compte"].get(("vecu", "expose", "habitudes"))
+    assert "Lu : 2 échanges, dont 1 décision" in quatre.rendre(resultat)
+
+
+def test_un_echange_signe_par_un_autre_run_nest_pas_compte(tmp_path):
+    """Le worker écrit ce journal pour TOUS ses clients : une décision signée par un autre run
+    ne dit rien de celui-ci, même si elle porte le même `agent_id`."""
+    _run_complet(tmp_path)
+    _echanges_passerelle(tmp_path, _echanges_de_forme("un_autre_run")
+                         + _echanges_de_forme(tmp_path.name)[:1])
+    resultat = quatre.depouiller(tmp_path)
+    assert resultat["echanges"] == 1
+    assert resultat["decisions"][("vecu", "expose")] == 1
+
+
+@pytest.mark.parametrize("contenu", [None, ""], ids=["absent", "vide"])
+def test_un_run_sans_echanges_le_dit_au_lieu_de_conclure_a_labsence_de_decision(tmp_path, contenu):
+    """Sans échange lu, « aucune décision ne porte le texte » serait faux : aucune décision
+    n'a été lue du tout. Le tableau sort quand même (A9.3 du banc), il ne lève pas."""
+    _run_complet(tmp_path)
+    if contenu is not None:
+        (tmp_path / "llm_exchanges.jsonl").write_text(contenu, encoding="utf-8")
+    rendu = quatre.rendre(quatre.depouiller(tmp_path))
+    assert "non concluant" in rendu and "n'a pesé sur rien" in rendu
+    assert "aucun échange lu dans `llm_exchanges.jsonl`" in rendu
+    assert "aucune décision ne porte le texte" not in rendu
+
+
+def test_le_tableau_se_lance_en_ligne_de_commande_sur_des_echanges_indentes(tmp_path):
+    """Lancé par son chemin, hors de la racine : l'import de `memoire.sources` doit tenir."""
+    _run_complet(tmp_path)
+    _echanges_passerelle(tmp_path, _echanges_de_forme(tmp_path.name))
+    r = subprocess.run(
+        [sys.executable, str(RACINE / "scripts" / "analysis" / "tableau_quatre_voies.py"),
+         str(tmp_path), "--markdown"],
+        capture_output=True, text=True, cwd=tmp_path, check=False,
+    )
+    assert r.returncode == 0, r.stderr
+    assert "expose" in r.stdout and "Lu : 2 échanges" in r.stdout
 
 
 def test_les_deux_scripts_se_lancent_en_ligne_de_commande(tmp_path):

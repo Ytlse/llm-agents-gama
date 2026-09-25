@@ -166,7 +166,7 @@ de remplacement, qui reste à spécifier (Q11).
 | 2 | `tests/test_100_lot2_canal_lu.py` | 33 | **livré** — R12 à R23, plus la correction du défaut du 22/09 |
 | 3 | `tests/test_100_lot3_jugement.py` | 22 | **livré** — R24 à R31 |
 | 4 | `tests/test_100_lot4_foyer.py` | 28 | **livré** — R32 à R42, plus les quatre gardes G1 à G4 |
-| 5 | `scripts/tests/test_100_lot5_sorties.py` | 17 | **livré** — R43 à R50, figure unique et tableau des quatre voies compris |
+| 5 | `scripts/tests/test_100_lot5_sorties.py` | 24 | **livré** — R43 à R50, figure unique et tableau des quatre voies compris ; le 2026-09-25, lecture des échanges au format de la passerelle et rôle lu dans `ID Personne` |
 | 6 | — | — | **livré** : levier `EVENEMENT=`, alias, montage, E6 levé, `evenements.md` |
 
 Suite `services/llm-agents` : **1888 passés, 6 ignorés, 0 échec**. Suite `scripts` : **63 échecs,

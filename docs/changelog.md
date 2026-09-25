@@ -1,3 +1,34 @@
+## [2026-09-25] Le tableau des quatre voies se lit sur les runs réels
+
+`tableau_quatre_voies.py` tombait sur tout run réel avant d'afficher une ligne. Il lisait
+`llm_exchanges.jsonl` ligne à ligne, alors que la passerelle y écrit un objet JSON indenté par
+échange : sur `2026-09-24_17_50`, 16 181 lignes illisibles, sautées sans bruit, et une seule qui se
+décodait — la chaîne `"walking"`, tirée d'une liste — sur laquelle le script appelait `.get()`.
+Il lit désormais les échanges avec le lecteur du rapport de mémoire, qui retrouve les 255 échanges
+du run, dont 112 décisions, et ne garde que ceux que ce run a signés (`origine`).
+
+Deux défauts sont corrigés au passage. Le rôle se lit dans `ID Personne` : `Référence` porte le
+nom du run, et le rôle sortait `?` sur toutes les lignes. Et un run sans échange lu sort « non
+concluant » en le disant, au lieu d'affirmer qu'aucune décision ne porte le texte — aucune n'a été
+lue. Le banc fonctionnel écrit à présent ses échanges indentés, comme la passerelle : écrits sur
+une ligne, ils laissaient passer le lecteur fautif.
+
+**Avant :** `AttributeError: 'str' object has no attribute 'get'`, aucune sortie.
+**Après :**
+
+```
+canal   |rôle          |décisions|     habitudes| connaissances|   changements|        rappel
+---|---|---|---|---|---|---
+lu      |expose        |       15|              |              |              |            15
+Lu : 255 échanges, dont 112 décisions (`itinary_multi_agent`), pour 1 exposition(s).
+```
+
+⚠ La colonne `rappel` de ce résultat n'est pas une mesure : elle compte toute décision d'un agent
+à qui un souvenir a été servi, sans vérifier que ce souvenir vient de l'événement, ni que la
+décision le suit — 11 des 15 décisions précèdent l'article lu le 26 mars. Elle reste à corriger.
+
+---
+
 ## [2026-09-24] Les chocs se jouent depuis la plateforme, et s'enchaînent la nuit
 
 Les six chocs déclarés passent désormais le chargeur de la simulation avec une cadence explicite.

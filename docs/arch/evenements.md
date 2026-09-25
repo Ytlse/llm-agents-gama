@@ -273,6 +273,15 @@ muettes en toutes lettres. Pour le canal `lu`, l'attribution se fait sur `agent_
 prompt : tous les lecteurs d'un même article partagent le même texte, chercher le texte seul ne
 dirait pas qui l'a vu.
 
+**Ce que le tableau lit.** Les décisions viennent de `llm_exchanges.jsonl`, par
+`lire_echanges()` de `scripts/analysis/memoire/sources.py` : la passerelle y écrit un objet JSON
+**indenté** par échange, et une lecture ligne à ligne ne le décode pas ; seuls comptent les
+échanges signés par ce run (`origine`), le worker écrivant pour tous ses clients. `evenements.jsonl` et
+`trace_rappel.jsonl`, eux, sont de vrais JSONL. Le rôle se lit dans la colonne `ID Personne` de
+`moves.csv` — `Référence` y porte le nom du run. Sans aucun échange lu, le tableau sort « non
+concluant » et le dit : aucune décision n'a été lue, ce qui n'est pas « aucune décision ne porte
+le texte ». Chaque rendu se termine par ce qu'il a lu : `Lu : 255 échanges, dont 112 décisions`.
+
 ---
 
 ---

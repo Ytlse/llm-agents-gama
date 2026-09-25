@@ -323,11 +323,13 @@ def echanges_stub(
         f"--- agent_id={agent} ---\nMes habitudes\n- rien de notable\n",
     ]
     chemin.parent.mkdir(parents=True, exist_ok=True)
+    # Indenté, comme la passerelle : écrit sur une ligne, ce stub laissait passer un lecteur
+    # ligne à ligne que le premier run réel faisait tomber (2026-09-25).
     chemin.write_text(
-        "\n".join(
-            json.dumps({"category": categorie, "messages": p}, ensure_ascii=False)
+        "".join(
+            json.dumps({"category": categorie, "messages": p}, ensure_ascii=False, indent=2) + "\n"
             for p in prompts
-        ) + "\n",
+        ),
         encoding="utf-8",
     )
     return chemin

@@ -48,15 +48,22 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
+RACINE = Path(__file__).resolve().parents[2]
+if str(RACINE) not in sys.path:
+    sys.path.insert(0, str(RACINE))
+
+from scripts.analysis.memoire.sources import lire_echanges
+
 # Les en-têtes que `llm/noyau.py` pose dans le prompt. LUS ICI, et il faut qu'ils restent
 # alignés : un en-tête renommé ferait sortir une voie à zéro sans qu'aucune erreur n'apparaisse.
-# Le test `test_100_lot5_quatre_voies.py` les compare à ceux de `noyau.py`.
+# Le test `scripts/tests/test_100_lot5_sorties.py` les compare à ceux de `noyau.py`.
 EN_TETES = {
     "habitudes": "Mes habitudes",
     "connaissances": "Ce que je sais",
     "changements": "Ce qui a changé récemment",
 }
 VOIES = ("habitudes", "connaissances", "changements", "rappel")
+CATEGORIE_DECISION = "itinary_multi_agent"
 
 # Mots trop courants pour être saillants. Volontairement court : la liste sert à écarter le
 # bruit, pas à faire de la linguistique.
@@ -80,6 +87,11 @@ def mots_saillants(texte: str, combien: int = 6) -> list[str]:
 
 
 def _jsonl(chemin: Path) -> list[dict]:
+    """Un vrai JSONL, un objet par ligne : `evenements.jsonl`, `chocs.jsonl`, `trace_rappel.jsonl`.
+
+    PAS `llm_exchanges.jsonl` : la passerelle y écrit des objets indentés, qu'une lecture ligne
+    à ligne ne décode pas — ou décode de travers, une liste de chaînes rendant des chaînes nues.
+    """
     if not chemin.is_file():
         return []
     lignes = []
@@ -101,7 +113,11 @@ def evenements_du_run(run: Path) -> list[dict]:
 
 
 def roles_du_run(run: Path) -> dict[str, str]:
-    """`{person_id: rôle}`, lu dans `moves.csv`. Vide si la colonne n'y est pas."""
+    """`{person_id: rôle}`, lu dans `moves.csv`. Vide si la colonne n'y est pas.
+
+    L'agent est dans `ID Personne`. `Référence` porte le nom du run (`experiences/journal.py`) :
+    lue comme identifiant, elle ne rendait aucun rôle, et chaque ligne du tableau sortait `?`.
+    """
     chemin = run / "moves.csv"
     if not chemin.is_file():
         return {}
@@ -111,7 +127,7 @@ def roles_du_run(run: Path) -> dict[str, str]:
         if "Rôle" not in (lecteur.fieldnames or []):
             return {}
         for ligne in lecteur:
-            pid = (ligne.get("Référence") or ligne.get("person_id") or "").strip()
+            pid = (ligne.get("ID Personne") or ligne.get("person_id") or "").strip()
             role = (ligne.get("Rôle") or "").strip()
             if pid and role:
                 roles.setdefault(pid, role)
@@ -146,8 +162,9 @@ def depouiller(run: Path) -> dict:
     }
 
     # Les décisions, lues dans les échanges LLM. Seules celles de la catégorie de décision
-    # comptent : une réflexion nocturne n'est pas une décision.
-    echanges = _jsonl(run / "llm_exchanges.jsonl")
+    # comptent : une réflexion nocturne n'est pas une décision. Le lecteur est celui du rapport
+    # de mémoire : le fichier n'est pas du JSONL (cf. `_jsonl`).
+    echanges = lire_echanges(run)
     rappels = _jsonl(run / "trace_rappel.jsonl")
 
     docs_par_agent: dict[str, set[str]] = defaultdict(set)
@@ -159,10 +176,12 @@ def depouiller(run: Path) -> dict:
 
     compte: dict[tuple[str, str, str], Counter] = defaultdict(Counter)
     decisions: Counter = Counter()
+    decisions_lues = 0
 
     for echange in echanges:
-        if str(echange.get("category") or "") != "itinary_multi_agent":
+        if str(echange.get("category") or "") != CATEGORIE_DECISION:
             continue
+        decisions_lues += 1
         prompt = json.dumps(echange.get("messages") or "", ensure_ascii=False)
         for pid, texte in textes.items():
             # ⚠ L'agent se reconnaît à `agent_id=<id>`, que le gabarit de décision pose en
@@ -187,19 +206,35 @@ def depouiller(run: Path) -> dict:
                 compte[(*cle_base, "rappel")]["exact"] += 1
 
     return {"compte": compte, "decisions": decisions, "evenements": len(evenements),
-            "roles_connus": bool(roles), "echanges": len(echanges)}
+            "roles_connus": bool(roles), "echanges": len(echanges),
+            "decisions_lues": decisions_lues}
+
+
+def _lu(resultat: dict) -> str:
+    """Ce qui a été lu. Un tableau sans son effectif ne se distingue pas d'un tableau vide."""
+    n, d = resultat["echanges"], resultat["decisions_lues"]
+    return (f"Lu : {n} échange{'s' * (n > 1)}, dont {d} décision{'s' * (d > 1)} "
+            f"(`{CATEGORIE_DECISION}`), pour {resultat['evenements']} exposition(s).")
 
 
 def rendre(resultat: dict, markdown: bool = False) -> str:
     compte, decisions = resultat["compte"], resultat["decisions"]
     lignes: list[str] = []
+    if not resultat["echanges"]:
+        # Rien lu n'est pas « rien trouvé » : sans prompt, aucune décision n'a pu être examinée.
+        return (
+            "non concluant — aucun échange lu dans `llm_exchanges.jsonl` (absent, vide ou "
+            "illisible : `telemetry.exchanges_enabled` était-il actif ?).\n"
+            "Ce n'est PAS « l'événement n'a pesé sur rien » : aucune décision n'a été lue.\n"
+            + _lu(resultat)
+        )
     if not decisions:
         return (
             "non concluant — aucune décision ne porte le texte de l'événement.\n"
             "Ce n'est PAS « l'événement n'a pesé sur rien » : l'appariement par le texte échoue "
             "pour le régime vécu, la réflexion reformule le vécu avant qu'il n'atteigne la "
             "mémoire longue (mesuré le 2026-09-16). Il faudrait un lien explicite posé à la "
-            "source, et il n'existe pas."
+            "source, et il n'existe pas.\n" + _lu(resultat)
         )
     sep = "|" if markdown else " "
     lignes.append(f"{'canal':<8}{sep}{'rôle':<14}{sep}{'décisions':>9}{sep}"
@@ -241,6 +276,7 @@ def rendre(resultat: dict, markdown: bool = False) -> str:
     if not resultat["roles_connus"]:
         lignes.append("⚠ `moves.csv` ne porte pas la colonne « Rôle » : run antérieur au ticket "
                       "100, lot 5. Les rôles ne se reconstituent pas après coup.")
+    lignes.append(_lu(resultat))
     return "\n".join(lignes)
 
 
