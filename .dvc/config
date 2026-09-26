@@ -1,4 +1,6 @@
 [core]
-    remote = remote_storage
+    remote = origin
 ['remote "remote_storage"']
     url = ../../dvc_remote
+['remote "origin"']
+    url = https://dagshub.com/Ytlse/llm-urban-mode-choice.dvc
