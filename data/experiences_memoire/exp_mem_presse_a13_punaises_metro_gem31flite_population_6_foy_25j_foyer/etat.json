@@ -1,6 +1,6 @@
 {
   "nom": "exp_mem_presse_a13_punaises_metro_gem31flite_population_6_foy_25j_foyer",
-  "etat": "en_cours",
+  "etat": "terminee",
   "cree_le": "2026-09-25T15:05:05.495844+00:00",
   "traite": {
     "etat": "ok",
@@ -9,9 +9,119 @@
     "fin": "2026-09-25T19:50:26.495203+00:00"
   },
   "temoin": {
-    "etat": "en_cours",
-    "debut": "2026-09-25T19:50:26.495786+00:00"
+    "etat": "ok",
+    "debut": "2026-09-25T19:50:26.495786+00:00",
+    "suspendu_le": "2026-09-25T20:39:23.766769+00:00",
+    "fin": "2026-09-25T22:59:57.551429+00:00"
   },
   "debut": "2026-09-25T16:31:35.670535+00:00",
-  "branche_active": "control"
+  "branche_active": "control",
+  "fin": "2026-09-25T22:59:57.554984+00:00",
+  "rapprochement_ticket108": {
+    "evenement_id": "a13_punaises_metro",
+    "declarees": 2,
+    "produites": 2,
+    "manquantes": 0,
+    "conforme": true
+  },
+  "rejeu_ab": {
+    "date_evenement": "2026-03-27",
+    "servis": 71,
+    "payes": 595,
+    "part_servie": 0.1066,
+    "par_categorie": {
+      "itinary_multi_agent": {
+        "servis": 21,
+        "payes": 231
+      },
+      "stm_reflection": {
+        "servis": 50,
+        "payes": 307
+      },
+      "ltm_self_reflection": {
+        "servis": 0,
+        "payes": 47
+      },
+      "enquete_affinite": {
+        "servis": 0,
+        "payes": 10
+      }
+    },
+    "payes_avant_evenement": 272,
+    "premiers_payes_avant": [
+      {
+        "categorie": "stm_reflection",
+        "jour": "2026-03-16",
+        "agents": [
+          "1127260"
+        ]
+      },
+      {
+        "categorie": "stm_reflection",
+        "jour": "2026-03-16",
+        "agents": [
+          "1127259"
+        ]
+      },
+      {
+        "categorie": "stm_reflection",
+        "jour": "2026-03-16",
+        "agents": [
+          "1320713"
+        ]
+      },
+      {
+        "categorie": "stm_reflection",
+        "jour": "2026-03-16",
+        "agents": [
+          "1127257"
+        ]
+      },
+      {
+        "categorie": "stm_reflection",
+        "jour": "2026-03-16",
+        "agents": [
+          "1320712"
+        ]
+      },
+      {
+        "categorie": "stm_reflection",
+        "jour": "2026-03-16",
+        "agents": [
+          "1127260"
+        ]
+      },
+      {
+        "categorie": "stm_reflection",
+        "jour": "2026-03-16",
+        "agents": [
+          "1127260"
+        ]
+      },
+      {
+        "categorie": "stm_reflection",
+        "jour": "2026-03-16",
+        "agents": [
+          "1320713"
+        ]
+      },
+      {
+        "categorie": "stm_reflection",
+        "jour": "2026-03-16",
+        "agents": [
+          "1127258"
+        ]
+      },
+      {
+        "categorie": "stm_reflection",
+        "jour": "2026-03-16",
+        "agents": [
+          "1320712",
+          "1320713"
+        ]
+      }
+    ],
+    "consignes": 2481,
+    "archive_temoin": "/Users/yvesb/Documents/Projects/llm-agents-gama/experiments/archive/2026-09-25_21_50"
+  }
 }

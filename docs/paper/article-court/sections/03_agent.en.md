@@ -1,6 +1,6 @@
 # 3. The agent under evaluation
 
-<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 21:22:31 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-26 00:10:00 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
 
 <!-- Relecture des gallicismes du 2026-09-25, accord de l'auteur (« Corrige ») : tics récurrents (« against » comparatif, « one » pour « un même », « carry », « bound », « under » devant un seuil, « rejoin », « from one X to another », « execute », « brings »), faux-amis (agenda, control, hypothesis, legibility, designate, demanding, chain, globally, bends, recedes), calques de construction et typographie à la française (« 0.9 point », « [a ; b] », « 30.3 % », « 1.06 dollars »). Aucun chiffre ne change ; les prompts et le message de l'annexe D ne sont pas touchés. -->
 
@@ -236,7 +236,7 @@ the relevant memories, and the numbered list of options.
 
 The model assigns a probability to each option in that list, and the probabilities of one
 decision sum to one. We call this distribution the probability mass. The decision the simulation carries out is a random draw from those probabilities, not the option ranked first. The options are listed
-in random order, so that a model cannot favour an option merely for appearing first.
+in random order, so that on average no option gains from appearing first.
 
 <!-- Remarque du tuteur, PDF annoté v1 KOI, p. 5 : « vector » entouré. Le vecteur p_t est sorti
      avec le formalisme, mais « that vector » et « returns a vector » restaient sans antécédent.
@@ -474,7 +474,7 @@ on this trip, and the most severe ones, enter the ranking regardless of their te
      récence ; ici le BLEU-2 cède la place à la météo, gravité et affinité d'axes s'ajoutent). -->
 
 The recent-events block tells the agent what has changed lately. Only serious events enter it:
-an engine failure rated 0.7 does, a minor delay does not. The event then fades like any trace,
+a suspicious noise in the car engine rated 0.7 does, a minor delay does not. The event then fades like any trace,
 counted from the day it happened, and leaves the block once its weight drops below about a
 third. The more severe the event, the longer it stays. An event rated 0.7 stays about fifteen
 days, the most severe about three weeks. The block also reminds the agent of beliefs it has
@@ -526,7 +526,7 @@ recently given up.
 Deciding each trip on its own produces physically impossible days. An agent who cycled to
 work has no car at the office in the evening. The controller therefore tracks the location of each personal vehicle. A vehicle is offered only from where it is parked, after which it
 follows its user. On a return trip, if a vehicle waits at the trip's origin, the options are
-restricted to that vehicle's mode.
+restricted to that vehicle's mode, so that the vehicle comes home.
 
 <!-- source: fr/03_Architecture.md § 3.5 et docs/arch/vehicle-chain.md, § Les trois règles :
      un mode véhiculé n'est proposé que si le véhicule est garé au point de départ ; le
@@ -538,6 +538,11 @@ restricted to that vehicle's mode.
 
 These rules bind every decision-maker we compare, reference models included, since without
 them we would compare decisions taken in different worlds.
+
+<!-- A TRANCHER (relecture externe du 2026-09-25) : le banc rejoue-t-il des jeux d'options figés,
+     communs à tous les décideurs, ou chacun déroule-t-il sa journée avec ses propres
+     véhicules ? Des règles identiques ne garantissent pas des options identiques. Une phrase
+     suffit ici, une fois le fait vérifié dans le protocole. -->
 
 <!-- source: fr/03_Architecture.md § 3.5, dernier paragraphe : « Le plancher et le plafond du
      chapitre 4 sont soumis aux mêmes contraintes » ; PLAN § 3.4, « elle s'applique à tous les

@@ -1,6 +1,6 @@
 # 2. Related work
 
-<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 21:07:15 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-26 00:10:00 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
 
 <!-- Relecture des gallicismes du 2026-09-25, accord de l'auteur (« Corrige ») : tics récurrents (« against » comparatif, « one » pour « un même », « carry », « bound », « under » devant un seuil, « rejoin », « from one X to another », « execute », « brings »), faux-amis (agenda, control, hypothesis, legibility, designate, demanding, chain, globally, bends, recedes), calques de construction et typographie à la française (« 0.9 point », « [a ; b] », « 30.3 % », « 1.06 dollars »). Aucun chiffre ne change ; les prompts et le message de l'annexe D ne sont pas touchés. -->
 
@@ -68,9 +68,11 @@ across travellers, never change afterwards.
      faute de place pour sa glose. -->
 
 Behavioural research documents departures that no survey records, habit among them.
-Travellers with a strong mode habit acquire less information about the alternatives and use simpler decision strategies (Verplanken, Aarts & van Knippenberg, 1997). Experience also
+Travellers with a strong mode habit acquire less information about the alternatives and use
+simpler decision strategies (Verplanken, Aarts & van Knippenberg, 1997). Experience also
 filters perception. Adam & Gaudou (2025) surveyed 650 respondents and found that car users
-rate the car as more affordable than non-users do. A model fitted on surveys cannot represent such perception filters, and generative agents have been proposed to fill that gap.
+rate the car as more affordable than non-users do. The reference models we use cannot represent
+such perception filters, and generative agents have been proposed to fill that gap.
 
 <!-- Audit des citations du 2026-09-23.
      Verplanken et al. (1997), résumé : les participants à forte habitude « acquired less
@@ -162,11 +164,12 @@ reference data are proprietary, however, and its agents are not compared with an
      Sortent, par le PLAN § 2.2 : Chopra et al. (2024) sur les archétypes. La preuve de concept
      de Liu et al. tombe faute de place. -->
 
-GTA (Section 1.2) is the closest published system on the evaluation side, and two of its choices limit what it can show. Each of its agents returns one mode per trip
-rather than a distribution, so no distributional metric applies. It also simulates a single
-day, and its authors name multi-day memory as future work. We add a baseline beneath the
-agents and four reference models above them. Our metric scores a whole distribution, not one
-mode per trip. Our agents keep events in memory across days.
+GTA (Section 1.2) is the closest published system on the evaluation side, and two of
+its choices limit what it can show. Each of its agents returns one mode per trip rather than a
+distribution, so its scores count modes and never weigh a probability. It also simulates a
+single day, and its authors name multi-day memory as future work. We add three baselines
+beneath the agents and four reference models above them. Our metric scores a whole
+distribution, not one mode per trip. Our agents keep events in memory across days.
 
 <!-- source: en/02_Related_work.md § 2.2, troisième paragraphe (v0.14 du 2026-09-10) :
      personas alignés sur l'enquête nationale allemande par truncate-replicate-sample, un modèle

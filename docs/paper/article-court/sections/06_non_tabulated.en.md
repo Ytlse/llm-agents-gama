@@ -1,6 +1,6 @@
 # 6. Beyond the survey: one event traced to the decision
 
-<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 21:07:15 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-26 00:10:00 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
 
 <!-- Relecture des gallicismes du 2026-09-25, accord de l'auteur (« Corrige ») : tics récurrents (« against » comparatif, « one » pour « un même », « carry », « bound », « under » devant un seuil, « rejoin », « from one X to another », « execute », « brings »), faux-amis (agenda, control, hypothesis, legibility, designate, demanding, chain, globally, bends, recedes), calques de construction et typographie à la française (« 0.9 point », « [a ; b] », « 30.3 % », « 1.06 dollars »). Aucun chiffre ne change ; les prompts et le message de l'annexe D ne sont pas touchés. -->
 
@@ -21,15 +21,14 @@
      viennent sont écrites ici comme conception, jamais comme mesure. Détail au
      compte-rendu. -->
 
-This section follows one off-survey event, an engine failure, from its entry into memory to
+This section follows one off-survey event, a suspicious noise in the car engine, from its entry into memory to
 the decisions of the days after.
 
 ## 6.1 What the 21 variables do not record
 
 None of the 21 variables records what a person went through yesterday, or what they read
-this morning. A decision-maker restricted to these inputs therefore returns, on the morning
-after an incident, exactly the prediction of the day before. This holds by construction, so
-there is nothing to measure.
+this morning. A decision-maker restricted to these inputs therefore cannot condition its
+prediction on an incident. This holds by construction, so there is nothing to measure.
 
 <!-- source: fr/07_Adaptation.md, chapeau : « Aucune ne porte le vécu de la personne […]
      Un décideur qui ne reçoit que ces 21 entrées ne peut répondre à rien d'autre » ;
@@ -85,6 +84,10 @@ The effect of an event on later decisions can end in two ways, and our measureme
 distinguish them. It ends by contradiction when the agent makes the same trip again and the
 incident does not recur. It ends by expiry when the memory leaves the prompt.
 
+<!-- A VÉRIFIER (relecture externe du 2026-09-25) : un trajet sans incident vaut-il
+     contradiction dans l'architecture, ou seulement occasion de révision ? La relecture
+     externe penche pour la seconde lecture ; docs/arch/memory-stm-ltm.md tranche. -->
+
 <!-- source: fr/07_Adaptation.md § 7.1, troisième paragraphe : extinction par contradiction
      ou par usure, « et elles se distinguent à la mesure ». La prédiction stratifiée du
      master (contradiction datée chez ceux qui continuent d'utiliser le mode) n'est pas
@@ -98,10 +101,10 @@ incident does not recur. It ends by expiry when the memory leaves the prompt.
 ## 6.3 The setup
 
 We simulate the same agent **[TBC — persona and models]** twice, once exposed to an incident
-and once as a control, and measure the difference between the two runs. The incident is an engine
-failure that imposes a half-hour delay on a car trip. It falls on 30 March, the fifteenth
-simulated day. Unlike the benchmark runs (Section 4.1), both runs keep memory enabled and last
-several weeks. The car remains offered the next
+and once as a control, and measure the difference between the two runs. The incident is a
+suspicious noise in the car engine during a car trip, which ends half an hour late. It falls on
+30 March, the fifteenth simulated day. Unlike the benchmark runs (Section 4.1), both runs keep
+memory enabled and last several weeks. The car remains offered the next
 morning, so what we measure here is a choice. **[TBC — A campaign now under way]**
 
 <!-- source: fr/07_Adaptation.md § 7.2.2 : un agent joué deux fois, avarie moteur,
@@ -164,17 +167,17 @@ environment item, which no incident targets, serves as the control question.
 
 ## 6.4 Results
 
-Although the car is offered as often as before the failure, it is taken far less often. The
-exposed agent takes it nine times out of ten before the failure, and three times out of ten after.
+Although the car is offered as often as before the noise, it is taken far less often. The
+exposed agent takes it nine times out of ten before the noise, and three times out of ten after.
 The control agent holds its rate throughout.
 
 *Table 4. Car taken when the car is offered, exposed and control agent. The periods split at
-the failure (30 March) and at the recovery of the car propensity (15 April).*
+the noise (30 March) and at the recovery of the car propensity (15 April).*
 
 | Period | Exposed agent | Control agent |
 |---|---:|---:|
-| Before the failure | 94% (34/36) | 90% (28/31) |
-| After the failure | 32% (12/38) | 92% (45/49) |
+| Before the noise | 94% (34/36) | 90% (28/31) |
+| After the noise | 32% (12/38) | 92% (45/49) |
 | After the recovery | 88% (35/40) | 87% (40/46) |
 
 <!-- Relecture éditoriale du 2026-09-25 : « After the return » devient « After the recovery »,
@@ -195,14 +198,14 @@ the failure (30 March) and at the recovery of the car propensity (15 April).*
      for the control agent. » -->
 
 The daily car propensity is the probability the model gives the car, averaged over the day's
-decisions. It falls on the day of the failure and recovers **fifteen days** later (Figure 5).
+decisions. It falls on the day of the noise and recovers **fifteen days** later (Figure 5).
 It drops from 90% the day before to 40% that day, and stays below the range of the control agent until it returns to it.
 
 <!-- source: fr/07_Adaptation.md § 7.2.3 et figure 7.1 : moves.csv, colonne
      P(Voiture Privée) %, moyenne quotidienne des décisions du jour, aucun découpage en
      phases. -->
 
-*Figure 5. The effect lasts as long as the memory stays in the prompt.*
+*Figure 5. Daily car propensity of the exposed and control agents. Dashed line, the noise; dotted line, its account leaves the decision prompt.*
 
 <!-- ⚠ Relecture de l'auteur, 2026-09-25 : paragraphe jugé inutile et retiré du corps. Il
      disait : « The four blocks by which the past reaches a decision can be told apart, and the
@@ -239,10 +242,10 @@ It drops from 90% the day before to 40% that day, and stays below the range of t
      § 6.3 : ce que la campagne lira n'est pas encore un résultat. -->
 
 Our measurements separate the two ways an effect can end, and this one ended by expiry. The
-agent took the car twelve times after the failure (Table 4), twelve occasions for
-contradiction. **[TBC — at this time, no contradiction of the belief born of the
-failure. Add an experiment?]** The memory of the failure leaves the decision prompts after
-13 April, and the propensity returns to the control band on 15 April.
+agent took the car twelve times after the noise (Table 4), twelve occasions
+for contradiction. **[TBC — at this time, no contradiction of the belief
+born of the noise. Add an experiment?]** The memory of the noise leaves the decision
+prompts after 13 April, and the propensity returns to the control band on 15 April.
 
 <!-- source: fr/07_Adaptation.md § 7.2.3, troisième et quatrième paragraphes :
      agent_memory_events.jsonl de l'exécution exposée, zéro contradiction de concept ;
@@ -265,8 +268,8 @@ failure. Add an experiment?]** The memory of the failure leaves the decision pro
      croyance SERVIE se fait démentir — c'est la prédiction stratifiée du master (§ 7.1),
      laissée hors du corps faute de mesure. -->
 
-Stated opinions drop after the failure and come back **[TBC after the daily run]**. On the
-car, **[n]** of the six items fall after the failure, and safety drops the most, by **[k]**
+Stated opinions drop after the noise and come back **[TBC after the daily run]**. On the
+car, **[n]** of the six items fall after the noise, and safety drops the most, by **[k]**
 points. Each item's daily series shows the day it regains its starting value, which can be
 set against the day the propensity returns to the control band. The environment item, the
 control question, does not move, and the control agent's ratings of the car do not change on

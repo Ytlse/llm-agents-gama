@@ -1,6 +1,6 @@
 # 5. Results on the ordinary day
 
-<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 21:05:00 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-26 00:10:00 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
 
 <!-- Relecture des gallicismes du 2026-09-25, accord de l'auteur (« Corrige ») : tics récurrents (« against » comparatif, « one » pour « un même », « carry », « bound », « under » devant un seuil, « rejoin », « from one X to another », « execute », « brings »), faux-amis (agenda, control, hypothesis, legibility, designate, demanding, chain, globally, bends, recedes), calques de construction et typographie à la française (« 0.9 point », « [a ; b] », « 30.3 % », « 1.06 dollars »). Aucun chiffre ne change ; les prompts et le message de l'annexe D ne sont pas touchés. -->
 
@@ -30,10 +30,10 @@
      cohorte population_1000_AAMAS_v6, jeu …_20260316_EN_c, formule v1_reference (0aeee565…),
      référentiel EMC² 2023 (9ac34597…). 3,154 décisions sur 3,299 attendues, 868 personnes mobiles. -->
 
-The ordinary day is a simulated day with no disruption, the day the survey describes. On
-that day the benchmark yields four findings, one per subsection.
+The ordinary day is a simulated day with no disruption, the day the survey describes.
+On that day the benchmark yields four findings, one per subsection.
 
-1. The decision-makers cluster into groups, and a prompt with no general criteria already beats
+1. The decision-makers form groups, and a prompt with no general criteria already beats
    every baseline.
 2. The expert prompt improves every language model, aligning some dimensions of the modal
    split and leaving others untouched.
@@ -55,7 +55,7 @@ that day the benchmark yields four findings, one per subsection.
      manages it ») et des dimensions de strate de la métrique ; « criteria » aurait collisionné
      avec les quatre critères généraux du prompt, qui sont autre chose. -->
 
-## 5.1 Fifteen decision-makers cluster into groups
+## 5.1 Fifteen decision-makers form groups
 
 The fifteen decision-makers form distinct groups on the composite (Figure 2, Table 1). The
 uniform baseline has about fourteen times the error of the best reference model. Every
@@ -98,11 +98,10 @@ it was measured. Rows are grouped, then sorted by composite.*
      d'entraînement et évalué sur la cohorte scellée c1 — composite 3,65 (3,6470),
      L1 10,48, étendue inter-graines 0,05 (graines 42 / 123 / 789 : 3,6470 / 3,7014 / 3,6926). -->
 
-The groups overlap in one place only: the best minimal-prompt condition, gemini-3.5, scores
-better than two expert-prompt conditions. Only one of these gaps exceeds the ±1.3-point
-cohort resolution of Section 4.3. Gemini-3.5 under the minimal prompt has 2.0 points less
-error than gemini-3.1 under the expert prompt, while its lead over mistral-large under the
-expert prompt stays within the resolution.
+The groups overlap in one place only: the best minimal-prompt condition, gemini-3.5,
+scores better than two expert-prompt conditions. It leads gemini-3.1 under the
+expert prompt by 2.0 composite points, and mistral-large under that prompt by 0.6, a
+gap smaller than the cohort resolution.
 
 <!-- 2026-09-25, passe de lisibilité. Chiffres du paragraphe, tous dérivés du tableau 1 du § 4.4 :
      « about fourteen » = 50,16 / 3,60 = 13,93 ; 14,8 = 14,75 (prompt minimal, mistral-large) ;
@@ -125,16 +124,21 @@ expert prompt stays within the resolution.
      3,60 à 4,09. ⚠ La légende du master annonce « un facteur douze » entre le plancher aléatoire
      et le meilleur composite ; 50,16 / 3,60 vaut 13,9. Le rapport n'est pas repris ici. -->
 
-The same prompt does not score the same on two versions of the same model family. With the tuned
-agent's expert prompt left unchanged, gemini-3.1 trails gemini-3.5 by 4.2 composite points
-(95% interval 3.0 to 5.4), three times the cohort resolution.
+The same prompt does not score the same on two versions of the same model family. With the
+tuned agent's expert prompt left unchanged, gemini-3.1 trails gemini-3.5 by
+4.2 composite points (95% interval 3.0 to 5.4).
 
 <!-- source: fr/99_annexes.md, annexe H.1, ligne « gemini-3.1 − gemini-3.5, prompt expert » :
      +4,15 [+2,99 ; +5,43] composite, +5,56 [+4,12 ; +7,02] hors choix unique, +17,4 L1.
      2,000 réplicats, graine 2026, rééchantillonnage par grappe sur 868 personnes communes. -->
 
-Re-running a condition with three seeds moves its composite less than a new cohort would.
-The tuned agent varies by 0.6 points across seeds (Table 1), below that resolution. Under the minimal prompt, the typed classifier varies by 0.4 points across seeds (0.41), and by less than a quarter of a point under both expert prompts (0.05 and 0.24). The sign of the difference between these two expert conditions holds on all three seeds. This inter-seed variation of 0.4 points is negligible next to the gain from tuning the classifier's prompt, which lowers the composite by 10.1 points (from 13.75 to 3.65).
+Re-running a condition with three seeds moves its composite less than the narrowest interval
+half-width of Section 4.3, 0.9 points. The tuned agent varies by 0.6 points across seeds
+(Table 1). Under the minimal prompt, the typed classifier varies by 0.4 points across seeds
+(0.41), and by less than a quarter of a point under both expert prompts (0.05 and 0.24). The
+sign of the difference between these two expert conditions holds on all three seeds. This
+inter-seed variation of 0.4 points is small next to the gain from tuning the classifier's
+prompt, which lowers the composite by 10.1 points (from 13.75 to 3.65).
 
 <!-- source: fr/06_Empirical_Evaluation.md § 6.5 et son commentaire (ticket 073, axe 1) :
      graines 42, 123 et 789, composites 4,857 / 4,646 / 4,299, étendue 0,56 ; hors choix unique
@@ -150,17 +154,17 @@ The tuned agent varies by 0.6 points across seeds (Table 1), below that resoluti
      de 0,493, 0,474 puis 0,246 point, constant sur les trois graines (critère Q3 du ticket 103). -->
 
 *Figure 2. The decision-makers form groups on the composite axis, and even the minimal
-prompt has less error than the minimum-duration baseline. The best minimal-prompt condition
-beats one expert-prompt condition by more than the cohort resolution.*
+prompt has less error than the minimum-duration baseline. The grey band is the cohort resolution,
+the median half-width of a 95% interval; it gives a scale, not a test.*
 
 ## 5.2 What tuning changes, and what it does not
 
-Tuning the system prompt raises the score of each of the three models, by more than the margin of error (Table 2). 
+Tuning the system prompt lowers the error of all three models (Table 2).
 The paired gain runs from 2.3 to 7.3 composite points, and all six intervals
 (three models, two metrics) exclude zero.
 
 *Table 2. Paired gains of the expert prompt over the minimal prompt, two metrics, with
-their 95% interval in brackets. A positive gain is a lower error.*
+their 95% interval in brackets. A positive gain is a lower error. Gains are computed on the persons both conditions scored, so they can differ slightly from the gaps in Table 1.*
 
 | Language model | Composite | L1 on overall shares |
 |---|---|---|
@@ -224,7 +228,15 @@ shortest trips stay where the minimal prompt left them.*
 
 ## 5.3 A classifier that writes no text reaches the reference range
 
-The typed classifier approaches the range of the four reference models out of sample. On the second cohort, the four reference models span 2.5 to 3.7 composite points (LightGBM 2.53, random forest 3.71). The typed classifier under its expert prompt scores 4.6 (4.64). Its distance to the upper edge of the reference band is 0.9 points, remaining within the ±1.3-point cohort resolution.
+On the sealed cohort, the typed classifier under its expert prompt scores 3.65, inside the
+range of the four reference models (3.60 to 4.09). On a second cohort of 1,000 personas,
+drawn the same way with no persona in common, the four reference models span 2.53 to 3.71
+composite points. The typed classifier scores 4.64 there, 0.9 points above that range.
+
+<!-- A TRANCHER : statut de la seconde cohorte. Le ticket 103 la dit hors échantillon pour tous
+     les prompts ; la décision du 2026-09-24 en fait la cohorte de calibration. Tant que
+     prompt_expert_32 n'est pas re-réglé sur c2, c'est le score c1 (3,65) qui est en
+     échantillon et le score c2 (4,64) qui est hors échantillon. Le dire ici en une phrase. -->
 
 <!-- source: experiments_results.md, Ticket 103 phase 1 (2026-09-22 19:12, échelle cohorte c2)
      et phase 2 (2026-09-22 19:34, Jev sur c2).
@@ -245,10 +257,16 @@ The typed classifier approaches the range of the four reference models out of sa
      [c2, composite of each cell of the two-by-three crossing]. »
      source de ce paragraphe : ticket 103, Q2 et lot A. Cinquante-cinq mots rendus. -->
 
-A decision-maker that writes no text scores in the same range as those that write a
-justification. We interpret this as follows: what improves fidelity lies in how the trip
-description is processed, not in the text the model writes. In our measurements, verbalised
-deliberation added nothing to aggregate fidelity.
+The typed classifier thus reaches the reference range without writing text. Given the same
+prompt as a language model, it is no longer clearly ahead. With the minimal prompt,
+gemini-3.5 scores 7.02 and the classifier 13.75. With the tuned agent's prompt, the
+classifier scores 4.14 and the agent 4.86, a gap smaller than a change of cohort. On the
+second cohort, the two stand 0.1 points apart. This comparison therefore does not tell what
+the text contributes.
+
+<!-- source : experiments_results.md, ticket 103 phase 4 (jev x prompt_expert_05, c1, graine 42 :
+     4,1399 ; gemini-3.5 : 4,8571) et phases 1-2 sur c2 (jev x prompt_expert_32 : 4,6394 ;
+     gemini-3.5 x prompt_expert_05 : 4,7627). Relecture de l'auteur du 2026-09-25. -->
 
 <!-- source : passe du 2026-09-23, décision de l'auteur. Deux phrases tombent ici. « The
      published debate on written reasoning reports gains on tasks that have a verifiable
@@ -261,6 +279,9 @@ deliberation added nothing to aggregate fidelity.
      mesure et sa réserve de portée, qui sont ce qu'il établit. Vingt-huit mots économisés. -->
 
 For the same 23,026 decisions, the classifier costs $1.06, whereas the tuned agent costs $49.28 at the standard rate, a factor of about fifty.
+
+<!-- A TRANCHER (relecture externe) : dire d'où viennent les 23 026 décisions (graines ?
+     cohortes ?), la date du tarif et ce que couvre la facturation (cache, jetons). -->
 
 <!-- Relecture éditoriale du 2026-09-25 : modèle et volume nommés. source :
      docs/traces/2026-09-21_13-10_cout_jev_vs_gemini/README.md l. 71 et 90-115 —
@@ -276,8 +297,8 @@ For the same 23,026 decisions, the classifier costs $1.06, whereas the tuned age
 
 ## 5.4 Matching shares is not matching decisions
 
-The tuned agent and the gradient boosting model sit within the cohort resolution of each
-other and still disagree on one trip in three. They put their highest probability on a
+The tuned agent and the gradient boosting model stand 1.3 composite points apart and still
+disagree on one trip in three. They put their highest probability on a
 different mode for 30.3% of trips, counted where both saw at least two options. Between two
 reference models the same count runs from 8.4 to 11.0%. On the median trip, the summed
 absolute gap between the mode probabilities of two generative agents is four times that of
@@ -310,7 +331,7 @@ logit, on accuracy or on cross-entropy.
 *Table 3. Trip-level agreement on the reported days, seven decision-makers. Accuracy and
 recall in %, on the 9,621 reported trips. Cross-entropy in nats, on the 5,229 decisions with
 at least two options that every distribution-valued decision-maker scores. The two baselines
-that return a single option receive none, since it is infinite at the first error.*
+that return a single option receive none: a zero probability on the reported mode makes it infinite.*
 
 | Decision-maker | Accuracy | Cross-entropy | Bike recall | Walk recall |
 |---|---|---|---|---|
@@ -359,10 +380,12 @@ that return a single option receive none, since it is infinite at the first erro
 
 The typed classifier falls below the all-car baseline on individual accuracy. It trails that
 baseline by 2.0 accuracy points (95% interval 0.3 to 3.8), while its composite reaches the
-range of the reference models (Section 5.3). Its probability mass goes to walking rather than
-to public transport. Walk recall reaches 56.3%, compared with about 44% for public transport
-(Figure 4). A population can therefore reproduce the modal split of a territory while
-getting more individual trips wrong than a baseline that reads nothing.
+range of the reference models (Section 5.3). It over-predicts walking at
+the expense of public transport. Its walk recall reaches 56.3%, compared with about
+44% for public transport, and its walk precision falls below that of the two other
+decision-makers (Figure 4). A population can therefore reproduce the
+modal split of a territory while getting more individual trips wrong than a baseline that
+takes the car whenever it can.
 
 <!-- 2026-09-25, passe de lisibilité. TEXTE RETIRÉ, à restituer si l'auteur le juge juste :
      « On the composite, no paired comparison separates it from the four machine learning

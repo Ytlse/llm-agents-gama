@@ -1,33 +1,3 @@
-% =====================================================================
-% chapters/04_Bench.tex — LaTeX rendering of ../sections/04_bench.en.md (2026-09-25 21:10:50)
-% Section 4 of the SHORT paper. \input from main.tex, after 03_Agent.tex.
-% Re-carried by hand on 25 September 2026 against the master of 2026-09-25 21:10:50.
-% This file DEFINES \label{sec:bench}, referenced from Section 3, and \label{sec:cohort},
-%   \label{sec:rules}, \label{sec:quantities}, \label{sec:deciders}, referenced nowhere.
-% It REFERENCES sec:receives and sec:memory (03_Agent.tex), sec:nontabulated
-%   (06_Non_tabulated.tex) and tab:scale (Table 1, twice in 4.4).
-% Tables: none. Table 1 (tab:scale) moved to Section 5.1 on 25 September 2026 (editorial
-%   review, author's agreement, recorded in ../sections/05_results.en.md): it is set in
-%   05_Results.tex, which defines \label{tab:scale}; the two \ref of 4.4 point there.
-% Figures: none.
-% Display equation: one, unnumbered (\[ ... \]), amsmath being loaded by aamas.cls. The three
-%   other metrics live in Appendix C, in the supplementary material.
-% Quotation: one, in a quote environment (4.4), the criterion on older travellers, word for
-%   word from the expert prompt.
-% Citations: tisseo2023emc2 for the survey (twice in 4.1), horl2021eqasim, lin1991divergence,
-%   rubner2000earth, ke2017lightgbm, zhu2005kernel, breiman2001random, as in the master.
-% Appendices A, B and D are named in plain text: they live in the supplementary material,
-%   outside this project, so there is no \label to \ref.
-% FOOTNOTES — PRESERVE ON EVERY RE-CARRY, both in 4.1:
-%   - the anonymised repository, from ../repository.tex (\repobase, \repodisplay), the only
-%     place where its TBD is written;
-%   - the PROGEDO archive URL, author-added, set as a footnote on the model of the survey
-%     footnote of the abstract. It is deliberately NOT in the body of the master, where it
-%     would cost words.
-% Derived file: re-carry by hand after every validated pass of ../sections/04_bench.en.md,
-%   and set the date on line 2 to that master's DERNIÈRE ÉCRITURE ANGLAISE marker.
-% =====================================================================
-
 \section{The comparison benchmark}
 \label{sec:bench}
 
@@ -38,7 +8,7 @@ themselves.
 \subsection{The cohort}
 \label{sec:cohort}
 
-Every aggregate score in this paper comes from one sealed cohort of 1{,}000 synthetic
+Every score of Table~\ref{tab:scale} comes from one sealed cohort of 1{,}000 synthetic
 personas, frozen in a file that is never modified. They form 499 complete households, inside
 the study area. The eqasim synthesis pipeline \citep{horl2021eqasim} produced the pool of
 11{,}329 people they were drawn from. It builds that pool from census and national travel
@@ -75,7 +45,7 @@ The survey records one mode per trip, not an itinerary. Every score therefore su
 probability of the options that share a mode.
 
 We release the protocol, the code, the seeds and the sealed cohort in an anonymised
-repository\footnote{\href{\repobase}{\texttt{\repodisplay}}}. Our data-use agreement forbids
+repository\footnote{\url{https://anonymous.4open.science/XXXX}}. Our data-use agreement forbids
 redistributing the survey microdata. The survey is obtained from the PROGEDO-ADISP archive,
 on individual
 request\footnote{\url{https://www.progedo.fr/donnees-disponibles/donnees-localisees/}}
@@ -91,7 +61,7 @@ Rule 1 gives every decision-maker the same 21 variables, twelve for the person a
 household, three for the trip, six for geometry (Appendix B).
 
 Rule 2 scores the probability mass a decision-maker puts on each option, not the option it
-ranks first. The option ranked first is not the decision the simulation carries out
+ranks first. The option ranked first is not necessarily the decision the simulation carries out
 (Section~\ref{sec:receives}).
 
 Rule 3 handles a difference in output. A reference model predicts a share for every mode,
@@ -100,11 +70,11 @@ prediction of a reference model to the modes offered for that trip, then rescale
 100\,\%. When several options share a mode, that mode's share is split evenly among them.
 
 Rule 1 equalises the 21 variables, not the information each side holds. The language-based
-decision-makers (the language models and the typed classifier) also see two things that no
-reference model can use. They see the schedule of the remaining trips and each itinerary step
-by step. Conversely, the reference models were estimated on the 39{,}203 survey trips, which no
-language-based decision-maker ever saw. Exposure to the target data thus favours the
-reference models, which makes them a stringent benchmark.
+decision-makers (the language models and the typed classifier) also see two things that our
+reference models do not receive. They see the schedule of the remaining trips and each
+itinerary step by step. Conversely, the reference models were estimated on the 39{,}203
+survey trips, which no language-based decision-maker ever saw. The prompts saw the survey
+only through the gaps per stratum that guided their tuning.
 
 \subsection{What we measure}
 \label{sec:quantities}
@@ -140,14 +110,13 @@ trip uniformly over its options scores about 50.
 We report one other metric alongside the composite: the L1 error on the overall shares
 (the sum of absolute gaps, in percentage points).
 
-Trips by the same person are not independent, so every interval comes from resampling persons
-rather than trips. Another cohort of 1{,}000 personas built the same way would shift a
-composite by $\pm$1.3 points, the median over the decision-makers of the half-width of their
-95\,\% interval. We call this shift the cohort resolution, and count a difference between two
-decision-makers only when it exceeds it. Each decision-maker has its own half-width, from 0.9
-points for the typed classifier under its expert prompt to 2.1 under its minimal prompt. A
-paired difference compares two decision-makers on the persons both scored, with a 95\,\%
-interval.
+Trips by the same person are not independent, so every interval comes from resampling
+persons rather than trips. The half-width of a composite's 95\,\% interval runs from 0.9
+points for the typed classifier under its expert prompt to 2.1 under its minimal prompt. Its
+median over the decision-makers, 1.3 points, is the shift another cohort of 1{,}000 personas
+built the same way would bring. We call it the cohort resolution and use it as a scale, not
+as a test. Two decision-makers are compared by a paired difference, on the persons both
+scored, with its own 95\,\% interval.
 
 The second scale, agreement on each trip, uses the survey respondents rather than the
 cohort. It covers 9{,}621 trips of 2{,}930 respondents, each with its reported mode. We report
@@ -160,8 +129,9 @@ reported trips that the decision-maker predicts.
 \label{sec:deciders}
 
 Three baselines give the level a decision-maker reaches without behavioural knowledge. One
-draws uniformly over the options offered, another puts everything on the car (the area's
-majority mode). The third, the minimum-duration baseline, picks the fastest option offered.
+draws uniformly over the options offered. The all-car baseline takes the car, the area's
+majority mode, whenever it is offered, even when slower, and the first option listed
+otherwise. The third, the minimum-duration baseline, picks the fastest option offered.
 
 Four reference models give the level that estimation on the survey reaches. They are a
 multinomial logit, the standard discrete-choice model, and three machine-learning
@@ -192,8 +162,9 @@ mode of independence for short distances, against the strain and stress of publi
 We obtained the expert prompt by successive rewrites of a single text, under one constraint:
 the text may contain no numerical threshold and no formula. At each iteration, a language
 model reads the gaps per stratum of the current prompt and proposes one targeted rewrite. The
-rewrite is kept when the over-represented mode shrinks. Like every score in the paper, each
-rewrite is scored on the probability mass of Rule 2.
+rewrite is kept when the over-represented mode shrinks. Like every score in the benchmark,
+each rewrite is scored on the probability mass of Rule 2. The prompt thus carries no number
+from the survey, but its wording was chosen against the survey's shares.
 
 We call \texttt{gemini-3.5} under the expert prompt the \emph{tuned agent}. It is the
 best-scoring language-model condition (Table~\ref{tab:scale}).
@@ -204,5 +175,6 @@ persona with the sealed cohort. It rewrites the criterion on walking and waiting
 long direct walk also counts as a cost. \texttt{Gemini-3.1} and \texttt{mistral-large} receive
 the tuned agent's prompt unchanged, which measures how far a prompt tuned on one model carries
 to another. The classifier also runs under that prompt, a check that Table~\ref{tab:scale}
-does not list. Every model--prompt combination is measured on the sealed cohort alone.
-Appendix D gives the three prompts in full, with the decisions each produced for one trip.
+does not list. Section~\ref{sec:deliberation} adds one check on a second cohort. Appendix D
+gives the three prompts in full, the generation settings, and the decisions each produced for
+one trip.

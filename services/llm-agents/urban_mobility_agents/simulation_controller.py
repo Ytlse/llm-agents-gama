@@ -80,7 +80,11 @@ from trip_helper.school_bus import (
     build_school_bus_option,
     is_school_bus_plan,
 )
-from urban_mobility_agents.agents.llm_agent import Context, LlmAgent
+from urban_mobility_agents.agents.llm_agent import (
+    ConsolidationMemoryUnavailable,
+    Context,
+    LlmAgent,
+)
 from urban_mobility_agents.candidats import (  # noqa: F401 — ré-exportés (ticket 035)
     _METRIC_MODE,
     GROUPE_RAIL,
@@ -943,6 +947,23 @@ class SimulationLoopV1(BaseScenario):
         self._inflight_tasks.add(task)
         task.add_done_callback(self._inflight_tasks.discard)
         return task
+
+    async def _consolidation_ou_arret(
+        self, coro: Coroutine, person_id: str, categorie: str
+    ) -> None:
+        """Suspend une expérience plutôt que de poursuivre avec une mémoire incomplète."""
+        try:
+            await coro
+        except ConsolidationMemoryUnavailable as exc:
+            if _arret_sur_repli_arme():
+                await self._declencher_hibernation_propre(
+                    None,
+                    str(person_id),
+                    motif="consolidation_memoire",
+                    details={"categorie": categorie, "erreur": str(exc)},
+                )
+                return
+            raise
 
     # -------------------------------------------------------------------------
     # Dispatcher EDF (Earliest Deadline First)
@@ -2728,11 +2749,15 @@ class SimulationLoopV1(BaseScenario):
                     ):
                         async def _reflect_one():
                             try:
-                                await self.agent.trigger_short_term_reflection_for_all_people(
-                                    timestamp=_ts,
-                                    people=[_person],
-                                    motif=_motif,
-                                    declencheur=_declencheur,
+                                await self._consolidation_ou_arret(
+                                    self.agent.trigger_short_term_reflection_for_all_people(
+                                        timestamp=_ts,
+                                        people=[_person],
+                                        motif=_motif,
+                                        declencheur=_declencheur,
+                                    ),
+                                    _person.person_id,
+                                    "stm_reflection",
                                 )
                                 _mem = self.agent.get_short_term_memory(
                                     _person.person_id
@@ -2786,10 +2811,14 @@ class SimulationLoopV1(BaseScenario):
                     + settings.agent.long_term_self_reflect_interval_days * 24 * 3600
                 )
                 self._spawn(
-                    self.agent.trigger_long_term_reflection_for_all_people(
-                        timestamp=timestamp,
-                        from_date=from_date,
-                        people=self.population.get_people_list(),
+                    self._consolidation_ou_arret(
+                        self.agent.trigger_long_term_reflection_for_all_people(
+                            timestamp=timestamp,
+                            from_date=from_date,
+                            people=self.population.get_people_list(),
+                        ),
+                        "population",
+                        "ltm_self_reflection",
                     )
                 )
 

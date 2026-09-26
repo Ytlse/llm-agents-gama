@@ -183,13 +183,22 @@ class RegistreEvenements:
         """
         return calendrier.jour_du_run(timestamp)
 
-    def jour_relatif(self, timestamp: int) -> int:
-        """Jours écoulés depuis le PREMIER jour de l'événement : −2, −1, 0, +1…
+    def jour_relatif(self, timestamp: int, person_id: str | None = None) -> int:
+        """Jours écoulés depuis l'exposition effective : −2, −1, 0, +1…
 
         Défini tous les jours du run, y compris avant et longtemps après : c'est l'abscisse de
         toutes les courbes de décrochage et de retour, et une abscisse qui n'existe que les
-        jours d'événement ne tracerait rien.
+        jours d'événement ne tracerait rien. Pour une fenêtre tirée par foyer, le jour zéro est
+        celui du lecteur du foyer de ``person_id`` ; utiliser le premier jour possible de la
+        fenêtre décalait toute la courbe (A13 : exposition J12 affichée +3 car fenêtre J9–J13).
+
+        Sans personne — anciens appels et événements subis résolus trajet par trajet — on garde
+        l'origine déclarative historique.
         """
+        if person_id is not None:
+            date_injection = self._date_injection(str(person_id))
+            if date_injection is not None:
+                return (self._date_de(timestamp) - date_injection).days
         return self.jour_du_run(timestamp) - self.evenement.premier_jour
 
     # ── Exposition ───────────────────────────────────────────────────────────────────────

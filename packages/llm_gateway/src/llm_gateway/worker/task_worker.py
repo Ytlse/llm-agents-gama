@@ -566,6 +566,7 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
             http_status=http_status,
             ratelimit_reset=getattr(exc, "ratelimit_reset", None),
             telemetry=settings.telemetry,
+            origine=base_req.origine,
         )
         rt.metrics.incr(f"llm_errors_by_type:{provider_name}:{error_type}")
         # Ring buffer texte relu par /errors/recent (cockpit Grafana).

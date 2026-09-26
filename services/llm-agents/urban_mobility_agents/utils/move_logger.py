@@ -274,7 +274,7 @@ def _contexte_choc(start_time_ms: Optional[int], person_id: str = "") -> tuple:
         role, raison = registre.role_de(str(person_id))
         return (
             registre.evenement.evenement_id,
-            registre.jour_relatif(int(start_time_ms) // 1000),
+            registre.jour_relatif(int(start_time_ms) // 1000, str(person_id)),
             role,
             raison,
         )

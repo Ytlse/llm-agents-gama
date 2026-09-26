@@ -146,7 +146,8 @@ def controler_rejeu(nom_exp: str, racine_bras: Path) -> dict[str, Any] | None:
         )
         return None
     date_evt = rejeu_ab.date_premiere_injection(racine_bras / "traite" / "evenements.jsonl")
-    resultat = rejeu_ab.bilan(rejeu_ab.lire_echanges(journal), date_evt)
+    origine = archive.name
+    resultat = rejeu_ab.bilan(rejeu_ab.lire_echanges(journal, origine=origine), date_evt)
     resultat["consignes"] = len(list((RACINE_REJEU / nom_exp).glob("*.json")))
     resultat["archive_temoin"] = str(archive)
     if resultat["payes_avant_evenement"]:
@@ -162,6 +163,47 @@ def controler_rejeu(nom_exp: str, racine_bras: Path) -> dict[str, Any] | None:
             f"l'événement ({date_evt}) ; {resultat['consignes']} réponses consignées."
         )
     return resultat
+
+
+def _ecrire_echanges(chemin: Path, echanges: list[dict[str, Any]]) -> None:
+    chemin.write_text(
+        "".join(json.dumps(e, ensure_ascii=False, default=str, indent=2) + "\n" for e in echanges),
+        encoding="utf-8",
+    )
+
+
+def isoler_journaux(archive: Path, cible: Path, origine: str) -> dict[str, int]:
+    """Copie dans le dossier du bras uniquement ses échanges et ses erreurs LLM.
+
+    Le worker reste mutualisé, donc ses fichiers bruts peuvent contenir plusieurs clients.
+    Les sorties de l'expérience, elles, deviennent autosuffisantes et non ambiguës. Les erreurs
+    anciennes sans champ ``origine`` sont écartées : on ne peut pas les attribuer honnêtement.
+    """
+    cible.mkdir(parents=True, exist_ok=True)
+    bilan = {"echanges": 0, "erreurs": 0, "erreurs_sans_origine": 0}
+    echanges_path = archive / "llm_exchanges.jsonl"
+    if echanges_path.is_file():
+        echanges = rejeu_ab.lire_echanges(echanges_path, origine=origine)
+        _ecrire_echanges(cible / "llm_exchanges.jsonl", echanges)
+        bilan["echanges"] = len(echanges)
+    erreurs_path = archive / "llm_errors.jsonl"
+    if erreurs_path.is_file():
+        erreurs = []
+        for ligne in erreurs_path.read_text(encoding="utf-8").splitlines():
+            try:
+                erreur = json.loads(ligne)
+            except ValueError:
+                continue
+            if erreur.get("origine") is None:
+                bilan["erreurs_sans_origine"] += 1
+            elif erreur.get("origine") == origine:
+                erreurs.append(erreur)
+        (cible / "llm_errors.jsonl").write_text(
+            "".join(json.dumps(e, ensure_ascii=False, default=str) + "\n" for e in erreurs),
+            encoding="utf-8",
+        )
+        bilan["erreurs"] = len(erreurs)
+    return bilan
 
 
 def executer_bras(
@@ -273,6 +315,14 @@ def executer_bras(
                         shutil.copy2(source_f, workdir_cible / f)
                 if (sous / "reports").is_dir():
                     shutil.copytree(sous / "reports", workdir_cible / "reports", dirs_exist_ok=True)
+    archive = archive_du_bras(nom_exp, branche)
+    if archive is not None:
+        isolement = isoler_journaux(archive, workdir_cible, archive.name)
+        logger.info(
+            f"[{nom_exp}_{branche}] journaux isolés : {isolement['echanges']} échange(s), "
+            f"{isolement['erreurs']} erreur(s) ; "
+            f"{isolement['erreurs_sans_origine']} ancienne(s) erreur(s) non attribuable(s) écartée(s)."
+        )
     return 0
 
 

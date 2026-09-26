@@ -1,6 +1,6 @@
 # 1. Introduction
 
-<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 21:07:15 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-26 00:10:00 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
 
 <!-- Relecture des gallicismes du 2026-09-25, accord de l'auteur (« Corrige ») : tics récurrents (« against » comparatif, « one » pour « un même », « carry », « bound », « under » devant un seuil, « rejoin », « from one X to another », « execute », « brings »), faux-amis (agenda, control, hypothesis, legibility, designate, demanding, chain, globally, bends, recedes), calques de construction et typographie à la française (« 0.9 point », « [a ; b] », « 30.3 % », « 1.06 dollars »). Aucun chiffre ne change ; les prompts et le message de l'annexe D ne sont pas touchés. -->
 
@@ -118,9 +118,9 @@ them.
 1. Simple baselines, such as always taking the fastest option, show the score a model reaches
    without knowing how residents choose. They form a floor.
 2. Machine learning models on structured data, fitted on the territory's own survey, show the score its data make possible. We call them reference models.
-3. The generative agents and the reference models read the same variables for each trip. A
-   gap between them then comes from how each decides rather than from the trip data it
-   receives.
+3. The generative agents and the reference models read the same 21 variables for each
+   trip. The language models receive a few inputs more, and only the reference models were
+   fitted on the survey's trips. Section 4.2 lists both asymmetries.
 4. Two agents can reproduce the same modal split while choosing differently for the same
    traveller. Only a trip-by-trip comparison reveals it.
 
@@ -146,15 +146,16 @@ them.
 
 ## 1.3 What this paper does
 
-This paper measures where verbalised deliberation earns its place in a mobility agent.
-Verbalised deliberation is the text a language model writes around its decision: the
-reasoning some models produce before answering, and the one-sentence justification the
-prompts require. In a population of mobility agents, this text is not what brings the
-simulated modal split close to the survey. We show it with a classifier that reads the same
-trip description, writes no text, and comes at least as close. The text may instead matter for events that no
-survey variable encodes, which we call off-survey events. Section 6 traces the channel
-through which one such event reaches the decision. It shows that the channel exists, not how
-strong its effect is.
+This paper examines the place of text-based models in mobility agents, compared with the
+reference models. A text-based model reads the trip description as written text, where a
+reference model reads 21 variables. We compare three language models and a classifier that
+returns one probability per option and writes no text. We score them against the survey on
+the modal split, trip by trip, and on cost. On the ordinary day, the classifier comes
+closest to the survey, within the range of the four reference models, and no language model
+reaches that range. On that day, reading text therefore brings no fidelity that the
+reference models lack. Text may instead matter for events that no survey variable encodes,
+which we call off-survey events. Section 6 traces the channel through which one such event
+reaches the decision. It shows that the channel exists, not how strong its effect is.
 
 <!-- source: PLAN § 0, thèse : « Dans une population d'agents de mobilité, la délibération
      verbalisée n'améliore pas la fidélité au régime que l'enquête décrit ; ce qu'elle apporte,
@@ -222,11 +223,12 @@ simulation follows the GAMA–OpenTripPlanner–LLM architecture of Vu et al. (2
      coupée en deux pour tenir R1, sans rien perdre. « multi-agent » ajouté comme glose
      de GAMA, première occurrence du nom dans l'article (consigne 10). -->
 
-The paper makes three contributions. The first is an equal-input comparison benchmark
-between generative agents and reference models, on a synthetic cohort checked against that survey. The second is the position of fifteen decision-makers on that benchmark, and two cases
-where equal modal shares hide different individual decisions. The third is the channel
-through which an off-survey event reaches the decision, traced inside a generative agent with
-memory.
+The paper makes three contributions. The first is a comparison benchmark between
+generative agents and reference models that read the same 21 variables, on a synthetic cohort
+checked against that survey. The second is the position of fifteen decision-makers on that
+benchmark, and two cases where equal modal shares hide different individual decisions. The
+third is the channel through which an off-survey event reaches the decision, traced inside a
+generative agent with memory.
 
 <!-- source: PLAN § 0, tableau des trois contributions, une ligne chacune, portées par les
      §§ 3-4, § 5 et § 6. Elles sont nommées « the first / second / third contribution » et

@@ -93,6 +93,10 @@ from world.population import PersonScheduler
 history_log = HistoryStreamLog.get_instance()
 
 
+class ConsolidationMemoryUnavailable(RuntimeError):
+    """La passerelle n'a rendu aucune consolidation : le tampon doit rester intact."""
+
+
 def log_llm_cache_hit(
     agent_id: str,
     activity_id: str | None,
@@ -1737,7 +1741,9 @@ class LlmAgent:
                 logger.error(
                     f"LTM self-reflection gateway returned no result for {context.person.person_id}"
                 )
-                return
+                raise ConsolidationMemoryUnavailable(
+                    f"LTM sans résultat pour {context.person.person_id}"
+                )
             # AgentResponse accepte les champs hors schéma (extra=allow) —
             # "reflection" est porté par la catégorie ltm_self_reflection.
             reflection = getattr(results[0], "reflection", "") or ""
@@ -2024,7 +2030,11 @@ class LlmAgent:
                 logger.error(
                     f"STM reflection gateway returned no result for {context.person.person_id}"
                 )
-                return
+                # Les entrées STM ne sont retirées qu'après ce bloc. L'exception garantit donc
+                # qu'une reprise puisse retenter exactement la consolidation manquante.
+                raise ConsolidationMemoryUnavailable(
+                    f"STM sans résultat pour {context.person.person_id}"
+                )
 
             agent_result = results[0]
             # AgentResponse accepte les champs hors schéma (extra=allow) —

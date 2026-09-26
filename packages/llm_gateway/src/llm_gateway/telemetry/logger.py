@@ -157,6 +157,7 @@ def log_llm_error(
     http_status: int | None = None,
     ratelimit_reset: str | None = None,
     telemetry: Any = None,
+    origine: str | None = None,
 ) -> None:
     """
     Enregistre une erreur LLM dans <workdir>/llm_errors.jsonl.
@@ -170,6 +171,9 @@ def log_llm_error(
         "error_type": error_type,
         "error_message": error_message,
         "http_status": http_status,
+        # Le worker est partagé par plusieurs simulations. Sans l'origine, une archive
+        # attribuait au bras courant les erreurs d'un autre run servi au même instant.
+        "origine": origine,
     }
     if ratelimit_reset is not None:
         entry["ratelimit_reset"] = ratelimit_reset

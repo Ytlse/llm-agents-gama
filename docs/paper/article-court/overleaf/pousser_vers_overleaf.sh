@@ -37,6 +37,7 @@ read -r -p "Remplacer ce contenu par l'article court ? [oui/non] " reponse
 rsync -a --exclude '.git' --exclude 'pousser_vers_overleaf.sh' \
       --exclude '*.aux' --exclude '*.log' --exclude '*.out' --exclude '*.bbl' \
       --exclude '*.blg' --exclude '*.pdf' --exclude 'nobib.tex' \
+      --exclude '*.meta.md' \
       "$SOURCE"/ "$TRAVAIL"/
 
 cd "$TRAVAIL"

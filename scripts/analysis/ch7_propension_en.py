@@ -33,7 +33,7 @@ def figure_propension_en(sorties: list[Path]) -> None:
         ax.plot(jours, [statistics.mean(d[j]) for j in jours], marker="o", ms=3.5, lw=1.6,
                 color=COULEUR["témoin" if nom == "control" else "traité"], label=nom)
     ax.axvline(CHOC, color="#CE3B4B", ls="--", lw=1.2)
-    ax.annotate("engine failure", (CHOC, 103), color="#CE3B4B", fontsize=9, ha="center")
+    ax.annotate("suspicious noise in car engine", (CHOC, 103), color="#CE3B4B", fontsize=9, ha="center")
     ax.axvline(SORTIE, color="#333", ls=":", lw=1.2)
     ax.annotate("the account leaves the context", (SORTIE, 103), color="#333", fontsize=9,
                 ha="center")

@@ -1,51 +1,11 @@
-% =====================================================================
-% chapters/05_Results.tex — LaTeX rendering of ../sections/05_results.en.md (2026-09-25 21:05:00)
-% Section 5 of the SHORT paper. \input from main.tex, after 04_Bench.tex.
-% Re-carried by hand on 25 September 2026 against the master of 2026-09-25 21:05:00.
-% This file DEFINES \label{sec:results}, referenced by the reading map of Section 1.4, and
-%   \label{sec:individual}, referenced from Section 7.1. It also defines sec:scale,
-%   sec:tuning and sec:deliberation (the last referenced from 5.4), and tab:scale, which
-%   04_Bench.tex references ("Table 1").
-% It references sec:quantities (Section 4.3, the cohort resolution) and sec:deliberation.
-% Figures: three, caption BELOW and a mandatory \Description{} (plain text, 2000 characters
-%   at most, not printed).
-%   fig:scale  (figure*, both columns) images/ch6_echelle.png     — ../PLAN.md § 9, figure 2, full width
-%   fig:distance (\columnwidth)        images/ch6_distance.png    — figure 3, one column
-%   fig:audit-modes (\columnwidth)     images/ch6_audit_modes.png — figure 4, one column
-%   REGENERATION PENDING on ch6_echelle.png: it must gain the inter-seed range column
-%   (../PLAN.md § 9). The PNG shipped here already carries the fifteen rows.
-%   ch6_audit_modes.png is set across both columns in the long paper. The plan puts it in one
-%   column here; two panels of grouped bars at 240 pt may not hold. If the compiled PDF is
-%   unreadable, promote it to figure* — it costs no page, the paper being float-bound.
-% Tables: three, caption ABOVE, booktabs.
-%   tab:scale (table*, both columns) — Table 1, moved from 4.4 to 5.1 on 25 September 2026
-%     by the master (editorial review, author's agreement). Rows grouped, then sorted by
-%     composite, with a Group column. Fifteen rows and five columns do not fit \columnwidth.
-%     04_Bench.tex, re-carried the same day, no longer carries the table: this file is the
-%     only one to define the label.
-%   tab:gains (table*, both columns) — ../PLAN.md § 9, Table 2 is full width; the confidence
-%     intervals in the cells do not fit \columnwidth.
-%   tab:unit (\columnwidth, tabularx with the L column of main.tex) — Table 3, one column,
-%     seven rows since the all-car row was added. Column heads are abbreviated over two
-%     lines, as in the long paper: the Markdown heads ("Cross-entropy", "Bike recall")
-%     overrun 240 pt.
-% PLACEHOLDERS, DELIBERATE, waiting on ticket 103: five "[pending]" cells in the last column
-%   of Table 1, plain bracketed text, NOT \todo. The one the master sets in bold (minimal
-%   prompt, gemini-3.5) is in \textbf{} here. Section 5.3 no longer carries any "[c2, ...]"
-%   item: the master now gives the measured second-cohort scores.
-% Appendix F is named in plain text: it lives in the supplementary material.
-% No citation in this section.
-% Derived file: regenerate after every validated pass of ../sections/05_results.en.md.
-% =====================================================================
-
 \section{Results on the ordinary day}
 \label{sec:results}
 
-The ordinary day is a simulated day with no disruption, the day the survey describes. On
-that day the benchmark yields four findings, one per subsection.
+The ordinary day is a simulated day with no disruption, the day the survey describes. 
+On that day the benchmark yields four findings, one per subsection.
 
 \begin{enumerate}
-  \item The decision-makers cluster into groups, and a prompt with no general criteria
+  \item The decision-makers form groups, and a prompt with no general criteria
     already beats every baseline.
   \item The expert prompt improves every language model, aligning some dimensions of the
     modal split and leaving others untouched.
@@ -54,7 +14,7 @@ that day the benchmark yields four findings, one per subsection.
   \item Agreement on the modal split does not carry over to individual trips.
 \end{enumerate}
 
-\subsection{Fifteen decision-makers cluster into groups}
+\subsection{Fifteen decision-makers form groups}
 \label{sec:scale}
 
 The fifteen decision-makers form distinct groups on the composite (Figure~\ref{fig:scale},
@@ -93,40 +53,42 @@ prompt sits among them, at 3.65.
 \end{table*}
 
 The groups overlap in one place only: the best minimal-prompt condition, \texttt{gemini-3.5},
-scores better than two expert-prompt conditions. Only one of these gaps exceeds the
-$\pm$1.3-point cohort resolution of Section~\ref{sec:quantities}. \texttt{Gemini-3.5} under
-the minimal prompt has 2.0 points less error than \texttt{gemini-3.1} under the expert prompt,
-while its lead over \texttt{mistral-large} under the expert prompt stays within the resolution.
+scores better than two expert-prompt conditions. It leads \texttt{gemini-3.1} under the
+expert prompt by 2.0 composite points, and \texttt{mistral-large} under that prompt by 0.6, a
+gap smaller than the cohort resolution.
 
 The same prompt does not score the same on two versions of the same model family. With the
 tuned agent's expert prompt left unchanged, \texttt{gemini-3.1} trails \texttt{gemini-3.5} by
-4.2 composite points (95\,\% interval 3.0 to 5.4), three times the cohort resolution.
+4.2 composite points (95\,\% interval 3.0 to 5.4).
 
-Re-running a condition with three seeds moves its composite less than a new cohort would.
-The tuned agent varies by 0.6 points across seeds (Table~\ref{tab:scale}), below that
-resolution. Under the minimal prompt, the typed classifier varies by 0.4 points across seeds
+Re-running a condition with three seeds moves its composite less than the narrowest interval
+half-width of Section~\ref{sec:quantities}, 0.9 points. The tuned agent varies by 0.6 points
+across seeds (Table~\ref{tab:scale}). Under the minimal
+prompt, the typed classifier varies by 0.4 points across seeds
 (0.41), and by less than a quarter of a point under both expert prompts (0.05 and 0.24). The
 sign of the difference between these two expert conditions holds on all three seeds. This
-inter-seed variation of 0.4 points is negligible next to the gain from tuning the
-classifier's prompt, which lowers the composite by 10.1 points (from 13.75 to 3.65).
+inter-seed variation of 0.4 points is small next to the gain from tuning the classifier's
+prompt, which lowers the composite by 10.1 points (from 13.75 to 3.65).
 
 \begin{figure*}[tp]
   \centering
   \includegraphics[width=\textwidth]{images/ch6_echelle.png}
-  \caption{The decision-makers form groups on the composite axis, and even the minimal prompt has less error than the minimum-duration baseline. The best minimal-prompt condition beats one expert-prompt condition by more than the cohort resolution.}
-  \Description{A horizontal bar chart. The x axis is the composite EMD-JSD error over every decision of the day, running from zero on the left to just over fifty on the right; lower means closer to the survey. Fifteen decision-makers are stacked as rows and coloured by group, and each bar carries its value. Sorted from the best: gradient boosting 3.60, kernel logistic regression 3.61, the typed classifier under its expert prompt 3.65, the multinomial logit 4.02 and the random forest 4.09; then Gemini 3.5 Flash-Lite under the expert prompt at 4.86, Gemini 3.5 Flash-Lite under the minimal prompt at 7.02, Mistral Large under the expert prompt at 7.63, Gemini 3.1 Flash-Lite under the expert prompt at 8.98, Gemini 3.1 Flash-Lite under the minimal prompt at 12.38, the typed classifier under the minimal prompt at 13.75 and Mistral Large under the minimal prompt at 14.75; at the far right the three baselines, minimum duration at 26.97, all-car at 30.73 and the uniform random draw at 50.16. A vertical grey band of about 1.3 points marks cohort-to-cohort variation, the resolution below which two scores cannot be told apart. Gemini 3.5 Flash-Lite under the minimal prompt sits to the left of Gemini 3.1 Flash-Lite under the expert prompt by more than that band.}
+  \caption{The decision-makers form groups on the composite axis, and even the minimal prompt has less error than the minimum-duration baseline. The grey band is the cohort resolution, the median half-width of a 95\,\% interval; it gives a scale, not a test.}
+  \Description{A horizontal bar chart. The x axis is the composite EMD-JSD error over every decision of the day, running from zero on the left to just over fifty on the right; lower means closer to the survey. Fifteen decision-makers are stacked as rows and coloured by group, and each bar carries its value. Sorted from the best: gradient boosting 3.60, kernel logistic regression 3.61, the typed classifier under its expert prompt 3.65, the multinomial logit 4.02 and the random forest 4.09; then Gemini 3.5 Flash-Lite under the expert prompt at 4.86, Gemini 3.5 Flash-Lite under the minimal prompt at 7.02, Mistral Large under the expert prompt at 7.63, Gemini 3.1 Flash-Lite under the expert prompt at 8.98, Gemini 3.1 Flash-Lite under the minimal prompt at 12.38, the typed classifier under the minimal prompt at 13.75 and Mistral Large under the minimal prompt at 14.75; at the far right the three baselines, minimum duration at 26.97, all-car at 30.73 and the uniform random draw at 50.16. A vertical grey band of about 1.3 points marks cohort-to-cohort variation, the median half-width of a 95 per cent interval. Gemini 3.5 Flash-Lite under the minimal prompt sits to the left of Gemini 3.1 Flash-Lite under the expert prompt by more than that band.}
   \label{fig:scale}
 \end{figure*}
 
 \subsection{What tuning changes, and what it does not}
 \label{sec:tuning}
 
-Tuning the system prompt raises the score of each of the three models, by more than the
-margin of error (Table~\ref{tab:gains}). The paired gain runs from 2.3 to 7.3 composite
+Tuning the system prompt lowers the error of all three models (Table~\ref{tab:gains}).
+The paired gain runs from 2.3 to 7.3 composite
 points, and all six intervals (three models, two metrics) exclude zero.
 
 \begin{table*}[tp]
-  \caption{Paired gains of the expert prompt over the minimal prompt, two metrics, with their 95\,\% interval in brackets. A positive gain is a lower error.}
+  \caption{Paired gains of the expert prompt over the minimal prompt, two metrics, with their 95\,\% interval in brackets. A positive gain is a lower error. Gains are computed on the persons both conditions scored, so they can differ slightly from the gaps in Table~\ref{tab:scale}.}
+  % Écart au tableau 1 vérifié le 2026-09-25 : composite 2,27 / 3,37 / 7,25 contre 2,16 / 3,40 /
+  %   7,12 par soustraction ; L1 10,2 / 8,6 / 18,0 identiques. Effet de l'appariement.
   \label{tab:gains}
   \begin{tabular}{lcc}
     \toprule
@@ -165,16 +127,17 @@ prompt moves the bike share by less than one point. No decision-maker fits one s
 \subsection{A classifier that writes no text reaches the reference range}
 \label{sec:deliberation}
 
-The typed classifier approaches the range of the four reference models out of sample. On the
-second cohort, the four reference models span 2.5 to 3.7 composite points (LightGBM 2.53,
-random forest 3.71). The typed classifier under its expert prompt scores 4.6 (4.64). Its
-distance to the upper edge of the reference band is 0.9 points, remaining within the
-$\pm$1.3-point cohort resolution.
+On the sealed cohort, the typed classifier under its expert prompt scores 3.65, inside the
+range of the four reference models (3.60 to 4.09). On a second cohort of 1{,}000 personas,
+drawn the same way with no persona in common, the four reference models span 2.53 to 3.71
+composite points. The typed classifier scores 4.64 there, 0.9 points above that range.
 
-A decision-maker that writes no text scores in the same range as those that write a
-justification. We interpret this as follows: what improves fidelity lies in how the trip
-description is processed, not in the text the model writes. In our measurements, verbalised
-deliberation added nothing to aggregate fidelity.
+The typed classifier thus reaches the reference range without writing text. Given the same
+prompt as a language model, it is no longer clearly ahead. With the minimal prompt,
+gemini-3.5 scores 7.02 and the classifier 13.75. With the tuned agent's prompt, the
+classifier scores 4.14 and the agent 4.86, a gap smaller than a change of cohort. On the
+second cohort, the two stand 0.1 points apart. This comparison therefore does not tell what
+the text contributes.
 
 For the same 23{,}026 decisions, the classifier costs \$1.06, whereas the tuned agent costs
 \$49.28 at the standard rate, a factor of about fifty.
@@ -182,8 +145,8 @@ For the same 23{,}026 decisions, the classifier costs \$1.06, whereas the tuned 
 \subsection{Matching shares is not matching decisions}
 \label{sec:individual}
 
-The tuned agent and the gradient boosting model sit within the cohort resolution of each
-other and still disagree on one trip in three. They put their highest probability on a
+The tuned agent and the gradient boosting model stand 1.3 composite points apart and still
+disagree on one trip in three. They put their highest probability on a
 different mode for 30.3\,\% of trips, counted where both saw at least two options. Between two
 reference models the same count runs from 8.4 to 11.0\,\%. On the median trip, the summed
 absolute gap between the mode probabilities of two generative agents is four times that of
@@ -195,7 +158,7 @@ by 3.9 accuracy points (95\,\% interval 2.3 to 5.5). No paired interval separate
 multinomial logit, on accuracy or on cross-entropy.
 
 \begin{table}[tbp]
-  \caption{Trip-level agreement on the reported days, seven decision-makers. Accuracy and recall in \%, on the 9{,}621 reported trips. Cross-entropy in nats, on the 5{,}229 decisions with at least two options that every distribution-valued decision-maker scores. The two baselines that return a single option receive none, since it is infinite at the first error.}
+  \caption{Trip-level agreement on the reported days, seven decision-makers. Accuracy and recall in \%, on the 9{,}621 reported trips. Cross-entropy in nats, on the 5{,}229 decisions with at least two options that every distribution-valued decision-maker scores. The two baselines that return a single option receive none: a zero probability on the reported mode makes it infinite.}
   \label{tab:unit}
   \small
   \setlength{\tabcolsep}{4pt}
@@ -217,11 +180,12 @@ multinomial logit, on accuracy or on cross-entropy.
 
 The typed classifier falls below the all-car baseline on individual accuracy. It trails that
 baseline by 2.0 accuracy points (95\,\% interval 0.3 to 3.8), while its composite reaches the
-range of the reference models (Section~\ref{sec:deliberation}). Its probability mass goes to
-walking rather than to public transport. Walk recall reaches 56.3\,\%, compared with about
-44\,\% for public transport (Figure~\ref{fig:audit-modes}). A population can therefore
-reproduce the modal split of a territory while getting more individual trips wrong than a
-baseline that reads nothing.
+range of the reference models (Section~\ref{sec:deliberation}). It over-predicts walking at
+the expense of public transport. Its walk recall reaches 56.3\,\%, compared with about
+44\,\% for public transport, and its walk precision falls below that of the two other
+decision-makers (Figure~\ref{fig:audit-modes}). A population can therefore reproduce the
+modal split of a territory while getting more individual trips wrong than a baseline that
+takes the car whenever it can.
 
 \begin{figure}[tbp]
   \centering

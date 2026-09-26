@@ -1,26 +1,3 @@
-% =====================================================================
-% chapters/02_Related_work.tex — LaTeX rendering of ../sections/02_related_work.en.md (2026-09-25 21:07:15)
-% Section 2 of the SHORT paper. \input from main.tex, after 01_Introduction.tex.
-% Re-carried by hand on 25 September 2026 against the master of 2026-09-25 21:07:15.
-% This file DEFINES \label{sec:related}, \label{sec:discrete-choice},
-%   \label{sec:generative-mobility} and \label{sec:alignment}, none referenced elsewhere at
-%   this date. It REFERENCES \label{sec:gap} (Section 1.2, in 01_Introduction.tex).
-% Citations, in reading order: mcfadden1974conditional, benakiva1985discrete, train2009discrete,
-%   verplanken1997habit, adam2025survey, park2023generative, liu2024toward,
-%   bougie2025citysim, bougie2026cityreal, alves2026evaluating, argyle2023outofone,
-%   meister2024benchmarking, baronchelli2025emergent, bintareaf2026silica. All fourteen
-%   resolve in sample.bib, checked 2026-09-25. GTA is named here by its section only.
-% No longer cited here since the master of 2026-09-25: horni2016matsim (the MATSim sentence
-%   and the opening sentence of 2.2 were cut at the author's request), wei2022chain and
-%   sprague2024cot (the closing paragraph on written reasoning is no longer in the master).
-%   Their entries stay in sample.bib; BibTeX prints nothing that is not cited.
-% ACM-Reference-Format prints NUMERIC citations, so the author-year forms the Markdown writes
-%   ("Adam & Gaudou, 2025") do not survive into the PDF: \citet gives "Author [12]" and \citep
-%   gives "[12]".
-% No float.
-% Derived file: update by hand after every validated pass of ../sections/02_related_work.en.md.
-% =====================================================================
-
 \section{Related work}
 \label{sec:related}
 
@@ -43,8 +20,8 @@ Behavioural research documents departures that no survey records, habit among th
 Travellers with a strong mode habit acquire less information about the alternatives and use
 simpler decision strategies \citep{verplanken1997habit}. Experience also filters perception.
 \citet{adam2025survey} surveyed 650 respondents and found that car users rate the car as more
-affordable than non-users do. A model fitted on surveys cannot represent such perception
-filters, and generative agents have been proposed to fill that gap.
+affordable than non-users do. The reference models we use cannot represent such
+perception filters, and generative agents have been proposed to fill that gap.
 
 \subsection{Generative agents in mobility simulation}
 \label{sec:generative-mobility}
@@ -61,10 +38,10 @@ with any reference model on mode choice.
 
 GTA (Section~\ref{sec:gap}) is the closest published system on the evaluation side, and two of
 its choices limit what it can show. Each of its agents returns one mode per trip rather than a
-distribution, so no distributional metric applies. It also simulates a single day, and its
-authors name multi-day memory as future work. We add a baseline beneath the agents and four
-reference models above them. Our metric scores a whole distribution, not one mode per trip.
-Our agents keep events in memory across days.
+distribution, so its scores count modes and never weigh a probability. It also simulates a
+single day, and its authors name multi-day memory as future work. We add three baselines
+beneath the agents and four reference models above them. Our metric scores a whole
+distribution, not one mode per trip. Our agents keep events in memory across days.
 
 \citet{alves2026evaluating} stand closest on the platform side, though their evaluation has no
 human ground truth. They couple the GAMA platform to a language-model module with a persistent

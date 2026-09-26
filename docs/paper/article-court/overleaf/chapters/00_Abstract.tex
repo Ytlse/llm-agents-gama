@@ -1,46 +1,24 @@
-% =====================================================================
-% chapters/00_Abstract.tex — LaTeX rendering of ../sections/00_abstract.en.md (2026-09-25 21:07:15)
-% Chapter 0 of the SHORT paper: the abstract. \input from main.tex, in the preamble, before
-%   \begin{document}, as the AAMAS sample does.
-% Derived file: update by hand after every validated pass of ../sections/00_abstract.en.md.
-%   The "source:" comments of the Markdown stay there and are not carried over.
-% Re-carried by hand on 25 September 2026 against the master of 2026-09-25 21:07:15: the
-%   author's text of 2026-09-24, after the editorial review and the gallicism pass of
-%   2026-09-25. One paragraph, as the master writes it.
-% LENGTH: 300 words, citation excluded, the 300 the plan budgets and the upper end of the
-%   "around 100-300 words in plain text" the conference asks. The same text serves the PDF
-%   and the OpenReview registration field, which is plain text.
-% AUTHOR-ADDED CITATION — PRESERVE ON REGENERATION. "the area's 2023 household travel survey"
-%   carries \citep{tisseo2023emc2} (DOI 10.13144/lil-1750; lil-0933 is the 2013 survey). Until
-%   2026-09-25 it was a footnote holding the distributor's citation text; at the author's
-%   request that text now lives, word for word, in the sample.bib entry. The citation does
-%   not count towards the word total, and it cannot travel into the OpenReview field: there,
-%   the sentence simply names the survey.
-% No \label, no \ref, no float.
-% NO PLACEHOLDER HERE. The typed-classifier sentence carries no figure, so nothing in this
-%   file waits on ticket 103.
-% =====================================================================
-
 \begin{abstract}
 In agent-based simulations of urban mobility, agents choose their travel mode with machine
 learning models on structured data, fitted on travel surveys, or with rules written by domain
 experts. Both approaches fix the space of possible behaviours before the simulation runs: a
 factor that is neither a variable nor a rule cannot change any decision. Generative agents
 built on large language models (LLMs) promise to lift this limit, because they carry decision
-heuristics that surveys never record. To our knowledge, this promise has not been tested
+heuristics that surveys do not record. To our knowledge, this promise has rarely been tested
 against a real population. We assess what LLM-based agents gain and lose when they reproduce
 human mode choices. We built an agent-based model of daily mobility in the Toulouse urban area
-(France), populated with a sample of 1{,}000 residents from a realistic synthetic population.
+(France), populated with 1{,}000 residents drawn from a realistic synthetic population.
 Fifteen decision-makers, from simple baselines to machine learning models and LLMs under two
-prompts, then chose modes for the same 3{,}299 trips. We compare their choices with the area's
+prompts, chose modes for the same 3{,}299 trips. We compare their choices with the area's
 2023 household travel survey \citep{tisseo2023emc2}.
 Even with a prompt tuned to draw attention to general criteria such as comfort and
-constraints, generative agents come close to the machine learning models without
+constraints, the best generative agent comes close to the machine learning models without
 outperforming them. A classifier that reads the same trip description but writes no text
-reaches the same range for about a fiftieth of the cost. On the ordinary day, the text a
-generative agent writes is thus not what makes it faithful. Matching the modal split does not
-mean matching individual choices either, since that same classifier gets more trips wrong than
-a baseline that sends everyone by car. Only generative agents, however, can handle a departure
-from the ordinary day that is described in words, such as a breakdown or a newspaper article.
-Their value lies in what the survey does not record, not in the ordinary day it describes.
+reaches their range for about a fiftieth of that agent's cost. On the ordinary day, matching
+the survey thus does not require writing text. Matching the modal split
+does not mean matching individual choices either, since that same classifier gets more trips
+wrong than a baseline that takes the car when offered. Generative agents, however, can
+respond to an event described in words. We trace a suspicious noise in the car engine through one agent's memory
+to its later decisions. Their value should be sought where the survey is silent, not in the
+ordinary day it describes.
 \end{abstract}

@@ -1,6 +1,6 @@
 # 4. The comparison benchmark
 
-<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 21:10:50 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-26 00:10:00 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
 
 <!-- Relecture des gallicismes du 2026-09-25, accord de l'auteur (« Corrige ») : tics récurrents (« against » comparatif, « one » pour « un même », « carry », « bound », « under » devant un seuil, « rejoin », « from one X to another », « execute », « brings »), faux-amis (agenda, control, hypothesis, legibility, designate, demanding, chain, globally, bends, recedes), calques de construction et typographie à la française (« 0.9 point », « [a ; b] », « 30.3 % », « 1.06 dollars »). Aucun chiffre ne change ; les prompts et le message de l'annexe D ne sont pas touchés. -->
 
@@ -17,7 +17,7 @@ themselves.
 
 ## 4.1 The cohort
 
-Every aggregate score in this paper comes from one sealed cohort of 1,000 synthetic
+Every score of Table 1 comes from one sealed cohort of 1,000 synthetic
 personas, frozen in a file that is never modified. They form 499 complete households, inside the study area. The eqasim synthesis pipeline (Hörl & Balać, 2021) produced the pool of 11,329 people they were drawn from.
 It builds that pool from census and national travel survey data. The cohort is nonetheless
 evaluated against the local survey (Cerema & Tisséo Collectivités, 2023). We align the pool
@@ -197,7 +197,7 @@ Rule 1 gives every decision-maker the same 21 variables, twelve for the person a
 household, three for the trip, six for geometry (Appendix B).
 
 Rule 2 scores the probability mass a decision-maker puts on each option, not the option it
-ranks first. The option ranked first is not the decision the simulation carries out
+ranks first. The option ranked first is not necessarily the decision the simulation carries out
 (Section 3.2).
 
 Rule 3 handles a difference in output. A reference model predicts a share for every mode,
@@ -217,11 +217,16 @@ When several options share a mode, that mode's share is split evenly among them.
      au plus par déplacement (experience.yaml, max_candidats: 6). -->
 
 Rule 1 equalises the 21 variables, not the information each side holds. The language-based
-decision-makers (the language models and the typed classifier) also see two things that no
-reference model can use. They see the schedule of the remaining trips and each itinerary step
-by step. Conversely, the reference models were estimated on the 39,203 survey trips, which no
-language-based decision-maker ever saw. Exposure to the target data thus favours the
-reference models, which makes them a stringent benchmark.
+decision-makers (the language models and the typed classifier) also see two things that our
+reference models do not receive. They see the schedule of the remaining trips and each
+itinerary step by step. Conversely, the reference models were estimated on the 39,203
+survey trips, which no language-based decision-maker ever saw. The prompts saw the survey
+only through the gaps per stratum that guided their tuning.
+
+<!-- A TRANCHER (relecture externe du 2026-09-25) : les 9 621 déplacements de l'audit unitaire
+     sont-ils disjoints des 39 203 d'estimation ? Le master (§ 4.2, commentaire source) met
+     les 13 045 trajets de test hors compte, mais ne dit pas si l'audit en est tiré. Nommer la
+     partition (personnes ou ménages) une fois vérifiée. -->
 
 <!-- Relecture éditoriale du 2026-09-25, décision de l'auteur : retour à la formulation
      d'origine, sans la météo des heures à venir (day_outlook). Un modèle classique pourrait
@@ -325,13 +330,13 @@ We report one other metric alongside the composite: the L1 error on the overall 
      cette lecture en prose : elle n'y est qu'un en-tête de colonne. La phrase ci-dessus est
      écrite ici pour la première fois. -->
 
-Trips by the same person are not independent, so every interval comes from resampling persons
-rather than trips. Another cohort of 1,000 personas built the same way would shift a
-composite by ±1.3 points, the median over the decision-makers of the half-width of their 95%
-interval. We call this shift the cohort resolution, and count a difference between two
-decision-makers only when it exceeds it. Each decision-maker has its own half-width, from 0.9
-points for the typed classifier under its expert prompt to 2.1 under its minimal prompt. A paired difference compares two decision-makers on the persons both
-scored, with a 95% interval.
+Trips by the same person are not independent, so every interval comes from resampling
+persons rather than trips. The half-width of a composite's 95% interval runs from 0.9
+points for the typed classifier under its expert prompt to 2.1 under its minimal prompt. Its
+median over the decision-makers, 1.3 points, is the shift another cohort of 1,000 personas
+built the same way would bring. We call it the cohort resolution and use it as a scale, not
+as a test. Two decision-makers are compared by a paired difference, on the persons both
+scored, with its own 95% interval.
 
 <!-- ⚠ Remarque de relecture n° 2, point E, 2026-09-23 : « agent » désignait ici un décideur
      sans dire lequel parmi quinze. « tuned » était employé ici avant toute définition ; les deux bornes sont celles du commentaire de source ci-dessous : classifieur typé sous sa consigne 0,86, sous prompt minimal 2,05. -->
@@ -370,8 +375,13 @@ reported trips that the decision-maker predicts.
 ## 4.4 Baselines, references, decision-makers
 
 Three baselines give the level a decision-maker reaches without behavioural knowledge. One
-draws uniformly over the options offered, another puts everything on the car (the area's
-majority mode). The third, the minimum-duration baseline, picks the fastest option offered.
+draws uniformly over the options offered. The all-car baseline takes the car, the area's
+majority mode, whenever it is offered, even when slower, and the first option listed
+otherwise. The third, the minimum-duration baseline, picks the fastest option offered.
+
+<!-- Repli d'All-car vérifié le 2026-09-25 : services/llm-agents/tests/test_035_03_05_06_execution.py,
+     test_exp00b_majoritaire_voiture_prend_la_voiture_sinon_repli (première option présentée,
+     la liste étant en ordre aléatoire, § 3.2). -->
 
 <!-- source: fr/05_Protocol.md § 5.3 : hasard uniforme (1/|O_i|), a priori empirique sur le
      mode majoritaire du territoire, heuristique de durée minimale sur les graphes de
@@ -454,8 +464,18 @@ The criterion on older travellers, for instance, is worded as follows.
 We obtained the expert prompt by successive rewrites of a single text, under one constraint:
 the text may contain no numerical threshold and no formula. At each iteration, a language
 model reads the gaps per stratum of the current prompt and proposes one targeted rewrite. The
-rewrite is kept when the over-represented mode shrinks. Like every score in the paper, each
-rewrite is scored on the probability mass of Rule 2.
+rewrite is kept when the over-represented mode shrinks. Like every score in the benchmark,
+each rewrite is scored on the probability mass of Rule 2. The prompt thus carries no number
+from the survey, but its wording was chosen against the survey's shares.
+
+<!-- A TRANCHER (relecture externe du 2026-09-25, point déjà ouvert au master § 4.4) : sur
+     quelle cohorte le prompt expert de gemini-3.5 a-t-il été réglé ? fr/05_Protocol.md
+     § 5.2.3 (21/09) dit la cohorte scellée elle-même, fr/06_Empirical_Evaluation.md l. 25
+     (22/09) une population de calibration séparée. Et prompt_expert_32 (classifieur) a été
+     réglé le 21/09 sur la cohorte scellée (docs/traces/2026-09-21_jev_mutations/README.md),
+     c2 n'existant que depuis le 22/09 : la phrase « on a calibration cohort that shares no
+     persona with the sealed cohort » ci-dessous n'est vraie qu'après re-réglage sur c2.
+     Donner aussi le nombre de réécritures et la règle d'arrêt. -->
 
 <!-- Relecture éditoriale du 2026-09-25, accord de l'auteur (« Corrige », point B3) : la
      citation, qui coupait la procédure de réglage et s'ouvrait sur un « thus » sans lien
@@ -525,7 +545,7 @@ persona with the sealed cohort. It rewrites the criterion on walking and waiting
 long direct walk also counts as a cost. Gemini-3.1 and mistral-large receive the tuned
 agent's prompt unchanged, which measures how far a prompt tuned on one model carries to
 another. The classifier also runs under that prompt, a check that Table 1 does not list.
-Every model–prompt combination is measured on the sealed cohort alone.
+Section 5.3 adds one check on a second cohort.
 
 <!-- Relecture éditoriale du 2026-09-25, accord de l'auteur (« Corrige », point B3) : « The
      classifier therefore has its own expert prompt » laissait le lecteur demander pourquoi
@@ -535,7 +555,7 @@ Every model–prompt combination is measured on the sealed cohort alone.
      graines au § 5.1 (« under both expert prompts ») et absent du tableau 1 : sans cette
      phrase, le § 5.1 faisait apparaître un seizième décideur. ⚠ Reste ouvert, voir le point à trancher
      ci-dessus : la cohorte sur laquelle prompt_expert_05 a été réglé. --> Appendix D gives the three prompts
-in full, with the decisions each produced for one trip.
+in full, the generation settings, and the decisions each produced for one trip.
 
 <!-- Phrase d'ouverture ajoutée le 2026-09-24 sur texte de l'auteur, qui l'appuie sur ses
      propres expériences : pour un même prompt, chaque modèle rend des parts agrégées

@@ -19,15 +19,15 @@ from typing import Any
 PREFIXE_REJEU = "rejeu_ab:"
 
 
-def lire_echanges(chemin: Path) -> list[dict]:
-    """`llm_exchanges.jsonl` est une suite d'objets JSON indentés, pas un objet par ligne."""
+def lire_echanges(chemin: Path, origine: str | None = None) -> list[dict]:
+    """Lit les échanges et, si demandé, isole un run du journal partagé du worker."""
     texte = chemin.read_text(encoding="utf-8")
     dec, i, out = json.JSONDecoder(), 0, []
     while True:
         while i < len(texte) and texte[i] in " \n\r\t":
             i += 1
         if i >= len(texte):
-            return out
+            return [e for e in out if origine is None or e.get("origine") == origine]
         obj, i = dec.raw_decode(texte, i)
         out.append(obj)
 

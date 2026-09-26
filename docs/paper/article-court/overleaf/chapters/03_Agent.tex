@@ -1,33 +1,3 @@
-% =====================================================================
-% chapters/03_Agent.tex — LaTeX rendering of ../sections/03_agent.en.md (2026-09-25 21:22:31)
-% Re-carried by hand on 25 September 2026 against the master of 2026-09-25 21:22:31 (no
-%   generator: outils/md_vers_tex.py was deleted on 23 September 2026). Whole chapter checked
-%   paragraph by paragraph: the opening is reduced to the section announcement; 3.1 now opens
-%   on the three components (world, controller, decision module) each holding one part of the
-%   agent, then the loop with trip and itinerary defined, the two routing engines, the five
-%   call points, the Vu et al. paragraph and the five changes as a numbered list; 3.2 gains
-%   the random order of options and the logit read as unobserved preference; 3.3 is renamed
-%   "Two memory stores", loses its opening paragraph, gains Sumers et al., Renoult & Rugg and
-%   MemoryBank, the cosine distance in the retrieval score and the recent-events paragraph;
-%   3.4 restates the return-trip rule.
-% Section 3 of the SHORT paper. \input from main.tex, after 02_Related_work.tex.
-% This file DEFINES \label{sec:agent}, \label{sec:loop}, \label{sec:receives} (referenced from
-%   04_Bench.tex), \label{sec:memory}, \label{sec:chain} and \label{fig:architecture}.
-% It REFERENCES sec:bench, sec:results and sec:nontabulated, defined in other chapters.
-% Figure: one, figure* across both columns (../PLAN.md § 9, figure 1, full width), caption
-%   BELOW and a mandatory \Description{} (plain text, 2000 characters at most, not printed).
-%   FILE: images/architecture_GAMA_Agents.jpg, the same JPG the long paper uses; the
-%   \Description is carried over from it unchanged, the image being identical. Placed where
-%   the master holds its caption, at the end of 3.1.
-% Display equation: one, unnumbered (\[ ... \]), as in 04_Bench.tex.
-% Tables: none.
-% Citations: taillandier2019gama, opentripplanner2025, boeing2025osmnx, vu2025modeling,
-%   mcfadden1974conditional, park2023generative, sumers2024coala, renoult2020historical,
-%   zhong2024memorybank (all in ../sample.bib; renoult2020historical extracted from
-%   ../../sources/sample.bib on 25 September 2026, as the master asks).
-% Derived file: re-carry by hand after every validated pass of ../sections/03_agent.en.md.
-% =====================================================================
-
 \section{The agent under evaluation}
 \label{sec:agent}
 
@@ -116,15 +86,15 @@ memories, and the numbered list of options.
 The model assigns a probability to each option in that list, and the probabilities of one
 decision sum to one. We call this distribution the probability mass. The decision the
 simulation carries out is a random draw from those probabilities, not the option ranked
-first. The options are listed in random order, so that a model cannot favour an option merely
-for appearing first.
+first. The options are listed in random order, so that on average no option gains from appearing
+first.
 
 That draw is a modelling assumption, and discrete choice models already make it. A logit
 also returns one probability per option. Its randomness stands for the part of each person's
 preference that the data do not observe \citep{mcfadden1974conditional}. Our draw plays the
-same role for what the trip description does not say about the person. Carrying out the
-top-ranked option instead would put every persona sharing a profile on the same mode, and the
-spread the survey records within that profile would vanish. A decision-maker that returns one
+same role for what the trip description does not say about the person. Carrying out
+the top-ranked option instead would put every persona sharing a profile on the same mode, and
+the spread the survey records within that profile would vanish. A decision-maker that returns one
 probability per option can then be scored against a distribution, as Section~\ref{sec:bench}
 does.
 
@@ -165,7 +135,7 @@ similarity. Traces that concern a mode offered on this trip, and the most severe
 the ranking regardless of their text.
 
 The recent-events block tells the agent what has changed lately. Only serious events enter
-it: an engine failure rated 0.7 does, a minor delay does not. The event then fades like any
+it: a suspicious noise in the car engine rated 0.7 does, a minor delay does not. The event then fades like any
 trace, counted from the day it happened, and leaves the block once its weight drops below
 about a third. The more severe the event, the longer it stays. An event rated 0.7 stays about
 fifteen days, the most severe about three weeks. The block also reminds the agent of beliefs
@@ -178,7 +148,7 @@ Deciding each trip on its own produces physically impossible days. An agent who 
 work has no car at the office in the evening. The controller therefore tracks the location of
 each personal vehicle. A vehicle is offered only from where it is parked, after which it
 follows its user. On a return trip, if a vehicle waits at the trip's origin, the options are
-restricted to that vehicle's mode.
+restricted to that vehicle's mode, so that the vehicle comes home.
 
 These rules bind every decision-maker we compare, reference models included, since without
 them we would compare decisions taken in different worlds.

@@ -1,3 +1,30 @@
+## [2026-09-26] Article court : l'adresse du dépôt anonyme compile de nouveau
+
+Le LaTeX anglais de l'article court compile de nouveau sur Overleaf. En passant dans
+`chapters/`, le fichier maître avait perdu la ligne qui charge l'adresse du dépôt anonyme. Le
+§ 4.1 s'arrêtait alors sur la note de bas de page qui la cite. La ligne est rétablie.
+
+**Avant :** « Undefined control sequence \repobase » au § 4.1, compilation interrompue.
+**Après :** la note du § 4.1 et les liens des annexes affichent l'adresse (encore `TBD` avant soumission).
+
+---
+
+## [2026-09-25] Article court : l'incident tracé devient un bruit suspect dans le moteur
+
+Dans le LaTeX anglais, l'événement suivi au § 6 ne s'appelle plus « engine failure ». Il devient
+« a suspicious noise in the car engine » dans l'abstract et aux § 3, 6 et 7. Au § 6, les
+reprises (« the failure ») deviennent « the noise », y compris dans le tableau 4 et dans la
+légende et le `\Description` de la figure 5. L'annotation de la figure 5 suit
+(`scripts/analysis/ch7_propension_en.py`). Seule la sortie anglaise a été régénérée.
+Les masters `sections/*.en.md` et le projet `overleaf-fr/` ne sont pas encore alignés.
+
+**Avant :** « an engine failure that imposes a half-hour delay on a car trip » ; annotation
+« engine failure » sur la figure.
+**Après :** « a suspicious noise in the car engine during a car trip, which ends half an hour
+late » ; annotation « suspicious noise in car engine ».
+
+---
+
 ## [2026-09-25] Article court : l'enquête de l'abstract anglais devient une référence
 
 Dans le résumé du LaTeX anglais, l'enquête ménages-déplacements de 2023 n'est plus citée par une

@@ -1,49 +1,15 @@
-% =====================================================================
-% chapters/06_Non_tabulated.tex — LaTeX rendering of ../sections/06_non_tabulated.en.md (2026-09-25 21:07:15)
-% Re-carried by hand on 25 September 2026 against the master of 2026-09-25 21:07:15. Whole
-%   chapter checked paragraph by paragraph: new section title; 6.1 and 6.2 rewritten; the
-%   household paragraph and the ``Two links'' paragraph left the chapter (the latter moved to
-%   7.1 in the master); 6.3 gains the date of the failure, the benchmark contrast and the six
-%   items; 6.4 loses the four-routes paragraph and the ``Two independent sources'' sentence,
-%   and its opinions paragraph now waits on the daily-survey run.
-% Section 6 of the SHORT paper. \input from main.tex, after 05_Results.tex.
-% This file DEFINES \label{sec:nontabulated}, referenced from Sections 3 and 7, and
-%   \label{sec:mechanism}, referenced from Section 7.1.
-% It REFERENCES sec:memory (Section 3.3), sec:cohort (Section 4.1), tab:offered (Table 4) and
-%   fig:propensity (Figure 5).
-% Figure: one, \columnwidth (../PLAN.md § 9, figure 5, one column), caption BELOW and a
-%   mandatory \Description{}.
-%   FILE: images/ch7_propension_quotidienne.png — in English (title, axis labels, legend
-%   "control" / "exposed", annotations "engine failure" and "the account leaves the context"),
-%   checked on 25 September 2026. Every figure of the paper is composed in English.
-% Table: one, tab:offered, \columnwidth, caption ABOVE, booktabs. ../PLAN.md § 9 caps the
-%   paper at three tables; the review (item N2) numbers this one as Table 4 for consistency.
-%   IF THE COMPILED PDF RUNS PAST EIGHT PAGES, this table is the first thing to drop: the
-%   Markdown holds the replacement sentence, ready to paste —
-%   "The car is taken on 94\,\%, 32\,\% then 88\,\% of the trips where it is offered, against
-%   90, 92 and 87\,\% for the control agent."
-% PLACEHOLDERS, DELIBERATE, set in \textbf{} as the master bolds them: [TBC --- persona and
-%   models] and [TBC --- A campaign now under way] (6.3); the fifteen days, the [TBC] on
-%   contradiction, [TBC after the daily run], [n], [k] and the whole second-experiment
-%   paragraph (6.4). Plain bracketed text, NOT \todo.
-% Appendix E is named in plain text: it lives in the supplementary material.
-% No citation in this section.
-% Derived file: re-carry by hand after every validated pass of ../sections/06_non_tabulated.en.md.
-% =====================================================================
-
 \section{Beyond the survey: one event traced to the decision}
 \label{sec:nontabulated}
 
-This section follows one off-survey event, an engine failure, from its entry into memory to
+This section follows one off-survey event, a suspicious noise in the car engine, from its entry into memory to
 the decisions of the days after.
 
 \subsection{What the 21 variables do not record}
 \label{sec:variables-gap}
 
 None of the 21 variables records what a person went through yesterday, or what they read
-this morning. A decision-maker restricted to these inputs therefore returns, on the morning
-after an incident, exactly the prediction of the day before. This holds by construction, so
-there is nothing to measure.
+this morning. A decision-maker restricted to these inputs therefore cannot condition its
+prediction on an incident. This holds by construction, so there is nothing to measure.
 
 \subsection{The mechanism}
 \label{sec:mechanism}
@@ -58,13 +24,16 @@ stays in the recent-events block, by the rule of Section~\ref{sec:memory}.
 The effect of an event on later decisions can end in two ways, and our measurements
 distinguish them. It ends by contradiction when the agent makes the same trip again and the
 incident does not recur. It ends by expiry when the memory leaves the prompt.
+% A VÉRIFIER (relecture externe du 2026-09-25) : un trajet sans incident vaut-il
+%   contradiction dans l'architecture, ou seulement occasion de révision ? La relecture
+%   externe penche pour la seconde lecture ; docs/arch/memory-stm-ltm.md tranche.
 
 \subsection{The setup}
 \label{sec:setup}
 
 We simulate the same agent \textbf{[TBC --- persona and models]} twice, once exposed to an
 incident and once as a control, and measure the difference between the two runs. The
-incident is an engine failure that imposes a half-hour delay on a car trip. It falls on
+incident is a suspicious noise in the car engine during a car trip, which ends half an hour late. It falls on
 30 March, the fifteenth simulated day. Unlike the benchmark runs
 (Section~\ref{sec:cohort}), both runs keep memory enabled and last several weeks. The car
 remains offered the next morning, so what we measure here is a choice.
@@ -77,46 +46,46 @@ safety. The environment item, which no incident targets, serves as the control q
 \subsection{Results}
 \label{sec:traced-results}
 
-Although the car is offered as often as before the failure, it is taken far less often. The
-exposed agent takes it nine times out of ten before the failure, and three times out of ten
+Although the car is offered as often as before the noise, it is taken far less often. The
+exposed agent takes it nine times out of ten before the noise, and three times out of ten
 after. The control agent holds its rate throughout.
 
 \begin{table}[tbp]
   \caption{Car taken when the car is offered, exposed and control agent. The periods split
-    at the failure (30 March) and at the recovery of the car propensity (15 April).}
+    at the noise (30 March) and at the recovery of the car propensity (15 April).}
   \label{tab:offered}
   \begin{tabular}{@{}lrr@{}}
     \toprule
     Period & Exposed agent & Control agent \\
     \midrule
-    Before the failure & 94\,\% (34/36) & 90\,\% (28/31) \\
-    After the failure  & 32\,\% (12/38) & 92\,\% (45/49) \\
+    Before the noise & 94\,\% (34/36) & 90\,\% (28/31) \\
+    After the noise  & 32\,\% (12/38) & 92\,\% (45/49) \\
     After the recovery & 88\,\% (35/40) & 87\,\% (40/46) \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 The daily car propensity is the probability the model gives the car, averaged over the day's
-decisions. It falls on the day of the failure and recovers \textbf{fifteen days} later
+decisions. It falls on the day of the noise and recovers \textbf{fifteen days} later
 (Figure~\ref{fig:propensity}). It drops from 90\,\% the day before to 40\,\% that day, and
 stays below the range of the control agent until it returns to it.
 
 \begin{figure}[tbp]
   \centering
   \includegraphics[width=\columnwidth]{images/ch7_propension_quotidienne.png}
-  \caption{The effect lasts as long as the memory stays in the prompt.}
-  \Description{Two daily time series of the probability the agent assigns to the car, in per cent, over about six weeks of simulated days from mid-March to late April. The exposed agent and the control run together above 65 per cent until the day of the engine failure, marked by a dashed vertical line. The exposed series then collapses to between 5 and 52 per cent for fifteen days, while the control keeps oscillating between 65 and 90 per cent. A dotted vertical line marks the day the account of the failure leaves the decision context, and the exposed series rejoins the control band two days later, on 15 April, and stays in it.}
+  \caption{Daily car propensity of the exposed and control agents. Dashed line, the noise; dotted line, its account leaves the decision prompt.}
+  \Description{Two daily time series of the probability the agent assigns to the car, in per cent, over about six weeks of simulated days from mid-March to late April. The exposed agent and the control run together above 65 per cent until the day of the suspicious noise in the car engine, marked by a dashed vertical line. The exposed series then collapses to between 5 and 52 per cent for fifteen days, while the control keeps oscillating between 65 and 90 per cent. A dotted vertical line marks the day the account of the noise leaves the decision context, and the exposed series rejoins the control band two days later, on 15 April, and stays in it.}
   \label{fig:propensity}
 \end{figure}
 
 Our measurements separate the two ways an effect can end, and this one ended by expiry. The
-agent took the car twelve times after the failure (Table~\ref{tab:offered}), twelve
-occasions for contradiction. \textbf{[TBC --- at this time, no contradiction of the belief
-born of the failure. Add an experiment?]} The memory of the failure leaves the decision
+agent took the car twelve times after the noise (Table~\ref{tab:offered}), twelve occasions
+for contradiction. \textbf{[TBC --- at this time, no contradiction of the belief
+born of the noise. Add an experiment?]} The memory of the noise leaves the decision
 prompts after 13 April, and the propensity returns to the control band on 15 April.
 
-Stated opinions drop after the failure and come back \textbf{[TBC after the daily run]}. On
-the car, \textbf{[n]} of the six items fall after the failure, and safety drops the most, by
+Stated opinions drop after the noise and come back \textbf{[TBC after the daily run]}. On
+the car, \textbf{[n]} of the six items fall after the noise, and safety drops the most, by
 \textbf{[k]} points. Each item's daily series shows the day it regains its starting value,
 which can be set against the day the propensity returns to the control band. The environment
 item, the control question, does not move, and the control agent's ratings of the car do not

@@ -1,6 +1,6 @@
 # 7. Implications, limitations, conclusion
 
-<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-25 21:22:31 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
+<!-- DERNIÈRE ÉCRITURE ANGLAISE : 2026-09-26 12:00:00 — le .tex correspondant porte cette date en en-tête tant qu'il en est le rendu fidèle. Voir sections/README.md. -->
 
 <!-- Relecture des gallicismes du 2026-09-25, accord de l'auteur (« Corrige ») : tics récurrents (« against » comparatif, « one » pour « un même », « carry », « bound », « under » devant un seuil, « rejoin », « from one X to another », « execute », « brings »), faux-amis (agenda, control, hypothesis, legibility, designate, demanding, chain, globally, bends, recedes), calques de construction et typographie à la française (« 0.9 point », « [a ; b] », « 30.3 % », « 1.06 dollars »). Aucun chiffre ne change ; les prompts et le message de l'annexe D ne sont pas touchés. -->
 
@@ -19,10 +19,12 @@ consumes 3 million tokens, with memory disabled. The 702 trips with a single opt
 reach the model, and the measured run reused part of an earlier day. Turning memory on adds
 some 2.5 million tokens more. Scaled to the whole study area (1.32 million residents aged five
 and over), one simulated day would require 2.9 million calls, for 2.6 to 4.2 billion
-tokens. One published answer to that cost asks the model once per behavioural
+tokens.
+
+One published answer to that cost asks the model once per behavioural
 archetype rather than once per agent (Chopra et al., 2025). There, 8.4 million agents cost
 some 400 queries. Agents of the same archetype share an estimated probability, and each draws its
-own action from it. This saving does not apply here: archetypes are defined by attributes,
+own action from it. This saving does not carry over as such: archetypes are defined by attributes,
 and an off-survey event is precisely what no attribute records.
 
 <!-- Audit des citations du 2026-09-23. Chopra et al. est paru à AAMAS 2025 (pp. 500-509),
@@ -73,7 +75,7 @@ this, and we do not estimate the share of trips that would reach the generative 
 Such a split would also have to decide which parts of the memory need a language model. When
 the model rates the severity of an event (Section 6.2), it only picks one of five levels, a
 label that a typed classifier could return as well. Recording the trace of what happened and
-maintaining the belief drawn from it, by contrast, take written prose. Whether a classifier
+maintaining the belief drawn from it, by contrast, take written prose in our system. Whether a classifier
 could also do this is an open question.
 
 <!-- Relecture éditoriale du 2026-09-25, accord de l'auteur (« Corrige », point C2) : venu du
@@ -201,7 +203,7 @@ could also do this is an open question.
 
 ## 7.2 Limitations
 
-Four limitations constrain what these measurements support.
+Five limitations constrain what these measurements support.
 
 **A local survey behind every step.** Prompt tuning, the training of the reference models
 and the scoring of the benchmark all rest on a local travel survey. Toulouse has one,
@@ -220,13 +222,20 @@ report the day after, from memory. It therefore contains a sampling error, large
 smallest strata, and misses the trips respondents forget. Benchmark scores measure a distance
 to these reported shares, not to the trips actually made.
 
-**One weekday as the reference.** The survey describes a single weekday outside school
-holidays, for residents aged five and over, and our results hold for that day alone. Extending
-the benchmark to weekends or holidays would need a reference for their activities, which differ
-from those of a working day.
+**One weekday as the reference.** Each respondent describes one weekday outside school
+holidays, for residents aged five and over, and our results hold for such a day alone.
+Extending the benchmark to weekends or holidays would need a reference for their activities,
+which differ from those of a working day.
 
-**No observed reaction to compare with.** Our survey records no reaction to an incident or to
-an article. Section 6 therefore shows that an agent reacts to an event none of the 21 variables records. It does not show that the agent reacts as a resident would.
+**No observed reaction to compare with.** Our survey records no reaction to an incident
+or to an article. Section 6 therefore shows that an agent reacts to an
+event none of the 21 variables records. It does not show that the agent reacts as a resident
+would.
+
+**Systems compared, not reasoning ablated.** The typed classifier and the language
+models differ in training and architecture as well as in the text they write. Section 5.3
+compares them, and does not isolate what the text contributes. Our intervals resample
+persons, and leave out the variation that population synthesis and prompt selection bring.
 
 <!-- ⚠ § 7.2 RÉÉCRIT en quatre sous-paragraphes titrés, décisions de l'auteur du 2026-09-25.
      (1) L'écart d'information sort des limites : les modèles sur données structurées sont la
@@ -323,35 +332,42 @@ an article. Section 6 therefore shows that an agent reacts to an event none of t
 
 ## 7.3 Conclusion
 
-We asked what verbalised deliberation adds to urban simulation, and where it earns its place
-in a mobility agent. Published evaluations of generative mobility agents rarely confront them
-with a real population. We confronted generative agents with a field survey, the 2023
+We asked what place text-based models hold in a mobility agent, compared with the reference
+models. Published evaluations of generative mobility agents rarely confront them
+with a real population. We confronted text-based models with a field survey, the 2023
 household travel survey of the Toulouse area, in France. We placed them between simple
 baselines and four reference models fitted on that survey, all reading the same 21 variables,
 then pushed them as far as prompt tuning allowed.
 
-On the ordinary day the survey describes, deliberation yields no measurable gain. A tuned
-generative agent comes within the cohort resolution of the reference models, without
-outperforming them. A typed classifier that writes no text reaches the same range for a
-fiftieth of the cost. Without reference models on the same survey, none of these three
-positions could have been read.
+On the ordinary day the survey describes, no text-based model comes closer to the survey than
+the reference models. A tuned generative agent comes within a point
+of the reference models, without outperforming them. A typed classifier that writes no text
+reaches their range for a fiftieth of that agent's cost. Without reference models on the same
+survey, none of these three positions could have been read.
 
 The modal split does not tell the whole story. The tuned agent and the gradient boosting model
-score within the cohort resolution of each other, yet pick a different mode on one trip in
-three. The typed classifier gets more reported trips wrong than a baseline that sends everyone
-by car. An evaluation that scores the modal split alone, or one mode per trip, cannot see this
-gap between shares and decisions.
+stand 1.3 composite points apart, yet pick a different mode on one trip in three. The typed
+classifier gets more reported trips wrong than a baseline that takes the car whenever it is
+offered. An evaluation that scores the modal split alone, or one mode per trip, cannot see
+this gap between shares and decisions.
 
-The cost of deliberation grows with the population it simulates. One call per decision stays
+The cost of generative agents grows with the population they simulate. One call per decision stays
 affordable for a few dozen travellers, whereas a city multiplies the bill, in money and in
-energy. A smaller model served on local hardware could bring that bill within reach, and later
-language models may close the remaining gap. Whatever the model, what a decision-maker
+energy. A smaller model served on local hardware could bring that bill within reach, and
+later language models may close the remaining gap. Whatever the model, what a decision-maker
 consumes matters as much as its accuracy when choosing an architecture. Billions of tokens per
 simulated day cannot be justified just to reproduce what the survey already tabulates.
 
-Deliberation is worth its cost where the survey is silent. We traced one agent end to end over
-several weeks. An engine failure entered its memory and cut its car use for fifteen days,
-although the car stayed on offer, then faded.
+Generative agents can earn their cost when a decision depends on an event that none of the
+21 survey variables records. We traced one agent end to end over
+several weeks. A suspicious noise in the car engine entered its memory and cut its car use for fifteen days,
+although the car stayed on offer. The effect faded once the account of the noise left the
+prompt.
+
+<!-- 2026-09-26, demande de l'auteur : « where the survey is silent » se lisait aussi
+     « là où il n'existe pas d'enquête » (ville sans EMD), ce que le papier ne mesure pas. Le
+     sens visé est celui du § 6.1 : un événement qu'aucune des 21 variables ne porte. Le
+     .tex attend le feu vert sur l'anglais. -->
 
 <!-- Conclusion refaite le 2026-09-25, relecture éditoriale, accord de l'auteur (« OK met à
      jour ») : l'ancien bloc unique est découpé en cinq paragraphes (question et apport face à

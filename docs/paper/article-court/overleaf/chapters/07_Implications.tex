@@ -1,35 +1,3 @@
-% =====================================================================
-% chapters/07_Implications.tex — LaTeX rendering of ../sections/07_implications.en.md (2026-09-25 21:22:31)
-% Section 7 of the SHORT paper, the last one. \input from main.tex, after 06_Non_tabulated.tex.
-% This file DEFINES \label{sec:implications}, \label{sec:cost-of-deciding} (7.1),
-%   \label{sec:limitations} (7.2) and \label{sec:conclusion} (7.3); no other chapter
-%   references them.
-% It REFERENCES sec:mechanism (Section 6.2, from 7.1) and sec:nontabulated (Section 6, from
-%   7.2). sec:individual (Section 5.4) is no longer referenced from here.
-% Figures: none, and none is wanted. ../PLAN.md § 7.1 forbids a cascade figure with empty
-%   flow shares, and forbids \todo.
-% Tables: none.
-% Citation: chopra2024limits (AAMAS 2025), the one published answer to the inference cost. It
-%   resolves in sample.bib.
-% Section 7.2 carries four run-in limitations whose titles are bold in the master; they are
-%   set with \textbf{} at the head of each paragraph.
-% CUT CANDIDATE, from the master's comments, if the page budget requires it: the last sentence
-%   of the cost paragraph of 7.3, "Billions of tokens per simulated day cannot be justified
-%   just to reproduce what the survey already tabulates."
-% ONE STATEMENT DEPENDS ON TICKET 103 although no placeholder is written here: the sentence
-%   of the conclusion on the typed classifier reaching the same range (written under scenario
-%   1; it leaves the conclusion under scenario 3).
-% Re-carried by hand on 25 September 2026 against the master of 2026-09-25 21:22:31: 7.1
-%   retitled ("What it costs to let generative agents decide", label renamed from
-%   sec:architecture-implication, which nothing referenced); the three-stage division of
-%   labour and the nominal-stage paragraph are withdrawn, replaced by two paragraphs (calling
-%   generative agents only when an event occurs; which parts of the memory need a language
-%   model, moved from 6.2); 7.2 rewritten as four titled limitations; 7.3 rewritten in five
-%   paragraphs. Earlier states of this chapter live in git history.
-% Maintained by hand (no generator since 2026-09-23): carry every validated pass of
-%   ../sections/07_implications.en.md and set the date of line 2 to its marker.
-% =====================================================================
-
 \section{Implications, limitations, conclusion}
 \label{sec:implications}
 
@@ -40,13 +8,15 @@ With the models used, the cost of one simulated day determines where deliberatio
 afforded. One weekday for 1{,}000 personas requires 2{,}108 calls to the language model and
 consumes 3 million tokens, with memory disabled. The 702 trips with a single option never
 reach the model, and the measured run reused part of an earlier day. Turning memory on adds
-some 2.5 million tokens more. Scaled to the whole study area (1.32 million residents aged five
-and over), one simulated day would require 2.9 million calls, for 2.6 to 4.2 billion
-tokens. One published answer to that cost asks the model once per behavioural archetype rather
+some 2.5 million tokens more. Scaled to the whole study area (1.32 million residents aged
+five and over), one simulated day would require 2.9 million calls, for 2.6 to 4.2 billion
+tokens.
+
+One published answer to that cost asks the model once per behavioural archetype rather
 than once per agent \citep{chopra2024limits}. There, 8.4 million agents cost some 400
 queries. Agents of the same archetype share an estimated probability, and each draws its own
-action from it. This saving does not apply here: archetypes are defined by attributes, and an
-off-survey event is precisely what no attribute records.
+action from it. This saving does not carry over as such: archetypes are defined by
+attributes, and an off-survey event is precisely what no attribute records.
 
 At city scale, one way to afford generative agents would be to call them only when an event
 occurs, and let a cheaper decision-maker handle the ordinary day. Our system does not include
@@ -55,13 +25,13 @@ this, and we do not estimate the share of trips that would reach the generative 
 Such a split would also have to decide which parts of the memory need a language model. When
 the model rates the severity of an event (Section~\ref{sec:mechanism}), it only picks one of
 five levels, a label that a typed classifier could return as well. Recording the trace of what
-happened and maintaining the belief drawn from it, by contrast, take written prose. Whether a
-classifier could also do this is an open question.
+happened and maintaining the belief drawn from it, by contrast, take written prose in our
+system. Whether a classifier could also do this is an open question.
 
 \subsection{Limitations}
 \label{sec:limitations}
 
-Four limitations constrain what these measurements support.
+Five limitations constrain what these measurements support.
 
 \textbf{A local survey behind every step.} Prompt tuning, the training of the reference models
 and the scoring of the benchmark all rest on a local travel survey. Toulouse has one,
@@ -75,45 +45,30 @@ report the day after, from memory. It therefore contains a sampling error, large
 smallest strata, and misses the trips respondents forget. Benchmark scores measure a distance
 to these reported shares, not to the trips actually made.
 
-\textbf{One weekday as the reference.} The survey describes a single weekday outside school
-holidays, for residents aged five and over, and our results hold for that day alone. Extending
-the benchmark to weekends or holidays would need a reference for their activities, which differ
-from those of a working day.
+\textbf{One weekday as the reference.} Each respondent describes one weekday outside school
+holidays, for residents aged five and over, and our results hold for such a day alone.
+Extending the benchmark to weekends or holidays would need a reference for their activities,
+which differ from those of a working day.
 
 \textbf{No observed reaction to compare with.} Our survey records no reaction to an incident
 or to an article. Section~\ref{sec:nontabulated} therefore shows that an agent reacts to an
 event none of the 21 variables records. It does not show that the agent reacts as a resident
 would.
 
+\textbf{Systems compared, not reasoning ablated.} The typed classifier and the language
+models differ in training and architecture as well as in the text they write. Section~\ref{sec:deliberation}
+compares them, and does not isolate what the text contributes. Our intervals resample
+persons, and leave out the variation that population synthesis and prompt selection bring.
+
 \subsection{Conclusion}
 \label{sec:conclusion}
 
-We asked what verbalised deliberation adds to urban simulation, and where it earns its place
-in a mobility agent. Published evaluations of generative mobility agents rarely confront them
-with a real population. We confronted generative agents with a field survey, the 2023
-household travel survey of the Toulouse area, in France. We placed them between simple
-baselines and four reference models fitted on that survey, all reading the same 21 variables,
-then pushed them as far as prompt tuning allowed.
+We examined the place of text-based decision-makers in mobility agents by confronting them with the 2023 household travel survey of the Toulouse area, France. Simple baselines and four survey-trained reference models provided benchmarks for interpreting their performance. The comparison covered population distributions, individual choices, and decision cost, with shared core variables and explicit differences in information and calibration.
 
-On the ordinary day the survey describes, deliberation yields no measurable gain. A tuned
-generative agent comes within the cohort resolution of the reference models, without
-outperforming them. A typed classifier that writes no text reaches the same range for a
-fiftieth of the cost. Without reference models on the same survey, none of these three
-positions could have been read.
+On the ordinary day represented by the benchmark, text-based models outperform the simple baselines on distributional alignment, and survey-guided prompt tuning further improves their scores. The tuned generative agent approaches the reference models without establishing an overall advantage. A typed classifier that generates no text reaches their composite-score range on the main cohort, although it falls outside that range on a second cohort. Across the measured decision workload, the classifier costs approximately one fiftieth as much as the tuned generative agent. Text generation is therefore not necessary to attain the population alignment observed on the main cohort, although this comparison does not isolate its causal contribution. These findings concern a limited set of models and prompts, rather than a performance ceiling for text-based decision-makers. New models and more extensive prompt optimisation may change both their ranking and their cost–accuracy trade-offs. Any such gains would need to be confirmed on data held out from prompt development.
 
-The modal split does not tell the whole story. The tuned agent and the gradient boosting model
-score within the cohort resolution of each other, yet pick a different mode on one trip in
-three. The typed classifier gets more reported trips wrong than a baseline that sends everyone
-by car. An evaluation that scores the modal split alone, or one mode per trip, cannot see this
-gap between shares and decisions.
+Population alignment does not establish individual predictive accuracy. The tuned agent and gradient boosting differ by 1.3 composite points, yet rank different modes first on approximately one third of trips with multiple options. On reported survey trips, the typed classifier predicts the observed mode less accurately than a baseline that takes the car whenever available. These results make the joint evaluation of distributions and individual choices essential: a convincing modal split can conceal substantial disagreement about who takes which mode.
 
-The cost of deliberation grows with the population it simulates. One call per decision stays
-affordable for a few dozen travellers, whereas a city multiplies the bill, in money and in
-energy. A smaller model served on local hardware could bring that bill within reach, and later
-language models may close the remaining gap. Whatever the model, what a decision-maker
-consumes matters as much as its accuracy when choosing an architecture. Billions of tokens per
-simulated day cannot be justified just to reproduce what the survey already tabulates.
+Cost further constrains the role of generative models. At the scale of the study area, our extrapolation reaches billions of tokens per simulated day. The ordinary-day benchmark does not establish an overall fidelity advantage over the best reference models that would justify using generative models for every decision. They instead motivate testing architectures that allocate generative computation to tasks for which it provides a measurable benefit.
 
-Deliberation is worth its cost where the survey is silent. We traced one agent end to end over
-several weeks. An engine failure entered its memory and cut its car use for fifteen days,
-although the car stayed on offer, then faded.
+The longitudinal experiment identifies one candidate task: incorporating experience into subsequent decisions. A suspicious engine noise entered an agent’s memory and was followed by reduced car use for approximately fifteen days, despite continued car availability. The propensity to use the car recovered after the event’s account left the prompt. This traces an operational connection between experience, memory, and action; it does not establish human-like adaptation. The next decisive test is whether this flexibility predicts observed responses to new events more accurately than simpler models given the same information. That is where the additional cost of generative agents must earn its justification.

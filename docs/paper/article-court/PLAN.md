@@ -20,7 +20,7 @@ seconde cohorte sont marqués `[c2]`.
 
 | | |
 |---|---|
-| **Titre proposé** | *Where Chain-of-Thought Earns Its Place: Generative Mobility Agents Against a Real Household Travel Survey* (retenu le 2026-09-23 ; en français : *Là où le chain-of-thought mérite sa place : des agents génératifs de mobilité face à une enquête ménages déplacements réelle*) |
+| **Titre proposé** | *Generative Mobility Agents Against a Real Household Travel Survey* (titre court : *Generative Mobility Agents Against a Real Survey* ; ajusté le 2026-09-25, auparavant *Where Chain-of-Thought Earns Its Place*) |
 | **Thèse** | Dans une population d'agents de mobilité, la délibération verbalisée n'améliore pas la fidélité au régime que l'enquête décrit ; ce qu'elle apporte, c'est la prise en compte d'événements qu'aucune variable n'encode, dont nous traçons le chemin jusqu'à la décision. |
 | **Relecteur visé** | Celui qui évalue des populations d'agents LLM contre des ancrages humains : la conversation de SILICA, Baronchelli, Argyle, Meister. Pas le relecteur transport, pas le relecteur systèmes. |
 | **Format** | 8 pages, figures et tableaux compris ; références hors limite ; annexes en matériel supplémentaire. |
