@@ -1,0 +1,132 @@
+# 2. Related work
+
+Three literatures meet in this paper, and none of them measures whether verbalised
+deliberation helps agents reproduce the mode shares of a real territory.
+
+## 2.1 Discrete choice and perception filters
+
+Transport research has predicted mode choice for fifty years with discrete choice models,
+which are statistically strong and behaviourally rigid. Such a model gives each mode a
+probability computed from travel time, cost and the traveller's attributes (McFadden, 1974;
+Ben-Akiva & Lerman, 1985). Analysts fit it on travel surveys, in which residents describe
+every trip of one day, so it inherits their mode shares (Train, 2009). Its decision rule,
+however, is a maximisation over fixed distributions of taste.
+
+Behavioural research documents departures that no survey records. Habit makes a repeated mode
+choice automatic. The traveller then acquires less information about the alternatives
+(Verplanken, Aarts & van Knippenberg, 1997; Gärling & Axhausen, 2003). Adam & Gaudou (2025)
+surveyed 650 respondents and found habitual car users underestimating the price of the car.
+Because a model fitted on surveys cannot carry such perception filters, generative agents are
+proposed to fill the gap.
+
+## 2.2 Generative agents in mobility simulation
+
+Language models entered mobility simulation as the deliberating part that earlier simulators
+did not have. Park et al. (2023) place the model inside the agent, with an episodic memory
+and reflection. Liu, Yang & Yin (2024) carry the design into travel demand, as a hybrid with
+established components. CitySim (Bougie & Watanabe, 2025) scales such agents to a city and
+validates them on time use. No experiment there confronts a simulated modal split with an
+observed one. In earlier simulators such as MATSim (Horni et al., 2016), equilibrium comes
+from scoring plans rather than from an agent's deliberation.
+
+GTA (Lämmer, Colley & Ebel, 2026) is the closest published system on the evaluation side, and
+three of its choices bound what it can show. Each of its agents returns one mode per trip
+rather than a distribution, so no distributional metric applies. Its days are also independent.
+Its authors name multi-day memory as future work. We add a baseline beneath the agents and
+four models fitted on the survey above them. Our metric scores a whole distribution, not one
+mode per trip. Our agents carry events across days.
+
+Alves et al. (2026) stand closest on the platform side, though their evaluation has no human
+ground truth. They couple the GAMA platform to a language-model module with a persistent
+memory, which decides on a disruption whether an agent replans. They judge adaptability
+against a rule-based baseline, not against observed behaviour.
+
+## 2.3 Distributional alignment of LLM populations
+
+A separate literature asks whether populations of language models can stand in for human
+samples. Argyle et al. (2023) conditioned a model on sociodemographic attributes and recovered
+response patterns of the matching subpopulation. Meister et al. (2024) found that a model
+verbalising a distribution aligns better than the same model sampled repeatedly. Our protocol
+scores a verbalised distribution for that reason.
+
+The same literature warns against reading these populations as human ones. Flint Ashery,
+Aiello & Baronchelli (2025) find collective biases in decentralised model populations that no
+individual agent shows. They decline the status of human proxy. The SILICA instrument (Bin
+Tareaf, 2026) certifies such populations with a perturbation library, the order of the
+options included. We adopt its reading grid and its option-order control.
+
+Whether writing the reasoning before answering helps is debated, with no result settling it
+for a population distribution. The gains reported for written reasoning come from tasks that
+have one verifiable answer (Wei et al., 2022; Sprague et al., 2024). We therefore measure on
+a population of mobility agents, whose loop the next section describes.
+
+
+------
+
+
+# 2. Travaux connexes
+
+Trois courants de recherche se rejoignent dans cet article, et aucun n'évalue si la délibération verbalisée
+aide les agents à reproduire les parts modales d'un territoire réel.
+
+## 2.1 Choix discret et filtres de perception
+
+Depuis cinquante ans, la recherche en transport prédit le choix modal à l'aide de modèles de choix discret,
+
+statistiquement robustes et comportementalement rigides. Un tel modèle attribue à chaque mode une
+probabilité calculée à partir du temps de trajet, du coût et des caractéristiques du voyageur (McFadden, 1974 ;
+Ben-Akiva & Lerman, 1985). Les analystes l'ajustent aux enquêtes de mobilité, dans lesquelles les résidents décrivent
+chaque trajet d'une journée, de sorte qu'il hérite de leurs parts modales (Train, 2009). Sa règle de décision,
+
+cependant, est une maximisation sur des distributions fixes de préférences.
+
+La recherche comportementale documente des départs qu'aucune enquête n'enregistre. L'habitude rend un choix modal répété
+automatique. Le voyageur acquiert alors moins d'informations sur les alternatives
+
+(Verplanken, Aarts & van Knippenberg, 1997 ; Gärling & Axhausen, 2003). Adam & Gaudou (2025)
+
+ont interrogé 650 personnes et ont constaté que les automobilistes réguliers sous-estimaient le prix d'une voiture.
+
+Comme un modèle basé sur des enquêtes ne peut intégrer de tels filtres de perception, les agents génératifs sont
+proposés pour combler cette lacune.
+
+## 2.2 Agents génératifs dans la simulation de mobilité
+
+Les modèles de langage ont fait leur apparition dans la simulation de mobilité en tant que composante délibérative absente des simulateurs précédents.
+
+Park et al. (2023) placent le modèle au sein de l'agent, avec une mémoire épisodique
+
+et une capacité de réflexion. Liu, Yang & Yin (2024) transposent cette approche à la demande de transport, sous forme d'hybride avec des
+composantes établies. CitySim (Bougie & Watanabe, 2025) déploie ces agents à l'échelle d'une ville et
+
+les valide en fonction de l'utilisation du temps. Aucune expérience ne confronte une répartition modale simulée à une répartition modale observée.
+
+Dans les simulateurs antérieurs tels que MATSim (Horni et al., 2016), l'équilibre résulte de la notation des plans plutôt que de la délibération d'un agent.
+
+GTA (Lämmer, Colley & Ebel, 2026) est le système publié le plus proche en termes d'évaluation, et
+trois de ses choix limitent ce qu'il peut afficher. Chaque agent renvoie un mode par trajet
+plutôt qu'une distribution, donc aucune métrique distributionnelle ne s'applique. Ses jours sont également indépendants.
+
+Ses auteurs mentionnent la mémoire multi-jours comme travaux futurs. Nous ajoutons une ligne de base sous les agents et
+quatre modèles ajustés sur l'enquête au-dessus. Notre métrique évalue une distribution complète, et non un mode par trajet.
+Nos agents conservent les événements d'un jour à l'autre.
+
+Alves et al. (2026) sont les plus proches du point de vue de la plateforme, bien que leur évaluation ne repose sur aucune vérité humaine. Ils couplent la plateforme GAMA à un module de modélisation du langage doté d'une mémoire persistante
+, qui détermine, en cas de perturbation, si un agent doit replanifier. Ils évaluent l'adaptabilité
+par rapport à une base de référence fondée sur des règles, et non par rapport au comportement observé.
+
+## 2.3 Alignement distributionnel des populations de modèles de langage
+
+Une autre littérature s'interroge sur la possibilité pour les populations de modèles de langage de se substituer à des échantillons humains.
+Argyle et al. (2023) ont conditionné un modèle sur des attributs sociodémographiques et ont retrouvé les schémas de réponse de la sous-population correspondante. Meister et al. (2024) ont constaté qu'un modèle verbalisant une distribution s'aligne mieux que le même modèle échantillonné de manière répétée. Notre protocole évalue une distribution verbalisée pour cette raison.
+
+Cette même littérature met en garde contre l'interprétation de ces populations comme étant des populations humaines. Flint Ashery,
+
+Aiello et Baronchelli (2025) constatent des biais collectifs dans les populations de modèles décentralisés, biais qu'aucun agent individuel ne présente. Ils refusent leur statut de substitut humain. L'instrument SILICA (Bin
+Tareaf, 2026) certifie ces populations à l'aide d'une bibliothèque de perturbations, incluant l'ordre des
+options. Nous adoptons sa grille de lecture et son contrôle de l'ordre des options.
+
+L'utilité de rédiger le raisonnement avant de répondre fait débat, aucun résultat ne permettant de trancher la question
+pour une distribution de population donnée. Les gains observés pour le raisonnement écrit proviennent de tâches qui
+admettent une réponse vérifiable (Wei et al., 2022 ; Sprague et al., 2024). Nous effectuons donc nos mesures sur
+une population d'agents de mobilité, dont la boucle est décrite dans la section suivante.

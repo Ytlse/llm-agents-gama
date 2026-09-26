@@ -8,6 +8,7 @@ atteint le conteneur et son identité, et le bilan dénonce un appel payé avant
 
 from __future__ import annotations
 
+import csv
 import json
 import sys
 from pathlib import Path
@@ -93,6 +94,21 @@ def test_un_echange_sans_jour_n_est_pas_accuse():
     assert b["payes_avant_evenement"] == 0 and b["payes"] == 1
 
 
+def test_le_prefixe_compare_les_deplacements_pas_seulement_les_appels(tmp_path):
+    champs = ["ID Personne", "ID Activité", "Heure de départ", "Mode de transport Choisi"]
+    for bras, mode in (("traite", "Vélo"), ("temoin", "Voiture Privée")):
+        dossier = tmp_path / bras
+        dossier.mkdir()
+        with (dossier / "moves.csv").open("w", newline="", encoding="utf-8") as flux:
+            writer = csv.DictWriter(flux, fieldnames=champs)
+            writer.writeheader()
+            writer.writerow({"ID Personne": "1", "ID Activité": "2",
+                             "Heure de départ": "2026-03-20T08:00:00", "Mode de transport Choisi": mode})
+    bilan = O.verifier_prefixe_deplacements(tmp_path, "2026-03-25")
+    assert bilan["conforme"] is False
+    assert bilan["cles_divergentes"] == 1
+
+
 def test_la_date_de_l_evenement_est_la_premiere_injection(tmp_path):
     f = tmp_path / "evenements.jsonl"
     f.write_text("\n".join(json.dumps({"horodatage_simule": h}) for h in
@@ -105,8 +121,8 @@ def test_le_controle_lit_le_journal_du_temoin_par_le_manifeste(tmp_path, monkeyp
     archive = tmp_path / "archive" / "2026-09-26_09_00"
     archive.mkdir(parents=True)
     (archive / "llm_exchanges.jsonl").write_text(
-        "\n".join(json.dumps(e, indent=2) for e in [_echange("rejeu_ab:k1", "2026-03-20"),
-                                                     _echange("k1", "2026-03-27")]) + "\n")
+        "\n".join(json.dumps({**e, "origine": archive.name}, indent=2) for e in
+                  [_echange("rejeu_ab:k1", "2026-03-20"), _echange("k1", "2026-03-27")]) + "\n")
     runs = tmp_path / "experiments" / "runs" / f"{NOM}_control"
     runs.mkdir(parents=True)
     (runs / "manifeste.json").write_text(json.dumps([{"branche": "control", "archive": str(archive)}]))
@@ -118,6 +134,21 @@ def test_le_controle_lit_le_journal_du_temoin_par_le_manifeste(tmp_path, monkeyp
     b = O.controler_rejeu(NOM, racine_bras)
     assert b["payes_avant_evenement"] == 0 and b["servis"] == 1 and b["payes"] == 1
     assert b["date_evenement"] == "2026-03-25"
+
+
+def test_les_journaux_du_bras_ecartent_les_autres_clients(tmp_path):
+    archive, cible = tmp_path / "archive" / "run_a", tmp_path / "sortie"
+    archive.mkdir(parents=True)
+    (archive / "llm_exchanges.jsonl").write_text("\n".join(
+        json.dumps({**_echange("k", "2026-03-20"), "origine": origine}, indent=2)
+        for origine in ("run_a", "run_b")) + "\n")
+    (archive / "llm_errors.jsonl").write_text("\n".join(
+        json.dumps({"task_id": origine, "origine": origine}) for origine in
+        ("run_a", "run_b", None)) + "\n")
+    bilan = O.isoler_journaux(archive, cible, "run_a")
+    assert bilan == {"echanges": 1, "erreurs": 1, "erreurs_sans_origine": 1}
+    assert {e["origine"] for e in rejeu_ab.lire_echanges(cible / "llm_exchanges.jsonl")} == {"run_a"}
+    assert [json.loads(l)["origine"] for l in (cible / "llm_errors.jsonl").read_text().splitlines()] == ["run_a"]
 
 
 def test_sans_journal_le_controle_le_dit(tmp_path, monkeypatch):

@@ -50,20 +50,25 @@ if [ $# -gt 0 ]; then
   EXPERIENCES=("$@")
 else
   EXPERIENCES=()
-  while IFS= read -r nom; do EXPERIENCES+=("$nom"); done < <(python3 - "$RACINE/data/experiences_memoire" <<'EOF'
+  while IFS= read -r nom; do EXPERIENCES+=("$nom"); done < <(python3 - "$RACINE/data/experiences/evenements_non_tabules" "$RACINE/data/experiences_memoire" <<'EOF'
 import json, sys
 from pathlib import Path
 file = []
-for d in Path(sys.argv[1]).iterdir():
-    if not (d / "experience_memoire.yaml").is_file():
+for racine_str in sys.argv[1:]:
+    p_racine = Path(racine_str)
+    if not p_racine.is_dir():
         continue
-    try:
-        etat = json.loads((d / "etat.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        etat = {}
-    if etat.get("etat") == "terminee":
-        continue
-    file.append((etat.get("cree_le") or etat.get("debut") or "", d.stat().st_mtime, d.name))
+    for f in p_racine.rglob("experience_memoire.yaml"):
+        if "archive" in f.parts or ".system_generated" in f.parts:
+            continue
+        d = f.parent
+        try:
+            etat = json.loads((d / "etat.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            etat = {}
+        if etat.get("etat") == "terminee":
+            continue
+        file.append((etat.get("cree_le") or etat.get("debut") or "", d.stat().st_mtime, d.name))
 for _, _, nom in sorted(file):
     print(nom)
 EOF
@@ -104,8 +109,9 @@ log "DÉBUT — ${#EXPERIENCES[@]} expérience(s) en file : ${EXPERIENCES[*]}"
 log "réglages : ATTENTE_S=${ATTENTE_S} ESSAIS_MAX=${ESSAIS_MAX}"
 
 for exp in "${EXPERIENCES[@]}"; do
-  if [ ! -f "$RACINE/data/experiences_memoire/$exp/experience_memoire.yaml" ]; then
-    log "[ALARME] $exp absente de data/experiences_memoire/ — ignorée"
+  EXP_DIR=$(python3 -c "import sys; from pathlib import Path; print(next((str(p.parent) for r in ['$RACINE/data/experiences/evenements_non_tabules', '$RACINE/data/experiences_memoire'] for p in Path(r).rglob('experience_memoire.yaml') if p.parent.name == '$exp' and 'archive' not in p.parts), ''))")
+  if [ -z "$EXP_DIR" ] || [ ! -f "$EXP_DIR/experience_memoire.yaml" ]; then
+    log "[ALARME] $exp absente de data/experiences/evenements_non_tabules/ — ignorée"
     ignorees+=("$exp")
     continue
   fi

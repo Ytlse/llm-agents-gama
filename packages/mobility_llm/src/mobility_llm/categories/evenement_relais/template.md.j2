@@ -34,11 +34,18 @@ You are the simulation of a person, such that:
 <!-- USER -->
 # INSTRUCTION
 This morning you read the article below. The other members of your household are listed after
-it. For EACH of them, decide whether you tell them something about it this morning, and if so,
-write what you say, in your own words, as you would actually say it.
+it. For EACH of them, write what you say about it, in your own words, as you would actually say
+it.
 
+{% if parameters.parole_obligatoire %}
+- This experiment requires the article to be discussed with the whole household. For EVERY
+  listed member, set `speaks` to true and write a non-empty message. You decide what you say and
+  may express doubt, indifference, or decide that no travel change is needed, but you must
+  seriously mention the article to each person.
+{% else %}
 - You may say nothing to someone: set `speaks` to false and leave `message` empty. Saying
   nothing is a normal answer.
+{% endif %}
 - For a member marked as a CHILD, the other parent and you decide for the child: write what
   you have decided for the child, as you would tell the child.
 - Do not invent any fact that the article does not contain. Do not tell them about your own

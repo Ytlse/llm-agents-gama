@@ -9,6 +9,7 @@ ticket 070.
 """
 
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -239,6 +240,16 @@ def test_R13_jour_nominal_nappelle_rien_mais_garde_labscisse(tmp_path, monkeypat
     assert r.jour_relatif(1000) == -2  # deux jours AVANT le choc
     monkeypatch.setattr(RegistreChocs, "jour_du_run", staticmethod(lambda ts: 15))
     assert r.jour_relatif(1000) == +3
+
+
+def test_R13bis_jour_zero_est_lexposition_effective_du_foyer(tmp_path, monkeypatch):
+    """Une fenêtre J9–J13 ne doit pas afficher +3 au foyer effectivement exposé J12."""
+    r = _registre(tmp_path)
+    monkeypatch.setattr(r, "_date_injection", lambda person_id: date(2026, 3, 27))
+    jours = iter((date(2026, 3, 27), date(2026, 3, 30)))
+    monkeypatch.setattr(r, "_date_de", lambda timestamp: next(jours))
+    assert r.jour_relatif(1000, "1127259") == 0
+    assert r.jour_relatif(1000, "1127259") == 3
 
 
 def test_R14_aucun_moteur_ditineraire_nest_sollicite():

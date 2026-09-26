@@ -1210,9 +1210,11 @@ def experiences(inclure_masquees: bool = False) -> dict[str, dict]:
     """
     if not DOSSIER.is_dir():
         return {}
-    trouvees = []
-    for p in sorted(DOSSIER.iterdir()):
-        e = _yaml(p / "experience.yaml")
+    trouvees: list[tuple[float, str, dict]] = []
+    exp_fichiers = [f for f in DOSSIER.rglob("experience.yaml") if "archive" not in f.parts and ".system_generated" not in f.parts]
+    for f in sorted(exp_fichiers, key=lambda x: x.parent.name):
+        p = f.parent
+        e = _yaml(f)
         if not e:
             continue
         if not inclure_masquees and _statut_experience(p)["statut"] != "actif":
@@ -1944,7 +1946,8 @@ def lister(dossier: Optional[Path] = None) -> list[dict]:
             etats_jeu[nom] = etat_du_jeu(nom)
         return etats_jeu[nom]
 
-    for exp_dir in sorted(p for p in dossier.iterdir() if (p / "experience.yaml").is_file()):
+    exp_fichiers = [f for f in dossier.rglob("experience.yaml") if "archive" not in f.parts and ".system_generated" not in f.parts]
+    for exp_dir in sorted([f.parent for f in exp_fichiers], key=lambda p: p.name):
         exp = _yaml(exp_dir / "experience.yaml")
         base_variante = (exp.get("gabarit") or {}).get("variante")
         jeu_defini = (exp.get("jeu") or {}).get("nom")
@@ -2619,36 +2622,40 @@ def tokens_cumules_executions() -> dict[str, int]:
                 except Exception:
                     pass
 
-    # 2. Exécutions mémoire en cours (data/experiences_memoire/)
-    dossier_mem = REPO_ROOT / "data" / "experiences_memoire"
-    if dossier_mem.is_dir():
-        for exp_dir in dossier_mem.iterdir():
-            if not exp_dir.is_dir():
-                continue
-            for bras in ("traite", "temoin"):
-                p_bras = exp_dir / bras
-                if not p_bras.is_dir():
+    # 2. Exécutions mémoire en cours (data/experiences/evenements_non_tabules/)
+    for racine_mem in (
+        REPO_ROOT / "data" / "experiences" / "evenements_non_tabules",
+        REPO_ROOT / "data" / "experiences_memoire",
+    ):
+        if racine_mem.is_dir():
+            for cfg in racine_mem.rglob("experience_memoire.yaml"):
+                if "archive" in cfg.parts or ".system_generated" in cfg.parts:
                     continue
-                p_etat = p_bras / "etat.json"
-                etat_str = ""
-                if p_etat.is_file():
-                    try:
-                        etat_str = json.loads(p_etat.read_text(encoding="utf-8")).get("etat", "")
-                    except Exception:
-                        pass
-                if etat_str == ETAT_EN_COURS or execution_vivante(p_bras):
-                    p_compteurs = p_bras / "compteurs.json"
-                    if p_compteurs.is_file():
+                exp_dir = cfg.parent
+                for bras in ("traite", "temoin"):
+                    p_bras = exp_dir / bras
+                    if not p_bras.is_dir():
+                        continue
+                    p_etat = p_bras / "etat.json"
+                    etat_str = ""
+                    if p_etat.is_file():
                         try:
-                            c = json.loads(p_compteurs.read_text(encoding="utf-8"))
-                            tin = int(c.get("tokens_in") or (c.get("tokens") or {}).get("in") or 0)
-                            tout = int(c.get("tokens_out") or (c.get("tokens") or {}).get("out") or 0)
-                            if tin > 0 or tout > 0:
-                                total_in += tin
-                                total_out += tout
-                                sources += 1
+                            etat_str = json.loads(p_etat.read_text(encoding="utf-8")).get("etat", "")
                         except Exception:
                             pass
+                    if etat_str == ETAT_EN_COURS or execution_vivante(p_bras):
+                        p_compteurs = p_bras / "compteurs.json"
+                        if p_compteurs.is_file():
+                            try:
+                                c = json.loads(p_compteurs.read_text(encoding="utf-8"))
+                                tin = int(c.get("tokens_in") or (c.get("tokens") or {}).get("in") or 0)
+                                tout = int(c.get("tokens_out") or (c.get("tokens") or {}).get("out") or 0)
+                                if tin > 0 or tout > 0:
+                                    total_in += tin
+                                    total_out += tout
+                                    sources += 1
+                            except Exception:
+                                pass
 
     return {
         "sources": sources,
@@ -4043,10 +4050,12 @@ def _suivi_du_registre(st, pd) -> None:
         filtre = c1.text_input("Filtrer (sous-chaîne sur toutes les colonnes)", key=cle_filtre,
                                help="texte brut, jamais une expression régulière : « exp_(alea » "
                                     "cherche bien ces caractères-là")
-        # Tri par défaut sur `execution` : son nom est l'horodatage, l'ordre lexicographique
-        # est donc l'ordre chronologique — ce que `date` donnait avant son retrait.
+        # Tri par défaut sur `etat` (ordre sémantique : En cours, Définie, Épuisée/Pause, Terminée),
+        # puis sur `execution` (ordre chronologique).
+        tri_defaut = "etat" if "etat" in triables else ("execution" if "execution" in triables else 0)
+        tri_index = triables.index(tri_defaut) if isinstance(tri_defaut, str) and tri_defaut in triables else (tri_defaut if isinstance(tri_defaut, int) else 0)
         tri = c2.selectbox("Trier par", triables,
-                           index=triables.index("execution") if "execution" in triables else 0,
+                           index=tri_index,
                            key="exp-tri")
         # Un filtre de VUE, décoché d'un clic — sans rapport avec « 🗑 Retirer du tableau »,
         # qui écrit dans `.masques.json`. Le panneau de progression plus bas parcourt les
@@ -4059,7 +4068,33 @@ def _suivi_du_registre(st, pd) -> None:
                  "remplacées ; la dernière exécution de chaque expérience reste toujours "
                  "visible. Le nombre de lignes masquées est dit sous le tableau.")
         if tri and tri in df.columns:
-            df = df.sort_values(tri, ascending=False, na_position="last").reset_index(drop=True)
+            if tri == "etat":
+                def _norm_etat_tri(s) -> str:
+                    t = str(s or "").lower().strip()
+                    return t.replace("é", "e").replace("è", "e").replace("ê", "e")
+
+                def _rang_tri_etat(ligne: dict) -> int:
+                    e = _norm_etat_tri(ligne.get("etat"))
+                    has_exec = bool(ligne.get("execution")) and pd.notna(ligne.get("execution"))
+                    obsolete = bool(ligne.get("obsolete"))
+                    if "en_cours" in e or "⏳" in e:
+                        return 0
+                    if not has_exec or "defin" in e or "planifi" in e:
+                        return 1
+                    if "pause" in e or "epuis" in e or "attente" in e or "interromp" in e or "arret" in e:
+                        return 2
+                    if "termin" in e:
+                        return 4 if obsolete else 3
+                    return 5
+
+                df["_rang_tri"] = [_rang_tri_etat(l) for l in df.to_dict("records")]
+                df["_exec_sort"] = df["execution"].fillna("") if "execution" in df.columns else ""
+                df = df.sort_values(
+                    by=["_rang_tri", "_exec_sort", "experience"],
+                    ascending=[True, False, True]
+                ).drop(columns=["_rang_tri", "_exec_sort"]).reset_index(drop=True)
+            else:
+                df = df.sort_values(tri, ascending=False, na_position="last").reset_index(drop=True)
         # Les obsolètes sortent AVANT que les valeurs filtrables soient calculées (R11) : un
         # fournisseur qui n'apparaît que sur des lignes obsolètes n'a pas à peupler le
         # sélecteur d'une colonne quand la case est cochée.
@@ -4221,14 +4256,116 @@ def _suivi_du_registre(st, pd) -> None:
             st.session_state["_table_active_row"] = None
             memoire_sel[changement_deselection] = []
 
+        def _norm_etat(s) -> str:
+            t = str(s or "").lower().strip()
+            return t.replace("é", "e").replace("è", "e").replace("ê", "e")
+
+        def _rang_tri_etat(ligne: dict) -> int:
+            e = _norm_etat(ligne.get("etat"))
+            has_exec = bool(ligne.get("execution")) and pd.notna(ligne.get("execution"))
+            obsolete = bool(ligne.get("obsolete"))
+            # Moins avancé au plus avancé / terminé :
+            # 0: En cours (en train de tourner activement)
+            # 1: Définie / Planifiée (pas encore lancée, 0%)
+            # 2: Pause / Épuisée / Interrompue / Arrêtée (partiellement avancée)
+            # 3: Terminée (menée à terme avec succès)
+            # 4: Terminée obsolète
+            if "en_cours" in e or "⏳" in e:
+                return 0
+            if not has_exec or "defin" in e or "planifi" in e:
+                return 1
+            if "pause" in e or "epuis" in e or "attente" in e or "interromp" in e or "arret" in e:
+                return 2
+            if "termin" in e:
+                return 4 if obsolete else 3
+            return 5
+
+        def _hauteur_tableau(nb_lignes: int) -> int:
+            """Calcule une hauteur généreuse évitant le défilement vertical pour les tableaux usuels."""
+            if nb_lignes <= 0:
+                return 200
+            return max(220, min(1000, (nb_lignes + 1) * 35 + 10))
+
+        def styler_tableau_experiences(vue_df: pd.DataFrame, df_source: pd.DataFrame):
+            """Applique un jeu de couleurs harmonieux et doux selon l'état de l'expérience :
+            - Expériences terminées avec succès : grisé teinté d'un vert apaisant
+            - Expériences obsolètes : grisé neutre discret
+            - Expériences à faire / à démarrer (définies, planifiées) : teinte ambrée / orangée douce
+            - Expériences en cours : teinte bleutée dynamique
+            - Expériences interrompues / en pause : teinte ardoise / violette douce
+            - Nom de l'expérience : texte standard bien contrasté
+            """
+            def style_ligne(row):
+                idx = row.name
+                raw = df_source.iloc[idx] if idx < len(df_source) else {}
+                etat_raw = _norm_etat(raw.get("etat", ""))
+                etat_disp = _norm_etat(row.get("etat", ""))
+                has_exec = pd.notna(raw.get("execution")) and bool(raw.get("execution"))
+                is_obsolete = bool(raw.get("obsolete"))
+
+                is_terminee = (
+                    "termin" in etat_raw
+                    or (has_exec and not is_obsolete and "termin" in etat_disp)
+                )
+                is_en_cours = (
+                    "en_cours" in etat_raw
+                    or "⏳" in etat_disp
+                )
+                is_a_faire = (
+                    not has_exec
+                    or "defin" in etat_raw
+                    or "planifi" in etat_disp
+                    or "defin" in etat_disp
+                )
+                is_pause = (
+                    "pause" in etat_raw
+                    or "epuis" in etat_raw
+                    or "interromp" in etat_raw
+                    or "arret" in etat_raw
+                    or "attente" in etat_raw
+                )
+
+                bg_color = ""
+                if is_terminee:
+                    bg_color = "background-color: rgba(110, 109, 105, 0.07);" if is_obsolete else "background-color: rgba(46, 125, 50, 0.08);"
+                elif is_en_cours:
+                    bg_color = "background-color: rgba(2, 136, 209, 0.10);"
+                elif is_pause:
+                    bg_color = "background-color: rgba(124, 77, 219, 0.08);"
+                elif is_a_faire:
+                    bg_color = "background-color: rgba(237, 108, 2, 0.07);"
+
+                styles = []
+                for col in vue_df.columns:
+                    st_cell = []
+                    if bg_color:
+                        st_cell.append(bg_color)
+
+                    if col == "etat":
+                        if is_terminee:
+                            st_cell.append("color: #6e6d69;" if is_obsolete else "color: #2e7d32;")
+                        elif is_en_cours:
+                            st_cell.append("color: #0288d1;")
+                        elif is_pause:
+                            st_cell.append("color: #7c4ddb;")
+                        elif is_a_faire:
+                            st_cell.append("color: #c66900;")
+
+                    styles.append(" ".join(st_cell))
+                return styles
+
+            return vue_df.style.apply(style_ligne, axis=1)
+
         events_par_groupe: dict[str, tuple] = {}
         lignes_sel_par_groupe: dict[str, list[int]] = {}
 
         if not groupes_ordonnes:
             cle_widget = "exp-table-vide"
+            styled_vide = styler_tableau_experiences(vue_tableau, df)
             st.dataframe(
-                vue_tableau,
+                styled_vide,
                 width="stretch",
+                height=_hauteur_tableau(len(vue_tableau)),
                 hide_index=True,
                 key=cle_widget,
                 **cfg,
@@ -4245,9 +4382,11 @@ def _suivi_du_registre(st, pd) -> None:
                 st.caption(explication)
 
             cle_widget = f"exp-table-{cle_grp}"
+            styled_grp = styler_tableau_experiences(vue_grp, df_grp)
             event_grp = st.dataframe(
-                vue_grp,
+                styled_grp,
                 width="stretch",
+                height=_hauteur_tableau(len(vue_grp)),
                 hide_index=True,
                 on_select="rerun",
                 selection_mode="single-row",

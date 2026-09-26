@@ -1,0 +1,280 @@
+# 5. Results at the nominal regime
+
+The nominal regime is an ordinary simulated day, the one the household travel survey
+describes, with no disruption in it. Four findings come out of that day.
+
+1. The fifteen decision-makers separate into five groups. No generative agent reaches the
+   four tabular references.
+2. Tuning the general criteria can align some dimensions of the distribution, and leave
+   the others where it found them.
+3. A typed classifier that writes no text reaches the same band, for a fiftieth of the cost.
+4. Two decision-makers that the aggregate cannot tell apart disagree on one trip in three.
+
+## 5.1 Fifteen decision-makers on one error scale
+
+The fifteen decision-makers spread over the composite axis in five groups that do not
+overlap (Figure 2). The composite counts error, so a lower value is a closer match to the
+survey distribution. The three floors carry the largest error, from 27.0 for the
+minimum-duration heuristic to 50.2 for a uniform draw over the choice set. The four decision-makers under the minimal
+prompt land between 7.0 and 14.8. Under the expert prompt, the three language models land
+between 4.9 and 9.0. The four tabular references hold inside half a point, from 3.60 to 4.09.
+
+The minimal prompt already carries less error than the best of the three floors. The worst of the four
+minimal-prompt conditions sits at 14.8, against 27.0 for the minimum-duration heuristic,
+which picks the fastest option offered. A model that receives the facts of a trip, and no
+general criteria, therefore carries behavioural information. That information is not
+the one the physical heuristic encodes.
+
+On two versions of one model family, the backbone model weighs as much as the instruction
+it carries. Served unchanged to a second model from the same provider, the expert text
+leaves 4.15 composite points between the two, interval +2.99 to +5.43.
+
+Replaying one condition under three seeds moves its composite less than the cohort itself
+does. The tuned gemini-3.5 condition scores 4.86, 4.65 and 4.30 on the same cohort and the
+same evaluation set. The range is 0.56 point, against a cohort resolution of ±1.3 points.
+Two further conditions replayed the same way range by 0.05 and 0.24 point. The sign of
+their difference holds on all three seeds.
+
+*Figure 2 — Five groups separate on the composite axis, and the minimal prompt already
+carries less error than the physical floor.*
+
+## 5.2 What tuning moves, and what it does not
+
+Tuning the general criteria improves every language model, by more than a cohort
+would move on its own (Table 2). The paired gain on the composite is 2.27 points for
+gemini-3.5, interval +1.40 to +3.22, then 3.37 points for gemini-3.1 and 7.25 for
+mistral-large. All nine intervals exclude zero. The gains run from
+one and a half to five and a half times the cohort resolution.
+
+*Table 2 — Paired gains of the expert prompt over the minimal prompt, three readings, with
+their 95 % interval in brackets. A positive gain is a lower error.*
+
+| Language model | Composite | Excluding single-option trips | L1 on global shares |
+|---|---|---|---|
+| gemini-3.5 | 2.27 [1.40 ; 3.22] | 3.59 [2.45 ; 4.83] | 10.2 [8.0 ; 12.5] |
+| gemini-3.1 | 3.37 [2.45 ; 4.25] | 4.15 [3.09 ; 5.22] | 8.6 [6.8 ; 10.6] |
+| mistral-large | 7.25 [5.90 ; 8.67] | 8.63 [7.15 ; 10.28] | 18.0 [13.5 ; 22.4] |
+
+These gains come from one tuned text, and its route is not the only one. Each mutation
+moves several strata at once, in both directions. The procedure keeps only those whose
+over-represented mode recedes.
+
+This text creates a slope rather than a level shift (Figure 3). Under one kilometre the car
+share of gemini-3.5 does not move, 9.7 % before tuning and 10.1 % after. Between one and
+fifty kilometres it rises by six to seven points in every band. The tuned agent then carries
+less error along distance than any tabular reference, 14.2 weighted points against 16.8 for
+the random forest. Distance is the only dimension where an agent manages it.
+
+Two errors coexist in the same decision-maker, and the tuning answers only one. The three
+language models put the bike share between 6.8 and 8.1 %, where the survey records 4.1 %.
+This text moves it by less than one point, and pulls public transport down by four to eleven
+points. One stratum resists every decision-maker, the 15–19 year olds (Appendix F).
+
+*Figure 3 — Tuning gives the agent a slope along distance, while the shortest trips stay
+where the minimal prompt left them.*
+
+## 5.3 Deliberation does not decide
+
+The typed classifier reaches the band of the four tabular references. Its composite on the
+second cohort is **[c2, out-of-sample composite of the typed classifier]**, against 3.60 to 4.09
+points for the four tabular references. The paired differences against those four references
+are **[c2, four paired differences with their 95 % intervals]**.
+
+A decision-maker that writes no text scores in the same band as those that write a
+justification. What helps is therefore the reading of the trip, not the sentences produced
+after the choice. Verbalised deliberation added nothing to aggregate fidelity here. We state
+that as a result on this bench, not as a property of language models.
+
+At an equal load of 23,026 decisions the classifier costs 1.06 dollar against 49.28, a
+factor of about fifty.
+
+## 5.4 The aggregate does not tell the individual
+
+The tuned agent and the gradient boosted model sit within the cohort resolution of each
+other and still disagree on one trip in three. They put their highest probability on a
+different mode for 30.3 % of trips, counted where both saw at least two options. That
+compares the distributions, not the mode each one drew. Between two tabular methods the same
+figure runs from 8.4 to 11.0 %. Two agents also differ four times more than two tabular
+models in the whole distribution, 40.0 points of median distance against 9.8.
+
+On the declared days of the survey the agent designates the declared mode slightly less
+often than the tabular references (Table 3). The audit covers 9,621 trips of 2,930
+respondents, each carrying the mode its respondent declared. The tuned agent reaches 67.6 %
+accuracy against 71.5 % for the gradient boosted model, a paired gap of 3.87 points,
+interval −5.47 to −2.28. Its gap to the multinomial logit separates from zero on neither
+accuracy nor cross-entropy.
+
+*Table 3 — Unit-level agreement on the declared days, six decision-makers. Accuracy and
+recall in %, cross-entropy on the 5,229 decisions that every distribution-valued
+decision-maker scores.*
+
+| Decision-maker | Accuracy | Cross-entropy | Bike recall | Walk recall |
+|---|---|---|---|---|
+| Gradient boosted | 71.5 | 0.299 | 20.4 | 63.4 |
+| Multinomial logit | 68.6 | 0.358 | 18.3 | 60.0 |
+| Minimum duration | 68.1 | — | 25.8 | 19.2 |
+| Expert prompt, gemini-3.5 | 67.6 | 0.341 | 22.5 | 47.2 |
+| Minimal prompt, gemini-3.5 | 64.8 | 0.384 | 24.1 | 44.2 |
+| Expert prompt, typed classifier | 64.7 | 0.464 | 18.1 | 56.3 |
+
+The typed classifier falls under the all-car floor on individual accuracy. It reaches
+64.7 % where the floor reaches 66.7 %, a paired gap of 2.04 points, interval −3.78 to −0.29.
+The next two sentences read on the expert prompt of gemini-3.5, not the classifier's own
+**[TBD]**. No paired comparison separates it from the four tabular references on
+the composite. The two other aggregate readings put it behind the kernel regression and the
+random forest. Its probability mass goes to walking rather than to public transport. Walk
+recall is 56.3 %, against **[TBD, about 44 % on Figure 4, exact value in Appendix I]** for
+public transport. The aggregate split hides that exchange. A population can therefore reproduce
+the modal split of a territory while getting more individual trips wrong than a rule that
+reads nothing.
+
+*Figure 4 — Recall and precision by mode: the typed classifier trades public transport for
+walking, and the aggregate split does not show the exchange.*
+
+These four findings hold on the ordinary day the survey describes. A survey tabulates no
+other day, and the next section leaves that regime for an event that no variable encodes.
+
+
+------
+
+
+# 5. Résultats en régime nominal
+
+Le régime nominal correspond à une journée simulée ordinaire, celle décrite par l'enquête sur les déplacements des ménages,
+
+sans perturbation. Quatre constats ressortent de cette journée.
+
+1. Les quinze décideurs se répartissent en cinq groupes. Aucun agent génératif n'atteint les
+quatre références tabulaires.
+
+2. L'ajustement des critères généraux permet d'aligner certaines dimensions de la distribution, tout en laissant
+les autres inchangées.
+
+3. Un classificateur dactylographié, qui ne génère aucun texte, atteint la même bande, pour un coût cinquante fois inférieur.
+
+4. Deux décideurs que l'agrégat ne parvient pas à distinguer sont en désaccord sur un déplacement sur trois.
+
+## 5.1 Quinze décideurs sur une échelle d'erreur unique
+
+Les quinze décideurs se répartissent sur l'axe composite en cinq groupes non
+chevauchants (Figure 2). L'erreur de comptage composite est prise en compte ; une valeur plus faible correspond donc mieux à la
+distribution de l'enquête. Les trois étages présentent la plus grande marge d'erreur, de 27,0 pour l'heuristique de durée minimale à 50,2 pour un tirage uniforme sur l'ensemble des choix. Les quatre décideurs sous l'invite minimale se situent entre 7,0 et 14,8. Sous l'invite experte, les trois modèles de langage se situent entre 4,9 et 9,0. Les quatre références tabulaires se situent à moins d'un demi-point, de 3,60 à 4,09.
+
+L'invite minimale présente déjà moins d'erreur que le meilleur des trois étages. La pire des quatre conditions d'invite minimale se situe à 14,8, contre 27,0 pour l'heuristique de durée minimale, qui choisit l'option la plus rapide proposée. Un modèle qui reçoit les faits d'un voyage, et aucun critère général, véhicule donc des informations comportementales. Ces informations ne sont pas celles encodées par l'heuristique physique.
+
+Sur deux versions d'une famille de modèles, le modèle de base pèse autant que l'instruction qu'il véhicule. Appliqué sans modification à un second modèle du même fournisseur, le texte expert
+laisse un écart composite de 4,15 points entre les deux, avec un intervalle de +2,99 à +5,43.
+
+La réexécution d'une condition avec trois initialisations différentes modifie son score composite de façon moins marquée que la cohorte elle-même.
+
+La condition Gemini-3.5 optimisée obtient des scores de 4,86, 4,65 et 4,30 sur la même cohorte et le même ensemble d'évaluation. L'écart est de 0,56 point, pour une résolution de cohorte de ±1,3 point.
+
+Deux autres conditions réexécutées de la même manière présentent des écarts de 0,05 et 0,24 point.
+
+Le signe de leur différence est le même pour les trois initialisations.
+
+Figure 2 — Cinq groupes se séparent sur l'axe composite, et l'invite minimale
+présente déjà moins d'erreur que le plancher physique.
+
+## 5.2 Ce que le réglage influence et ce qu'il n'influence pas
+
+Le réglage des critères généraux améliore chaque modèle de langage, davantage qu'une cohorte
+ne progresserait seule (Tableau 2). Le gain apparié sur l'axe composite est de 2,27 points pour
+gemini-3.5, intervalle de +1,40 à +3,22, puis de 3,37 points pour gemin-3.1 et de 7,25 pour
+mistral-large. Les neuf intervalles excluent zéro. Les gains varient de
+une fois et demie à cinq fois et demie la résolution de la cohorte.
+
+Tableau 2 — Gains appariés de l'invite experte par rapport à l'invite minimale, trois lectures, avec
+leur intervalle de confiance à 95 % entre parenthèses. Un gain positif correspond à une erreur plus faible.
+
+| Modèle de langage | Composite | Hors trajets à option unique | L1 sur les parts globales |
+
+|---|---|---|---|
+
+| gemini-3.5 | 2.27 [1.40 ; 3.22] | 3.59 [2.45 ; 4.83] | 10.2 [8.0 ; 12.5] |
+
+| gemini-3.1 | 3.37 [2.45 ; 4.25] | 4.15 [3.09 ; 5.22] | 8.6 [6.8 ; 10.6] |
+
+| mistral-large | 7.25 [5.90 ; 8.67] | 8.63 [7.15 ; 10.28] | 18.0 [13.5 ; 22.4] |
+
+Ces gains proviennent d'un texte optimisé, et son cheminement n'est pas unique. Chaque mutation
+déplace plusieurs strates simultanément, dans les deux sens. La procédure ne conserve que les individus dont le mode surreprésenté diminue.
+
+Ce texte crée une pente plutôt qu'un changement de niveau (Figure 3). Sur une distance inférieure à un kilomètre, la part de voiture de Gemini-3.5 reste stable : 9,7 % avant ajustement et 10,1 % après. Entre un et cinquante kilomètres, elle augmente de six à sept points dans chaque tranche. L'agent ajusté présente alors une erreur moindre sur la distance que toute référence tabulaire : 14,2 points pondérés contre 16,8 pour la forêt aléatoire. La distance est la seule dimension que l'agent gère.
+
+Deux erreurs coexistent chez le même décideur, et l'ajustement n'en corrige qu'une. Les trois modèles de langage situent la part de vélo entre 6,8 et 8,1 %, alors que l'enquête enregistre 4,1 %.
+
+Ce texte la modifie de moins d'un point et fait baisser la part des transports en commun de quatre à onze points. Une strate résiste à tous les décideurs : les 15-19 ans (Annexe F).
+
+*Figure 3 — Le réglage confère à l'agent une pente en fonction de la distance, tandis que les trajets les plus courts restent
+là où l'invite minimale les a laissés.*
+
+## 5.3 La délibération ne décide pas
+
+Le classificateur dactylographié atteint la bande des quatre références tabulaires. Son score composite sur la
+seconde cohorte est **[c2, score composite hors échantillon du classificateur dactylographié]**, contre 3,60 à 4,09
+points pour les quatre références tabulaires. Les différences appariées par rapport à ces quatre références
+
+sont **[c2, quatre différences appariées avec leurs intervalles à 95 %]**.
+
+Un décideur qui ne rédige aucun texte obtient un score dans la même bande que ceux qui rédigent une
+justification. Ce qui aide, c'est donc la lecture Le comportement du trajet, et non les phrases produites
+après le choix. La délibération verbalisée n'a rien apporté à la fidélité globale ici. Nous l'affirmons
+comme un résultat sur ce banc d'essai, et non comme une propriété des modèles de langage.
+
+Pour une charge égale de 23 026 décisions, le classificateur coûte 1,06 dollar contre 49,28, soit un
+facteur d'environ cinquante.
+
+## 5.4 L'agrégat ne renseigne pas l'individu
+
+L'agent optimisé et le modèle à gradient boosté se situent dans la résolution de cohorte l'un de l'autre
+et divergent encore sur un trajet sur trois. Ils attribuent leur probabilité la plus élevée à un
+mode différent pour 30,3 % des trajets, comptabilisés lorsque les deux ont vu au moins deux options. Cela
+compare les distributions, et non le mode tiré par chacun. Entre deux méthodes tabulaires, le même
+chiffre varie de 8,4 à 11,0 %. Deux agents diffèrent également quatre fois plus que deux modèles tabulaires
+sur l'ensemble de la distribution, avec une distance médiane de 40,0 points contre 9,8.
+
+Les jours déclarés de l'enquête, l'agent désigne le mode déclaré légèrement moins
+
+souvent que les références tabulaires (Tableau 3). L'audit porte sur 9 621 trajets de 2 930
+répondants, chacun effectuant le trajet selon le mode déclaré. L'agent optimisé atteint une précision de 67,6 %
+contre 71,5 % pour le modèle à gradient boosté, soit un écart de 3,87 points (intervalle : −5,47 à −2,28). Son écart avec le modèle logit multinomial est significatif, tant en termes de précision que d'entropie croisée.
+
+*Tableau 3 — Accord au niveau unitaire sur les jours déclarés, six décideurs. Précision et
+rappel (%), entropie croisée sur les 5 229 décisions prises par chaque décideur (à valeurs distribuées).*
+
+| Décideur | Précision | Entropie croisée | Rappel vélo | Rappel marche |
+
+|---|---|---|---|---|
+
+| Gradient boosté | 71,5 | 0,299 | 20,4 | 63,4 |
+
+| Logit multinomial | 68,6 | 0,358 | 18,3 | 60,0 |
+
+| Durée minimale | 68,1 | — | 25,8 | 19,2 |
+
+| Invite expert, Gemini-3.5 | 67,6 | 0,341 | 22,5 | 47,2 |
+
+| Invite minimale, Gemini-3.5 | 64,8 | 0,384 | 24,1 | 44,2 |
+
+| Invite expert, classificateur typé | 64,7 | 0,464 | 18,1 | 56,3 |
+
+Le classificateur typé présente une précision individuelle inférieure au seuil minimal pour l'ensemble des véhicules. Il atteint
+64,7 % là où le plancher atteint 66,7 %, soit un écart de 2,04 points (intervalle : -3,78 à -0,29).
+
+Les deux phrases suivantes se basent sur l'invite experte de Gemini-3.5, et non sur celle du classificateur lui-même.
+
+**[À déterminer]** Aucune comparaison appariée ne le distingue des quatre références tabulaires sur
+le composite. Les deux autres lectures agrégées le placent derrière la régression à noyau et la
+forêt aléatoire. Sa probabilité est plus élevée pour la marche que pour les transports en commun. Le rappel pour la marche est de 56,3 %, contre **[À déterminer], environ 44 % sur la figure 4, valeur exacte dans l'annexe I]** pour les
+transports en commun. La répartition agrégée masque cette inversion. Une population peut donc reproduire
+la répartition modale d'un territoire tout en commettant plus d'erreurs sur les trajets individuels qu'une règle qui
+
+ne tient pas compte de ces erreurs.
+
+Figure 4 — Rappel et précision par mode : le classificateur typé remplace les transports en commun par la marche
+
+et la répartition agrégée ne reflète pas ce changement.
+
+Ces quatre observations sont valables pour la journée ordinaire décrite par l’enquête. Une enquête ne recense aucune
+autre journée, et la section suivante aborde ce cas de figure pour un événement qu’aucune variable ne permet de modéliser.

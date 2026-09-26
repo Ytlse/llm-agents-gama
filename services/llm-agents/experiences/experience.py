@@ -315,13 +315,48 @@ class Experience(_Strict):
             erreurs.append(f"tolerances_horaires : groupes manquants {manquants}")
         return erreurs
 
+    def sous_dossier_jeu(self) -> str:
+        """Nom du sous-dossier selon le jeu de référence (ex. jeu_1000_AAMAS_v6_EN_c)."""
+        nom_jeu = self.jeu.nom
+        if "v6_c2" in nom_jeu or "c2_20260316" in nom_jeu:
+            return "jeu_1000_AAMAS_v6_c2_EN_c"
+        if "enquete_058" in nom_jeu or "58_test" in nom_jeu:
+            return "jeu_enquete_058_test"
+        if "AAMAS_v6" in nom_jeu or "v6_20260316_EN_c" in nom_jeu:
+            return "jeu_1000_AAMAS_v6_EN_c"
+        return nom_jeu
+
     def dossier(self) -> Path:
-        return dossier_experiences() / self.nom
+        existant = trouver_dossier_experience(self.nom)
+        if existant:
+            return existant
+        return dossier_experiences() / "regime_nominal" / self.sous_dossier_jeu() / self.nom
+
+
+def trouver_dossier_experience(nom: str) -> Path | None:
+    """Trouve le dossier d'une expérience (recherche directe ou récursive par sous-dossiers)."""
+    racine = dossier_experiences()
+    # 1. Chemin direct
+    direct = racine / nom
+    if (direct / "experience.yaml").is_file():
+        return direct
+    # 2. Sous-dossiers par jeu de test
+    if racine.is_dir():
+        for f in racine.rglob("experience.yaml"):
+            if "archive" in f.parts or ".system_generated" in f.parts:
+                continue
+            if f.parent.name == nom:
+                return f.parent
+    return None
 
 
 def charger_experience(chemin: str | Path) -> Experience:
     """Lit et valide ; une erreur nomme le champ (E1). Aucun défaut implicite."""
     p = Path(chemin)
+    if not p.is_file() and not p.is_dir():
+        d = trouver_dossier_experience(str(chemin))
+        if d:
+            p = d / "experience.yaml"
     if p.is_dir():
         p = p / "experience.yaml"
     if not p.is_file():

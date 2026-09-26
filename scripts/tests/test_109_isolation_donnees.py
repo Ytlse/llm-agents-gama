@@ -15,7 +15,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from scripts.dashboard import memoire as ONGLET
 
-VRAI_DOSSIER = REPO_ROOT / "data" / "experiences_memoire"
+VRAI_DOSSIER = REPO_ROOT / "data" / "experiences" / "evenements_non_tabules"
 VRAI_FORMULAIRE = REPO_ROOT / "experiments" / ".dashboard" / "formulaire_memoire.yaml"
 
 

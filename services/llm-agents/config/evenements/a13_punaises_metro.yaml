@@ -62,3 +62,6 @@ service:
 # mineur, le message est la décision des parents (ticket 111, D5).
 relais:
   mode: par_destinataire
+  # Dans cette expérience, le traitement porte sur une information effectivement discutée
+  # dans tout le foyer. Le lecteur choisit ses mots, mais pas de taire l'article à un membre.
+  parole_obligatoire: true

@@ -30,3 +30,4 @@ service:
   jours_de_deplacement: 5
 relais:
   mode: par_destinataire
+  parole_obligatoire: true

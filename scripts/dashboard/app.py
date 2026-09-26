@@ -329,12 +329,14 @@ def render_sidebar() -> None:
 
 # ── Panneau des jobs ──────────────────────────────────────────────────────────
 def _job_decideur(job: runner.Job) -> str:
-    """Décideur d'un job d'expérience, lu dans son yaml de configuration (vide sinon)."""
     if "experience-memoire" in job.label:
         nom = next((tok[4:] for tok in job.argv if tok.startswith("EXP=")), "")
         if nom:
-            cfg_file = REPO_ROOT / "data" / "experiences_memoire" / nom / "experience_memoire.yaml"
-            if cfg_file.is_file():
+            from experiences.memoire import trouver_dossier_experience
+
+            exp_dir = trouver_dossier_experience(nom)
+            cfg_file = (exp_dir / "experience_memoire.yaml") if exp_dir else None
+            if cfg_file and cfg_file.is_file():
                 try:
                     import yaml
 

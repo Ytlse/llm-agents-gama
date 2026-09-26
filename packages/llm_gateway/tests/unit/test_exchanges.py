@@ -12,7 +12,7 @@ from llm_gateway.telemetry.exchanges import (
     identity,
     load_redactor,
 )
-from llm_gateway.telemetry.logger import log_llm_exchange
+from llm_gateway.telemetry.logger import log_llm_error, log_llm_exchange
 
 
 def _record(**kw) -> ExchangeRecord:
@@ -86,6 +86,13 @@ def test_active_avec_redacteur_configure(tmp_path):
     log_llm_exchange("t", "p", [{"role": "user", "content": "x" * 5000}], {"ok": True}, 1, 1, telemetry=telemetry)
     text = (tmp_path / "llm_exchanges.jsonl").read_text(encoding="utf-8")
     assert "coupés" in text and "x" * 5000 not in text
+
+
+def test_le_journal_erreur_porte_l_origine_du_run(tmp_path):
+    telemetry = SimpleNamespace(workdir=tmp_path)
+    log_llm_error("t", "p", "quota", "épuisé", 429, telemetry=telemetry, origine="run_a")
+    erreur = json.loads((tmp_path / "llm_errors.jsonl").read_text())
+    assert erreur["origine"] == "run_a"
 
 
 def test_redacteur_inchargeable_n_ecrit_pas_en_clair(tmp_path):

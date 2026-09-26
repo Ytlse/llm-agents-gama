@@ -1,5 +1,0 @@
-persona_id,trajets_total,modes_distincts,entropie_modale_bits,equitabilite_pielou,routes_distinctes,entropie_itineraire_bits,exposition,entropie_avant,entropie_evenement,entropie_apres
-286921,57,3,1.3057,0.5623,20,3.8621,Sans événement,,,
-286923,46,3,1.1916,0.5132,5,1.7611,Sans événement,,,
-286922,24,3,0.4972,0.2141,8,2.7254,Sans événement,,,
-286920,24,1,0.0,0.0,9,3.1258,Sans événement,,,

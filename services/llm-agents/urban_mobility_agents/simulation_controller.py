@@ -782,6 +782,7 @@ class SimulationLoopV1(BaseScenario):
             e.evenement_id,
             jour,
             household_id,
+            parole_obligatoire=e.relais.parole_obligatoire,
         )
 
     def _modes_habituels(self, personne) -> list[str]:
@@ -954,13 +955,16 @@ class SimulationLoopV1(BaseScenario):
         """Suspend une expérience plutôt que de poursuivre avec une mémoire incomplète."""
         try:
             await coro
-        except ConsolidationMemoryUnavailable as exc:
+        except Exception as exc:  # noqa: BLE001 — toute consolidation manquante invalide le run
             if _arret_sur_repli_arme():
                 await self._declencher_hibernation_propre(
                     None,
                     str(person_id),
                     motif="consolidation_memoire",
-                    details={"categorie": categorie, "erreur": str(exc)},
+                    details={
+                        "categorie": categorie,
+                        "erreur": f"{type(exc).__name__}: {exc}",
+                    },
                 )
                 return
             raise
@@ -2046,7 +2050,13 @@ class SimulationLoopV1(BaseScenario):
             return
         self._hibernation_declenchee = True
 
-        if motif == "replis_consecutifs":
+        if motif == "decision_absente":
+            logger.error(
+                f"[ALARME] [hibernation] Décision absente pour {person_id} après les "
+                f"retentatives du gateway. Arrêt au premier échec : aucun index par défaut "
+                f"n'entre dans les résultats."
+            )
+        elif motif == "replis_consecutifs":
             logger.error(
                 f"[ALARME] [hibernation] {self._replis_consecutifs} replis CONSÉCUTIFS "
                 f"(seuil {settings.agent.replis_consecutifs_max}), dernier pour {person_id} : "
@@ -2067,6 +2077,13 @@ class SimulationLoopV1(BaseScenario):
                 f"{(details or {}).get('constat', 'constat non fourni')} Arrêt ordonné du "
                 f"contrôleur plutôt que de servir le trajet après son heure. Aucune heure de "
                 f"réouverture : la reprise se fait comme après des replis (saturation amont)."
+            )
+        elif motif == "consolidation_memoire":
+            logger.error(
+                f"[ALARME] [hibernation] Consolidation mémoire absente pour {person_id} : "
+                f"{(details or {}).get('categorie', '?')} — "
+                f"{(details or {}).get('erreur', 'aucun détail')}. Le tampon reste intact ; "
+                f"la reprise retentera avant toute décision fondée sur une mémoire incomplète."
             )
         else:
             logger.warning(
@@ -4079,8 +4096,8 @@ class SimulationLoopV1(BaseScenario):
                     # Ticket 105 — une décision prise casse la série.
                     self._replis_consecutifs = 0
                 else:
-                    # Ticket 105 — la série de replis se compte AVANT toute décision d'arrêt :
-                    # c'est elle, et non le motif de l'échec, qui dit qu'on a changé de régime.
+                    # Le compteur reste dans la trace pour diagnostiquer les incidents, mais
+                    # une expérience s'arrête dès le premier échec non absorbé par le gateway.
                     self._replis_consecutifs += 1
 
                     # Ticket 105 — le repli n'était qu'en `debug`, donc invisible : il a fallu
@@ -4088,7 +4105,7 @@ class SimulationLoopV1(BaseScenario):
                     # de mesure en portait 10,3 %. Une décision que le modèle n'a pas prise est
                     # une anomalie de mesure, elle se journalise comme telle.
                     logger.error(
-                        f"[ALARME] [repli] décision servie par l'index 0, PAS par le modèle | "
+                        f"[ALARME] [repli] décision absente ; index 0 interdit en expérience | "
                         f"agent={person.person_id} instant={humanize_date(timestamp)} "
                         f"destination={next_activity.location} "
                         f"genre_erreur={_trace_decision.get('genre_erreur') or 'aucun'} "
@@ -4099,10 +4116,9 @@ class SimulationLoopV1(BaseScenario):
                     # laisser l'index 0 se faire passer pour une décision du modèle. Deux motifs
                     # d'arrêt, armés par le même verrou d'expérience :
                     #   • quota journalier — le fournisseur dit à quelle heure il rouvre ;
-                    #   • replis consécutifs — n'importe quelle cause, y compris une saturation
-                    #     amont qui ne renvoie AUCUN genre_erreur (54 × HTTP 503 « high demand »
-                    #     le 2026-09-23, zéro RESOURCE_EXHAUSTED). C'est le filet qui rattrape
-                    #     les motifs qu'on n'a pas encore rencontrés.
+                    #   • toute autre absence de décision après les retentatives du gateway —
+                    #     arrêt immédiat, car laisser l'index 0 entrer dans moves.csv contaminerait
+                    #     déjà l'état et les mesures.
                     if _arret_sur_repli_arme():
                         # 2026-09-25 — la surcharge du fournisseur (5xx, 429 par minute) arrive
                         # désormais QUALIFIÉE : le worker rend le lot avant que le client
@@ -4118,11 +4134,10 @@ class SimulationLoopV1(BaseScenario):
                             # SIGTERM demandé ; le couple respecte la signature au cas où la
                             # coroutine reprend la main avant que le processus ne tombe.
                             return None, None
-                        if self._replis_consecutifs >= settings.agent.replis_consecutifs_max:
-                            await self._declencher_hibernation_propre(
-                                None, person.person_id, motif="replis_consecutifs"
-                            )
-                            return None, None
+                        await self._declencher_hibernation_propre(
+                            None, person.person_id, motif="decision_absente"
+                        )
+                        return None, None
                     plan_index = 0
                     provider_info = ""
                     mode_probabilities = {}

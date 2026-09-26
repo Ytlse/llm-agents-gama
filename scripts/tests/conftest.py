@@ -31,7 +31,7 @@ def _isoler_donnees_memoire(tmp_path_factory, monkeypatch):
         yield None
         return
     racine = tmp_path_factory.mktemp("memoire_isolee")
-    dossier = racine / "data" / "experiences_memoire"
+    dossier = racine / "data" / "experiences" / "evenements_non_tabules"
     dossier.mkdir(parents=True)
     monkeypatch.setattr(_memoire, "DOSSIER_MEMOIRE", dossier)
     monkeypatch.setattr(_memoire, "ETAT_FORMULAIRE_MEMOIRE", racine / "formulaire_memoire.yaml")

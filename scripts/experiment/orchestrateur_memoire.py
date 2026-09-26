@@ -8,6 +8,7 @@ L'expérience n'est marquée comme « terminee » que si les deux ont été jou�
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import logging
 import os
@@ -15,7 +16,7 @@ import shutil
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -135,6 +136,61 @@ def archive_du_bras(nom_exp: str, branche: str) -> Path | None:
     return None
 
 
+def verifier_prefixe_deplacements(racine_bras: Path, date_evt: str | None) -> dict[str, Any]:
+    """Vérifie directement que les sorties prétraitement des deux bras sont identiques."""
+    chemins = {b: racine_bras / b / "moves.csv" for b in ("traite", "temoin")}
+    if date_evt is None or any(not p.is_file() for p in chemins.values()):
+        return {"conforme": False, "raison": "date événement ou moves.csv manquant"}
+
+    champs = (
+        "Heure de départ",
+        "Mode de transport Choisi",
+        "Modes proposés au LLM",
+        "Options présentées",
+        "P(Marche) %",
+        "P(Vélo) %",
+        "P(Voiture Privée) %",
+        "P(Transports_collectifs) %",
+        "P(Train) %",
+        "P(Deux-roues motorisé) %",
+        "P(Autres modes) %",
+        "Mémoire à court terme",
+        "Mémoire à long terme",
+        "Filtre de perception",
+    )
+
+    def lire(path: Path) -> dict[tuple[str, str, str], list[tuple[str, ...]]]:
+        groupes: dict[tuple[str, str, str], list[tuple[str, ...]]] = {}
+        with path.open(encoding="utf-8", newline="") as flux:
+            for ligne in csv.DictReader(flux):
+                depart = ligne.get("Heure de départ", "")
+                try:
+                    jour_vecu = (datetime.fromisoformat(depart) - timedelta(hours=3)).date().isoformat()
+                except ValueError:
+                    continue
+                if jour_vecu >= date_evt:
+                    continue
+                cle = (ligne.get("ID Personne", ""), ligne.get("ID Activité", ""), jour_vecu)
+                groupes.setdefault(cle, []).append(tuple(ligne.get(f, "") for f in champs))
+        for valeurs in groupes.values():
+            valeurs.sort()
+        return groupes
+
+    traite, temoin = lire(chemins["traite"]), lire(chemins["temoin"])
+    cles = traite.keys() | temoin.keys()
+    manquantes = sum(cle not in traite or cle not in temoin for cle in cles)
+    divergentes = sum(
+        cle in traite and cle in temoin and traite[cle] != temoin[cle] for cle in cles
+    )
+    return {
+        "conforme": manquantes == 0 and divergentes == 0,
+        "lignes_traite": sum(map(len, traite.values())),
+        "lignes_temoin": sum(map(len, temoin.values())),
+        "cles_manquantes": manquantes,
+        "cles_divergentes": divergentes,
+    }
+
+
 def controler_rejeu(nom_exp: str, racine_bras: Path) -> dict[str, Any] | None:
     """Après le témoin : chaque appel d'avant l'événement doit avoir été servi par rejeu."""
     archive = archive_du_bras(nom_exp, "control")
@@ -148,13 +204,15 @@ def controler_rejeu(nom_exp: str, racine_bras: Path) -> dict[str, Any] | None:
     date_evt = rejeu_ab.date_premiere_injection(racine_bras / "traite" / "evenements.jsonl")
     origine = archive.name
     resultat = rejeu_ab.bilan(rejeu_ab.lire_echanges(journal, origine=origine), date_evt)
+    resultat["prefixe_deplacements"] = verifier_prefixe_deplacements(racine_bras, date_evt)
     resultat["consignes"] = len(list((RACINE_REJEU / nom_exp).glob("*.json")))
     resultat["archive_temoin"] = str(archive)
-    if resultat["payes_avant_evenement"]:
+    if resultat["payes_avant_evenement"] or not resultat["prefixe_deplacements"]["conforme"]:
         logger.error(
             f"[ALARME] [{nom_exp}] rejeu : {resultat['payes_avant_evenement']} appel(s) du témoin "
             f"PAYÉS avant l'événement ({date_evt}) — les bras ont divergé pour une autre raison "
-            f"que lui. Premiers : {resultat['premiers_payes_avant'][:3]}"
+            f"que lui. Premiers : {resultat['premiers_payes_avant'][:3]}. "
+            f"Préfixe moves : {resultat['prefixe_deplacements']}"
         )
     else:
         logger.info(
@@ -391,7 +449,7 @@ def main() -> None:
 
     args = parser.parse_args()
     nom_exp = args.experience
-    exp_dir = memoire.DOSSIER_MEMOIRE / nom_exp
+    exp_dir = memoire.trouver_dossier_experience(nom_exp) or (memoire.DOSSIER_MEMOIRE / nom_exp)
     cfg_path = exp_dir / "experience_memoire.yaml"
 
     if not cfg_path.is_file():
@@ -519,6 +577,18 @@ def main() -> None:
     etat_data["rapprochement_ticket108"] = rappr
     if traite_ok and temoin_ok and espace_rejeu(nom_exp, config) and not args.dry_run:
         etat_data["rejeu_ab"] = controler_rejeu(nom_exp, racine_bras)
+        controle = etat_data["rejeu_ab"]
+        if (
+            controle is None
+            or controle.get("payes_avant_evenement", 0) > 0
+            or not controle.get("prefixe_deplacements", {}).get("conforme", False)
+        ):
+            etat_data["etat"] = "non_conforme"
+            logger.error(
+                f"[ALARME] [{nom_exp}] comparaison A/B NON CONFORME : le préfixe commun "
+                f"n'est pas démontré. Les deux bras sont achevés, mais leurs résultats ne "
+                f"doivent pas être interprétés comme un effet causal."
+            )
     ecrire_etat()
 
     logger.info("=" * 60)
@@ -526,6 +596,10 @@ def main() -> None:
         logger.info(
             f"✅ ESSAI À BLANC de {nom_exp} réussi ({', '.join(branches)}) — aucune simulation, "
             f"aucun appel ; état de l'expérience INCHANGÉ, traces synthétiques dans {racine_bras}."
+        )
+    elif etat_data["etat"] == "non_conforme":
+        logger.error(
+            f"⛔ CAMPAGNE {nom_exp} ACHEVÉE MAIS NON CONFORME : contrôle du préfixe A/B échoué."
         )
     elif len(branches) == 2:
         logger.info(f"✅ CAMPAGNE MÉMOIRE {nom_exp} TERMINÉE AVEC SUCCÈS (LES 2 BRAS ONT TOURNÉ).")

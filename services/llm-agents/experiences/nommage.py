@@ -544,17 +544,16 @@ def definitions_existantes(dossier: str | Path) -> dict[str, str]:
     out: dict[str, str] = {}
     if not racine.is_dir():
         return out
-    for p in sorted(racine.iterdir()):
-        fichier = p / "experience.yaml"
-        if not fichier.is_file():
+    for fichier in sorted(racine.rglob("experience.yaml")):
+        if "archive" in fichier.parts or ".system_generated" in fichier.parts:
             continue
         try:
             data = yaml.safe_load(fichier.read_text(encoding="utf-8")) or {}
         except yaml.YAMLError:
             continue
         sig = signature(data)
-        out.setdefault(str(data.get("nom") or p.name), sig)
-        out.setdefault(p.name, sig)
+        out.setdefault(str(data.get("nom") or fichier.parent.name), sig)
+        out.setdefault(fichier.parent.name, sig)
     return out
 
 

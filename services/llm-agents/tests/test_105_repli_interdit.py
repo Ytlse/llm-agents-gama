@@ -68,25 +68,15 @@ class TestVerrouDExperience:
         )
 
 
-# ── Le seuil ─────────────────────────────────────────────────────────────────────────────
-
-
-class TestSeuil:
-    def test_le_seuil_existe_et_vaut_plus_de_un(self):
-        """Pas 1 : un 503 isolé est rattrapé par les tentatives et ne produit aucun repli.
-        Ce qu'on attrape est un RÉGIME, pas un incident."""
-        seuil = settings.agent.replis_consecutifs_max
-        assert isinstance(seuil, int)
-        assert seuil >= 2, "un seuil à 1 arrêterait un run sur un incident absorbable"
-
-    def test_le_seuil_par_defaut_est_trois(self):
-        assert settings.agent.replis_consecutifs_max == 3
-
-
 # ── La logique d'arrêt, lue dans la source ───────────────────────────────────────────────
 
 
 class TestLogiqueDArret:
+    @staticmethod
+    def _bloc_repli() -> str:
+        """Isole la branche décision ; la consolidation emploie le même verrou plus haut."""
+        return SOURCE.split('selection_method = "LLM"')[1].split("plan: TravelPlan")[0]
+
     def test_le_compteur_est_declare(self):
         assert "self._replis_consecutifs: int = 0" in SOURCE
 
@@ -96,19 +86,16 @@ class TestLogiqueDArret:
         assert "self._replis_consecutifs = 0" in bloc
 
     def test_le_compteur_monte_avant_toute_decision_d_arret(self):
-        garde = SOURCE.split("if _arret_sur_repli_arme():")[0]
-        assert "self._replis_consecutifs += 1" in garde[-2000:]
-
-    def test_le_seuil_declenche_l_hibernation(self):
-        assert (
-            "self._replis_consecutifs >= settings.agent.replis_consecutifs_max"
-            in SOURCE
+        bloc = self._bloc_repli()
+        assert bloc.index("self._replis_consecutifs += 1") < bloc.index(
+            "if _arret_sur_repli_arme():"
         )
-        bloc = SOURCE.split(
-            "self._replis_consecutifs >= settings.agent.replis_consecutifs_max"
-        )[1][:400]
+
+    def test_le_premier_echec_non_absorbe_suspend_avant_repli(self):
+        bloc = self._bloc_repli()
         assert "_declencher_hibernation_propre" in bloc
-        assert 'motif="replis_consecutifs"' in bloc
+        assert 'motif="decision_absente"' in bloc
+        assert bloc.index('motif="decision_absente"') < bloc.index("plan_index = 0")
 
     def test_le_chemin_quota_du_077_est_preserve(self):
         """Lui seul connaît l'heure de réouverture : il ne doit pas être absorbé par le neuf."""
@@ -125,11 +112,11 @@ class TestLogiqueDArret:
         Sans ce genre, trois `Timeout expiré` muets entraient d'abord dans la mesure en replis
         (2026-09-23 : 16 mars 05:00, 07:48, puis le troisième) avant que le seuil n'arrête le run.
         """
-        bloc = SOURCE.split("if _arret_sur_repli_arme():")[1][:1500]
+        bloc = self._bloc_repli()
         assert "surcharge_fournisseur" in bloc
         assert bloc.index("surcharge_fournisseur") < bloc.index(
-            "self._replis_consecutifs >= settings.agent.replis_consecutifs_max"
-        ), "la surcharge qualifiée s'arrête AVANT le seuil des replis, pas après"
+            'motif="decision_absente"'
+        ), "la surcharge qualifiée conserve son motif et son heure de reprise"
 
     def test_l_arret_pour_surcharge_le_dit_en_alarme(self):
         bloc = SOURCE.split('elif motif == "surcharge_fournisseur":')[1][:600]
@@ -137,8 +124,12 @@ class TestLogiqueDArret:
 
     def test_les_deux_arrets_rendent_la_main_sans_choisir(self):
         """Un `return None, None` : surtout pas un plan_index=0 après avoir décidé d'arrêter."""
-        bloc = SOURCE.split("if _arret_sur_repli_arme():")[1][:1500]
+        bloc = self._bloc_repli()
         assert bloc.count("return None, None") == 2
+
+    def test_une_consolidation_absente_suspend_aussi_l_experience(self):
+        assert "ConsolidationMemoryUnavailable" in SOURCE
+        assert 'motif="consolidation_memoire"' in SOURCE
 
 
 # ── La visibilité ────────────────────────────────────────────────────────────────────────
@@ -170,10 +161,10 @@ class TestMarqueurDArret:
         assert "if resume_at is None" in SOURCE
         assert '"replis_consecutifs": self._replis_consecutifs' in SOURCE
 
-    def test_l_arret_pour_replis_le_dit_en_alarme(self):
-        assert "[ALARME] [hibernation]" in SOURCE
-        bloc = SOURCE.split("[ALARME] [hibernation]")[1][:600]
-        assert "replis CONSÉCUTIFS" in bloc
+    def test_l_arret_pour_decision_absente_le_dit_en_alarme(self):
+        bloc = SOURCE.split('if motif == "decision_absente":')[1][:600]
+        assert "[ALARME] [hibernation]" in bloc
+        assert "Arrêt au premier échec" in bloc
 
     def test_l_arret_reste_un_sigterm(self):
         """`sys.exit` se ravale en erreur de requête sous l'ASGI ; l'orchestrateur attend un 0."""

@@ -117,6 +117,9 @@ def _charger_experience_par_nom(nom: str) -> E.Experience:
     chemin = Path(nom)
     if chemin.suffix in (".yaml", ".yml") and chemin.is_file():
         return E.charger_experience(chemin)
+    dossier = E.trouver_dossier_experience(nom)
+    if dossier and (dossier / "experience.yaml").is_file():
+        return E.charger_experience(dossier / "experience.yaml")
     return E.charger_experience(E.dossier_experiences() / nom / "experience.yaml")
 
 

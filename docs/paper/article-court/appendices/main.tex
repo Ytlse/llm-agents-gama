@@ -1,0 +1,95 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% LaTeX Template for AAMAS-2027 Supplementary Material
+%%% Where Chain-of-Thought Earns Its Place: Generative Mobility Agents Against a Real Household Travel Survey
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass[manuscript,anonymous]{aamas} 
+\renewcommand{\texttt}[1]{{\ttfamily\hyphenchar\font=`\-\relax\hyphenpenalty=10000\relax #1}}
+
+\usepackage{balance}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{afterpage}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{fvextra}
+\fvset{breaklines=true, fontsize=\small, frame=leftline, framesep=3mm}
+\DeclareUnicodeCharacter{2248}{\ensuremath{\approx}}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+
+\input{repository}
+
+\makeatletter
+\gdef\@copyrightpermission{
+  \begin{minipage}{0.2\columnwidth}
+   \href{https://creativecommons.org/licenses/by/4.0/}{\includegraphics[width=0.90\textwidth]{by}}
+  \end{minipage}\hfill
+  \begin{minipage}{0.8\columnwidth}
+   \href{https://creativecommons.org/licenses/by/4.0/}{This work is licensed under a Creative Commons Attribution International 4.0 License.}
+  \end{minipage}
+  \vspace{5pt}
+}
+\makeatother
+
+\setcopyright{ifaamas}
+\acmConference[AAMAS 2027]{Proc.\@ of the 26th International Conference on Autonomous Agents and Multiagent Systems (AAMAS 2027)}{3--7 May 2027}{Hanoi, Vietnam}{M.~Baldoni, F.~Fang, W.~Yeoh, N.~Yorke-Smith (eds.)}
+\copyrightyear{2027}
+\acmYear{2027}
+\acmDOI{}
+\acmISBN{}
+
+\acmSubmissionID{<<OpenReview submission id>>}
+\submissionType{Research Paper Track}
+
+\title[Where Chain-of-Thought Earns Its Place: Supplementary Material]{Where Chain-of-Thought Earns Its Place: Generative Mobility Agents Against a Real Household Travel Survey. Supplementary Material and Extended Technical Companion}
+
+\author{Yves Bru}
+\affiliation{
+  \institution{UMR IRIT, Université Toulouse Capitole}
+  \city{Toulouse}
+  \country{France}}
+\email{yves.bru@gmail.com}
+
+\author{Benoit Gaudou}
+\affiliation{
+  \institution{UMR IRIT, Université Toulouse Capitole}
+  \city{Toulouse}
+  \country{France}}
+\email{benoit.gaudou@ut-capitole.fr}
+
+\author{Kamaldeep Singh Oberoi}
+\affiliation{
+  \institution{CESI, CESI LINEACT}
+  \city{Toulouse}
+  \country{France}}
+\email{ksoberoi@cesi.fr}
+
+\keywords{Large Language Models, Generative Agents, Urban Mobility, Mode Choice, Distributional Alignment, Behavioural Validation, Systems Reproducibility}
+
+\begin{document}
+
+\maketitle
+
+\input{chapters/00_abstract}
+\input{chapters/01_demographic_control}
+\input{chapters/02_protocol_variables}
+\input{chapters/03_mathematical_metrics}
+\input{chapters/04_prompts_and_traces}
+\input{chapters/05_news_shocks}
+\input{chapters/06_stratified_errors}
+\input{chapters/07_paired_contrasts}
+\input{chapters/08_factorial_generalization}
+\input{chapters/09_computational_economics}
+\input{chapters/10_execution_language}
+\input{chapters/11_multi_agent_specification}
+\input{chapters/12_methodological_audit}
+\input{chapters/13_data_governance}
+\input{chapters/14_individual_audit}
+\input{chapters/15_systems_architecture}
+
+\bibliographystyle{ACM-Reference-Format} 
+\bibliography{sample}
+
+\end{document}

@@ -1,0 +1,24 @@
+# 12. Methodological Audit and Chronology of Twelve Scientific Rectifications
+
+This chapter documents the internal audit log tracking twelve methodological corrections applied during the project. We describe the discrepancies identified and the corrective procedures enforced.
+
+## 12.1 The Twelve Methodological Rectifications
+
+To guarantee scientific reproducibility, we logged every methodological revision between early drafts and the certified manuscript. Table 12.1 details these twelve rectifications.
+
+*Table 12.1. Methodological audit log and corrective actions.*
+
+| # | Discrepancy identified in early versions | Corrective action applied |
+|---|---|---|
+| 1 | Baseline evaluated on 15 variables | Enforced strict 21-variable contract (`spec_version 2`) |
+| 2 | Tabular $L_1$ compared against LLM argmax | Realigned comparison to continuous probability mass |
+| 3 | Claimed $\chi^2$ non-rejection as proof of validity | Replaced with TOST equivalence bounds and effect sizes |
+| 4 | Milestone 0 presented as behavioral validation | Requalified as a baseline structural coherence check |
+| 5 | Composites compared across unequal sample sizes | Enforced identical sample sizes to prevent sample-size bias |
+| 6 | Information parity presented as symmetric | Explicitly declared exposure asymmetry (39,203 trips seen vs zero) |
+| 7 | Tabular model described as blind to events | Added event-informed tabular condition (C5) |
+| 8 | News shock evaluated without length control | Added length-matched placebo articles (C3) |
+| 9 | Unverified claim of "10,000x faster" | Withdrawn pending certified hardware measurements |
+| 10 | Disaggregate audit perimeter mismatch (1,000 vs 13,045) | Unified perimeter to 9,621 declared trips across 2,930 individuals |
+| 11 | Composite weights reported as normalized to 1.0 | Corrected to fixed unnormalized sum ($1.0 / 0.5 / 0.3$) |
+| 12 | Unreferenced demographic targets cited | Aligned all targets with official Cerema certified tables |

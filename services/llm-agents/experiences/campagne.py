@@ -241,10 +241,12 @@ def charger(nom: str) -> Campagne:
             f"{chemin.name} : `lanceurs` désigne {hors_campagne}, qui ne sont dans aucune "
             "phase. Un lanceur pour une expérience absente ne servira jamais et masque une "
             "faute de frappe.")
+    from experiences.experience import trouver_dossier_experience
+
     manquantes = [
         e
         for e in campagne.toutes
-        if not (dossier_experiences() / e / "experience.yaml").is_file()
+        if not ((dossier_experiences() / e / "experience.yaml").is_file() or (trouver_dossier_experience(e) and (trouver_dossier_experience(e) / "experience.yaml").is_file()))
     ]
     if manquantes:
         raise CampagneInvalide(

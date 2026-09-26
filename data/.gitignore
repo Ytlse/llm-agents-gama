@@ -17,7 +17,13 @@
 # sélection ne serait ni rejouable ni vérifiable sur une autre machine, et son critère
 # resterait théorique.
 !/population/population_10_mesurables_093/
+!*.dvc
+!/population/*.dvc
 /population_samples
 /po_toulouse.small
-!/population/sauvegardes/
+/population/sauvegardes
 /experiences
+/experiences_memoire
+!/experiences_memoire/
+!/experiences_memoire/*/
+!/experiences_memoire/*/experience_memoire.yaml

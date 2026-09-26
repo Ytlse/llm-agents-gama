@@ -1,3 +1,12 @@
+## [2026-09-26] Tableau de bord : stylisation, agrandissement et tri par état des tableaux d'expériences
+
+Les tableaux du registre d'expériences dans l'onglet « Expériences » disposent désormais d'un tri par défaut sur l'état (ordre sémantique : En cours, Définie, Épuisée/Pause, Terminée), d'une hauteur dynamique et d'une stylisation colorée douce selon l'état.
+
+**Avant :** Les tableaux du registre étaient triés par date d'exécution décroissante, avaient une hauteur fixe par défaut de Streamlit (~384px) imposant un défilement vertical dès une dizaine de lignes, et toutes les lignes avaient un fond neutre uniforme.
+**Après :** Le tri par défaut place en tête les expériences en cours, puis celles définies / à lancer, puis celles en pause / épuisées, et enfin celles terminées avec succès (les plus récentes en premier à état égal). La hauteur s'adapte automatiquement au nombre de lignes et les lignes bénéficient d'un code couleur doux par statut.
+
+---
+
 ## [2026-09-26] Article court : l'adresse du dépôt anonyme compile de nouveau
 
 Le LaTeX anglais de l'article court compile de nouveau sur Overleaf. En passant dans

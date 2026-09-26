@@ -181,7 +181,14 @@ def modes_habituels(journal: dict) -> list[str]:
     ]
 
 
-def charge_utile(lecteur_id: str, perception: str, article: str, membres: list[dict]) -> dict:
+def charge_utile(
+    lecteur_id: str,
+    perception: str,
+    article: str,
+    membres: list[dict],
+    *,
+    parole_obligatoire: bool = False,
+) -> dict:
     from urban_mobility_agents.utils.routage import instances_pour
 
     return {
@@ -196,6 +203,7 @@ def charge_utile(lecteur_id: str, perception: str, article: str, membres: list[d
             }
         ],
         "parameters": {
+            "parole_obligatoire": bool(parole_obligatoire),
             "temperature": 0.2,
             # 2048 : les modèles de raisonnement dépensent leur réflexion DANS ce budget (le
             # jugement a dû passer de 256 à 1024 le 2026-09-22 pour cette raison), et la
@@ -223,8 +231,15 @@ def _champ(obj, nom: str):
     return getattr(obj, nom, None)
 
 
-def valider(reponse, lecteur_id: str, membres: list[dict], household_id: str,
-            evenement_id: str) -> tuple[Message, ...]:
+def valider(
+    reponse,
+    lecteur_id: str,
+    membres: list[dict],
+    household_id: str,
+    evenement_id: str,
+    *,
+    parole_obligatoire: bool = False,
+) -> tuple[Message, ...]:
     """Les messages, un par membre, ou `RelaisRefuse`. Aucun repli."""
     agents = getattr(reponse, "agents", None) if reponse is not None else None
     if not agents:
@@ -257,6 +272,13 @@ def valider(reponse, lecteur_id: str, membres: list[dict], household_id: str,
             parle_brut = _champ(d, "parle")
         parle = bool(parle_brut)
         texte = str(_champ(d, "message") or "").strip()
+        if parole_obligatoire and not parle:
+            raise _refuser(
+                household_id,
+                evenement_id,
+                f"`speaks` faux pour {pid} alors que la parole est obligatoire",
+                technique=True,
+            )
         if parle and not texte:
             raise _refuser(
                 household_id, evenement_id, f"`speaks` vrai et message vide pour {pid}"
@@ -287,8 +309,14 @@ async def produire(
     evenement_id: str,
     jour: int,
     household_id: str,
+    parole_obligatoire: bool = False,
 ) -> RelaisFoyer:
-    """Un appel, un foyer. Lève `RelaisRefuse` plutôt que de rendre un message inventé."""
+    """Produit le relais du foyer, sans texte de repli.
+
+    En mode obligatoire, une réponse qui tait au moins un membre est une réponse incomplète et
+    est redemandée immédiatement. Les mots restent ceux du lecteur ; seule la couverture de
+    tous les destinataires est imposée par le protocole.
+    """
     lecteur_id = str(lecteur.person_id)
     mineurs = sum(1 for m in membres if m.get("mineur"))
     logger.info(
@@ -296,9 +324,41 @@ async def produire(
         f"{len(membres)} membre(s) dont {mineurs} mineur(s), « {evenement_id} » jour {jour}"
     )
     t0 = time.monotonic()
-    reponse = await llm_client.execute(charge_utile(lecteur_id, perception, texte, membres))
+    reponse = None
+    messages = None
+    dernier_refus: RelaisRefuse | None = None
+    essais = TENTATIVES_MAX if parole_obligatoire else 1
+    for tentative_locale in range(1, essais + 1):
+        reponse = await llm_client.execute(
+            charge_utile(
+                lecteur_id,
+                perception,
+                texte,
+                membres,
+                parole_obligatoire=parole_obligatoire,
+            )
+        )
+        try:
+            messages = valider(
+                reponse,
+                lecteur_id,
+                membres,
+                household_id,
+                evenement_id,
+                parole_obligatoire=parole_obligatoire,
+            )
+            break
+        except RelaisRefuse as err:
+            dernier_refus = err
+            if not parole_obligatoire or tentative_locale >= essais:
+                raise
+            logger.warning(
+                f"[evenements] relais obligatoire du foyer {household_id} incomplet — "
+                f"nouvel essai immédiat {tentative_locale + 1}/{essais} ({err})"
+            )
+    if messages is None:
+        raise dernier_refus or RelaisRefuse("relais sans messages", technique=True)
     duree = time.monotonic() - t0
-    messages = valider(reponse, lecteur_id, membres, household_id, evenement_id)
     relais = RelaisFoyer(
         household_id=str(household_id),
         lecteur_id=lecteur_id,

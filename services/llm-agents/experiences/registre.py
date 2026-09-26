@@ -107,10 +107,16 @@ def lister(
 
         ref_sha = _F.charger().reference.sha256
     except Exception:  # noqa: BLE001 — le registre reste lisible même sans formule
-        ref_sha = None
-    for exp_dir in sorted(
-        p for p in racine.iterdir() if (p / "experience.yaml").is_file()
-    ):
+        pass
+    # Découverte récursive de toutes les expériences (directes ou en sous-dossiers de jeu)
+    fichiers_exp = []
+    if racine.is_dir():
+        for p in racine.rglob("experience.yaml"):
+            if "archive" in p.parts or ".system_generated" in p.parts:
+                continue
+            fichiers_exp.append(p.parent)
+
+    for exp_dir in sorted(fichiers_exp, key=lambda p: p.name):
         try:
             exp = (
                 yaml.safe_load(

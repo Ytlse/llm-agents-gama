@@ -1,7 +1,0 @@
-persona_id,trajets_total,modes_distincts,entropie_modale_bits,equitabilite_pielou,routes_distinctes,entropie_itineraire_bits,exposition,entropie_avant,entropie_evenement,entropie_apres
-1320713,97,3,1.4154,0.6096,24,3.8917,foyer exposé,0.9968,0.971,1.5638
-1127258,78,2,0.9995,0.4305,9,2.498,foyer exposé,1.0,0.9183,0.9995
-1127260,40,2,0.9928,0.4276,14,3.5124,foyer exposé,0.9183,0.0,0.7219
-1127257,59,2,0.8874,0.3822,12,3.3594,foyer exposé,0.8767,0.9183,0.8936
-1320712,59,3,0.4799,0.2067,6,1.9969,foyer exposé,0.825,0.0,0.0
-1127259,97,1,0.0,0.0,12,3.3408,foyer exposé,0.0,0.0,0.0

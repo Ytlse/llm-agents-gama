@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,7 +28,11 @@ logger = logging.getLogger(__name__)
 
 # Racine du dépôt (ce fichier vit dans services/llm-agents/experiences/)
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DOSSIER_MEMOIRE = REPO_ROOT / "data" / "experiences_memoire"
+DOSSIER_MEMOIRE = (
+    Path(os.getenv("EXPERIENCES_MEMOIRE_DIR"))
+    if os.getenv("EXPERIENCES_MEMOIRE_DIR")
+    else REPO_ROOT / "data" / "experiences" / "evenements_non_tabules"
+)
 DOSSIER_EVENEMENTS = REPO_ROOT / "services" / "llm-agents" / "config" / "evenements"
 DOSSIER_CHOCS = REPO_ROOT / "services" / "llm-agents" / "config" / "chocs"
 ETAT_FORMULAIRE_MEMOIRE = (
@@ -162,7 +167,57 @@ def nom_canonique(
     return base
 
 
-def attribuer_nom(
+def trouver_dossier_experience(nom: str) -> Path | None:
+    """Trouve le dossier d'une expérience mémoire (directe ou en sous-dossier chocs/presse)."""
+    direct = DOSSIER_MEMOIRE / nom
+    if direct.is_dir():
+        return direct
+    if DOSSIER_MEMOIRE.is_dir():
+        for f in DOSSIER_MEMOIRE.rglob("experience_memoire.yaml"):
+            if "archive" in f.parts or ".system_generated" in f.parts:
+                continue
+            if f.parent.name == nom:
+                return f.parent
+    legacy = REPO_ROOT / "data" / "experiences_memoire"
+    if legacy.is_dir() and legacy != DOSSIER_MEMOIRE:
+        if (legacy / nom).is_dir():
+            return legacy / nom
+        for f in legacy.rglob("experience_memoire.yaml"):
+            if "archive" in f.parts or ".system_generated" in f.parts:
+                continue
+            if f.parent.name == nom:
+                return f.parent
+    return None
+
+
+def sous_dossier_categorie(config: dict[str, Any]) -> Path:
+    """Détermine le chemin cible selon le type d'événement mémoire."""
+    nom = str(config.get("nom", ""))
+    canal = str(config.get("canal", ""))
+    evt = str(config.get("evenement", ""))
+
+    if "choc" in nom.lower() or canal == "vecu" or evt.lower().startswith("c"):
+        cat = "chocs_reseau"
+        if "c1" in nom.lower() or evt.lower() == "c1":
+            evt_dir = "C1_bouchon_rocade_42j"
+        elif "c2" in nom.lower() or evt.lower() == "c2":
+            evt_dir = "C2_crevaison_42j"
+        elif "c6" in nom.lower() or evt.lower() == "c6":
+            evt_dir = "C6_voiture_suspecte_42j"
+        else:
+            evt_dir = evt or "autres_chocs"
+    else:
+        cat = "articles_presse"
+        if "a09" in nom.lower() or "vent" in nom.lower() or evt.lower() == "a09":
+            evt_dir = "A09_vent_autan_15j"
+        elif "a13" in nom.lower() or "punaises" in nom.lower() or evt.lower() == "a13":
+            evt_dir = "A13_punaises_metro_25j"
+        else:
+            evt_dir = evt or "autres_articles"
+    return DOSSIER_MEMOIRE / cat / evt_dir
+
+
+def nom_disponible(
     canal: str,
     evenement: str,
     modele_decision: str,
@@ -182,12 +237,15 @@ def attribuer_nom(
     )
     if nom_existant and nom_existant.startswith(base):
         return nom_existant
-    if not (DOSSIER_MEMOIRE / base).exists():
+    if not trouver_dossier_experience(base):
         return base
     idx = 2
-    while (DOSSIER_MEMOIRE / f"{base}_{idx}").exists():
+    while trouver_dossier_experience(f"{base}_{idx}"):
         idx += 1
     return f"{base}_{idx}"
+
+
+attribuer_nom = nom_disponible
 
 
 def decrire_population(population: str) -> dict[str, int]:
@@ -426,12 +484,16 @@ def resoudre_instances_admises(
 
 
 def enregistrer_experience(config: dict[str, Any]) -> tuple[Path, bool]:
-    """Enregistre l'expérience mémoire dans data/experiences_memoire/<nom>/."""
+    """Enregistre l'expérience mémoire dans data/experiences_memoire/<categorie>/<evenement>/<nom>/."""
     nom = config.get("nom")
     if not nom or not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9._\-]{2,127}$", nom):
         raise ValueError(f"Nom d'expérience invalide : {nom!r}")
 
-    exp_dir = DOSSIER_MEMOIRE / nom
+    existant = trouver_dossier_experience(nom)
+    if existant:
+        exp_dir = existant
+    else:
+        exp_dir = sous_dossier_categorie(config) / nom
     exp_dir.mkdir(parents=True, exist_ok=True)
     yaml_path = exp_dir / "experience_memoire.yaml"
 
@@ -459,14 +521,18 @@ def enregistrer_experience(config: dict[str, Any]) -> tuple[Path, bool]:
 
 
 def lister_experiences() -> list[dict[str, Any]]:
-    """Balaie data/experiences_memoire/ et rend la liste ordonnée des expériences."""
+    """Balaie data/experiences_memoire/ récursivement et rend la liste ordonnée des expériences."""
     if not DOSSIER_MEMOIRE.is_dir():
         return []
 
-    resultats: list[dict[str, Any]] = []
-    for exp_dir in sorted(DOSSIER_MEMOIRE.iterdir(), reverse=True):
-        if not exp_dir.is_dir():
+    exp_dirs = []
+    for cfg_file in DOSSIER_MEMOIRE.rglob("experience_memoire.yaml"):
+        if "archive" in cfg_file.parts or ".system_generated" in cfg_file.parts:
             continue
+        exp_dirs.append(cfg_file.parent)
+
+    resultats: list[dict[str, Any]] = []
+    for exp_dir in sorted(exp_dirs, key=lambda p: p.name, reverse=True):
         cfg_file = exp_dir / "experience_memoire.yaml"
         if not cfg_file.is_file():
             continue

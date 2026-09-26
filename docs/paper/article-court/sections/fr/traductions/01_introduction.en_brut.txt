@@ -1,0 +1,133 @@
+# 1. Introduction
+
+## 1.1 What generative agents promise
+
+Existing multi-agent simulations of multimodal urban mobility rely on tabular models
+estimated from household travel surveys, or on explicit rules defined by domain experts. A
+household travel survey asks the residents of one territory to describe every trip they made
+on one day. In both, the space of representable behaviours is fixed a priori: a factor
+encoded as neither variable nor rule cannot influence any decision.
+
+The fixed behaviour space binds precisely where simulation is asked to help. A city tests a
+transport policy on a simulated population before it builds anything. The answer it gets is
+bounded by the behaviour its model can represent. Because mode choice is multidimensional,
+integrating that complexity at city scale is difficult.
+
+Generative agents built on language models promise to overcome that difficulty. Fed on
+massive corpora, they carry decision heuristics that surveys do not record, and they adapt
+without explicit rules. A strike, a heatwave or a news item about safety in the metro could
+then reach a decision that no survey column holds. They also promise to work without the
+local calibration data that agent-based models require. Detailed multimodal trajectory
+datasets exist for a few large metropolitan areas only.
+
+## 1.2 Measuring the promise against a real population
+
+Published evaluations of these agents rarely have a human population to compare with. Most
+judge a generative agent against a rule-based agent, or against aggregate patterns the
+authors produced themselves. One system stands apart.
+
+GTA (Lämmer, Colley & Ebel, 2026) confronts a simulated modal split with a national travel
+survey. The modal split is the share of trips made by each mode. GTA draws its personas from
+that survey. A language model writes each of their day plans. Its only modelled reference is
+the observed split of other regions. Copying Hamburg's shares scores a root-mean-square
+error of 1.99 on Berlin, against 4.07 for its own simulation.
+
+This paper supplies four things missing from these comparisons. A baseline beneath the
+agents says what a decision-maker reaches with no behavioural knowledge of the territory. Models fitted on that territory's own survey say what its data support. The same
+inputs on both sides make a gap attributable to the decision-maker rather than to what it was
+told. A reading below the aggregate says whether two decision-makers that produce the same
+shares decide alike.
+
+## 1.3 What this paper does
+
+This paper measures where verbalised deliberation earns its place in a mobility agent.
+Verbalised deliberation is the model writing its reasoning in words before it answers. In a
+population of mobility agents, it does not improve fidelity to the ordinary regime the
+survey describes. It brings in events that no variable encodes. We trace the path of one such
+event to the decision.
+
+We measure on one territory, the Toulouse area, against its certified 2023 household travel
+survey. A controlled cohort of 1,000 synthetic personas makes the 3,299 trips of the day we
+score. Fifteen decision-makers run on those trips. We call decision-maker anything that turns
+a trip description into a probability over the options offered. The agents live in a GAMA
+multi-agent simulation of the Toulouse area, with its real networks and timetables. That
+simulation follows the GAMA–OpenTripPlanner–LLM architecture of Vu et al. (2025).
+
+The paper rests on three contributions. The first is a comparison bench with equal inputs
+between generative agents and tabular models, on a synthetic cohort controlled against that
+survey. The second is the position of fifteen decision-makers on that bench, and two
+dissociations the aggregate shares do not show. The third is the traced path of a
+non-tabulated event to the decision, inside a generative agent with memory.
+
+## 1.4 Organisation
+
+The paper follows the order of the measurement. Section 2 places it in three literatures.
+Section 3 states what the evaluated agent receives and returns. Section 4 builds the
+comparison bench and its protocol. Section 5 reports the ordinary day. Section 6 follows the
+non-tabulated event. Section 7 draws the implications, the limitations and the conclusion.
+
+
+------
+
+
+# 1. Introduction
+
+## 1.1 Les promesses des agents génératifs
+
+Les simulations multi-agents existantes de mobilité urbaine multimodale reposent sur des modèles tabulaires
+estimés à partir d'enquêtes de mobilité des ménages, ou sur des règles explicites définies par des experts du domaine. Une
+enquête de mobilité des ménages demande aux habitants d'un territoire de décrire chaque déplacement effectué
+au cours d'une journée. Dans les deux cas, l'espace des comportements représentables est fixé a priori : un facteur
+n'étant ni une variable ni une règle ne peut influencer aucune décision.
+
+Cet espace comportemental fixe limite précisément le domaine où la simulation est censée intervenir. Une ville teste une
+politique de transport sur une population simulée avant d'entreprendre toute construction. Le résultat obtenu est
+limité par le comportement que son modèle peut représenter. Le choix du mode de transport étant multidimensionnel,
+
+intégrer cette complexité à l'échelle de la ville est difficile.
+
+Les agents génératifs construits sur des modèles de langage promettent de surmonter cette difficulté. Alimentés par
+des corpus massifs, ils intègrent des heuristiques de décision que les enquêtes n'enregistrent pas et s'adaptent
+sans règles explicites. Une grève, une vague de chaleur ou un article de presse sur la sécurité dans le métro pourraient alors
+
+aboutir à une décision qu'aucune enquête ne permet de prendre. Ces systèmes promettent également de fonctionner sans les
+données d'étalonnage locales requises par les modèles à base d'agents. Des ensembles de données détaillés sur les trajectoires multimodales
+existent uniquement pour quelques grandes métropoles.
+
+## 1.2 Évaluation des promesses face à une population réelle
+
+Les évaluations publiées de ces agents font rarement l'objet d'une comparaison avec une population humaine. La plupart
+
+évaluent un agent génératif par rapport à un agent basé sur des règles, ou par rapport à des modèles agrégés
+produits par les auteurs eux-mêmes. Un système se distingue.
+
+GTA (Lämmer, Colley & Ebel, 2026) confronte une répartition modale simulée à une enquête nationale sur les déplacements.
+
+La répartition modale correspond à la part des déplacements effectués par chaque mode. GTA crée ses personas à partir de cette enquête.
+
+Un modèle de langage rédige le plan de journée de chacun. Sa seule référence modélisée est
+la répartition observée dans d'autres régions. Copier les parts de Hambourg génère une erreur quadratique moyenne de 1,99 sur Berlin, contre 4,07 pour sa propre simulation.
+
+Cet article apporte quatre éléments manquants à ces comparaisons. Une ligne de base sous les agents indique la décision qu'un décideur prendrait sans connaissance comportementale du territoire. Les modèles ajustés sur l'enquête propre à ce territoire indiquent ce que confirment ses données. Les mêmes entrées des deux côtés créent un écart attribuable au décideur plutôt qu'aux informations qui lui ont été communiquées. Une lecture sous l'agrégat indique si deux décideurs produisant les mêmes parts prennent des décisions similaires.
+
+## 1.3 Ce que fait cet article
+
+Cet article mesure la pertinence de la délibération verbalisée dans un agent de mobilité.
+
+La délibération verbalisée consiste pour le modèle à formaliser son raisonnement par écrit avant de répondre. Dans une population d'agents de mobilité, elle n'améliore pas la fidélité au régime ordinaire décrit par l'enquête. Elle introduit des événements qu'aucune variable n'encode. Nous retraçons le parcours d'un tel événement jusqu'à la décision.
+
+Nous effectuons des mesures sur un territoire, la région toulousaine, en nous basant sur son enquête certifiée sur les déplacements des ménages de 2023.
+Un groupe contrôlé de 1 000 profils synthétiques effectue les 3 299 déplacements du jour que nous analysons.
+Quinze décideurs interviennent sur ces déplacements. Nous appelons « décideur » tout agent qui transforme la description d'un déplacement en une probabilité parmi les options proposées. Les agents évoluent dans une simulation multi-agents GAMA de la région toulousaine, avec ses réseaux et horaires réels.
+Cette simulation suit l'architecture GAMA–OpenTripPlanner–LLM de Vu et al. (2025).
+
+Cet article repose sur trois contributions. La première est un banc d'essai comparatif avec des entrées égales entre agents génératifs et modèles tabulaires, sur une cohorte synthétique contrôlée par rapport à cette enquête. La seconde concerne la position de quinze décideurs sur ce banc d'essai, et deux dissociations que les parts agrégées ne révèlent pas. Le troisième point concerne le parcours d'un
+événement non tabulé jusqu'à la décision, au sein d'un agent génératif doté de mémoire.
+
+## 1.4 Organisation
+
+Cet article suit l'ordre de la mesure. La section 2 le situe dans trois contextes bibliographiques.
+
+La section 3 décrit ce que l'agent évalué reçoit et renvoie. La section 4 présente le
+banc de comparaison et son protocole. La section 5 décrit une journée type. La section 6 analyse l'
+événement non tabulé. La section 7 en tire les implications, les limites et la conclusion.

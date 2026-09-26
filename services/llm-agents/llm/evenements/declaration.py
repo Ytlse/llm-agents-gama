@@ -225,6 +225,10 @@ class Relais:
     """Ce que le lecteur dit à son foyer — ticket 111."""
 
     mode: str
+    # Certains protocoles mesurent l'effet d'une information effectivement diffusée dans tout
+    # le foyer. Dans ce cas le modèle garde ses mots, mais le silence n'est pas une modalité du
+    # traitement : chaque destinataire doit recevoir un message non vide.
+    parole_obligatoire: bool = False
 
 
 @dataclass(frozen=True)
@@ -572,7 +576,13 @@ def _lire_relais(brut: Any, evenement_id: str) -> Relais:
             f"événement « {evenement_id} » : `relais.mode` « {mode} » inconnu — attendu "
             f"{' ou '.join(RELAIS_MODES)}"
         )
-    return Relais(mode=mode)
+    parole = brut.get("parole_obligatoire", False)
+    if not isinstance(parole, bool):
+        raise RefusDEvenement(
+            f"événement « {evenement_id} » : `relais.parole_obligatoire` = {parole!r} — "
+            f"attendu un booléen"
+        )
+    return Relais(mode=mode, parole_obligatoire=parole)
 
 
 def _refuser_les_champs_des_lots_suivants(data: dict, evenement_id: str) -> None:

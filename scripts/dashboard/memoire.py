@@ -32,11 +32,12 @@ if str(_CHEMIN_SERVICES) not in sys.path:
 
 from experiences import memoire
 
-# Rechargement à chaud pour garantir la présence des dernières fonctions exposées (D2 & Ticket 095)
-try:
-    memoire = importlib.reload(memoire)
-except Exception:
-    pass
+# Rechargement à chaud en environnement interactif (Streamlit)
+if "pytest" not in sys.modules:
+    try:
+        memoire = importlib.reload(memoire)
+    except Exception:
+        pass
 
 
 def _adaptateurs_disponibles() -> list[str]:

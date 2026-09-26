@@ -1,75 +1,77 @@
-# ============================================================
-# Système / éditeurs
-# ============================================================
+# ==============================================================================
+# .gitignore — llm-agents-gama
+# ==============================================================================
+# Doctrine générale :
+#  1. Code, tests, spécifications, templates et configurations -> dans Git.
+#  2. Données lourdes, réseaux GTFS, sauvegardes et runs -> gérés par DVC (DagsHub).
+#  3. Données confidentielles / sous convention (lil-1750, ProGEDO) -> en local uniquement.
+#  4. Caches, logs temporaires, scories de calcul -> exclus et purgés.
+# ==============================================================================
+
+# ==============================================================================
+# 1. Système, OS et Éditeurs
+# ==============================================================================
 .DS_Store
-# Verrous laissés par Word/PowerPoint quand un document est ouvert.
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+# Fichiers verrous temporaires créés par Microsoft Office (Word, PowerPoint)
 ~$*
 
-# ============================================================
-# Environnements virtuels Python
-# ============================================================
+# ==============================================================================
+# 2. Environnements virtuels, Dépendances & Métadonnées de build
+# ==============================================================================
 .venv/
 venv/
 env/
+ENV/
+*.egg-info/
+build/
+dist/
+# Dépendances Node (générateurs de planches de présentation)
+node_modules/
+package-lock.json
+package.json
 
-# ============================================================
-# Secrets et configuration locale
-# ============================================================
+# ==============================================================================
+# 3. Secrets, Identifiants & Configurations locales
+# ==============================================================================
 .env
+.env.*
+!.env.example
 GAMA/CityTransport/config/sim_params.yaml
-
-# Configuration Claude Code propre à la machine (non partagée).
-# Le reste de .claude/ (CLAUDE.md, settings.json, agents/, skills/) est
-# du contenu versionné : ne pas l'ignorer en bloc, sinon tout nouveau
-# fichier ajouté sans `git add -f` disparaît silencieusement.
+# Configuration Claude Code propre à la machine locale (le reste de .claude/ reste versionné)
 .claude/settings.local.json
+.claude/worktrees/
 
-# ============================================================
-# Logs et caches Python
-# ============================================================
+# ==============================================================================
+# 4. Logs, Caches d'outillage & Artefacts de test
+# ==============================================================================
 *.pyc
-*.log
+*.pyo
 __pycache__/
+*.log
+# Journaux d'échanges LLM volumineux
+prompt_dialogue.log
+services/llm-agents/prompt_dialogue.log
 
-# ============================================================
-# Dossiers de résultats, d'export et d'expérimentations
-# ============================================================
-exports/
-results/
-samples/
-experiments*/
-GAMA/CityTransport/results
-GAMA/CityTransport/results_legacy/*
-scripts/models_influence/results*
-scripts/analysis/*.png
+# Caches linters, typage et tests
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.hypothesis/
+.import_linter_cache/
+packages/llm_gateway/site/
 
-# Sorties générées de la synthèse (docs/synthesis/index.html, data.json,
-# archive/*) : produites par scripts/synthesis/build.py, ne pas versionner.
-docs/synthesis/*
-scripts/synthesis/data/*
-scripts/models_influence/calibration_results/*
+# Rapports de couverture de tests
+.coverage
+coverage.xml
+htmlcov/
 
-# Captures d'écran ponctuelles (monitoring, debug) déposées dans docs/capture/
-docs/capture/*.png
-
-# Supports de présentation déposés dans docs/slides/ : 46 Mo de PPTX et de PDF
-# exportés à chaque itération, sans intérêt pour le code et définitifs une fois
-# dans l'historique (le plus gros fichier versionné du dépôt fait 6,4 Mo).
-# Le README du dossier, lui, reste versionné : c'est lui qui porte l'historique
-# fonctionnel des versions. La règle *.pptx couvre aussi les verrous « ~$… »
-# laissés par PowerPoint.
-docs/slides/*.pptx
-docs/slides/*.pdf
-
-# ============================================================
-# Dossiers de données de monitoring (Grafana / Prometheus)
-# ============================================================
-grafana_data/
-prometheus_data/
-
-# ============================================================
-# Caches applicatifs
-# ============================================================
+# Caches applicatifs internes
 cache/*
 llm_cache/
 services/llm-agents/cache/*
@@ -78,150 +80,131 @@ services/llm-agents/data/otp_cache/*
 scripts/general/cache/*
 data/cache/*
 
-# Métadonnées de build (régénérées à chaque `pip install -e`) : jamais versionnées.
-*.egg-info/
-build/
-dist/
+# ==============================================================================
+# 5. Données de recherche DVC / DagsHub & Populations
+# ==============================================================================
+# Les fichiers pointeurs (*.dvc) sont versionnés dans Git.
+# Les dossiers de données réelles ci-dessous restent sur le stockage DVC distant.
 
-# ============================================================
-# Données OTP / GTFS / réseau temporaires
-# ============================================================
-otp-toulouse/toulouse/*
-otp-toulouse/source/*
-scripts/data/gtfs/*
-# Ces deux dossiers portent des DONNÉES (pbf, graph.obj, feeds, notebooks de fouille)
-# qu'on ne versionne pas — mais la provenance d'un extrait et les recettes que la
-# documentation cite doivent, elles, se rejouer. Exceptions explicites (ticket 031, T1/T3/T4) :
-# `Toulouse.osm.pbf.dvc` et son README disent d'où vient l'extrait OSM servi à OTP ;
-# `transit_service_hull.py` recalcule `geography.TOULOUSE_TRANSIT_SERVICE_WKT` ;
-# `otp_link_check.py` compte les « Couldn't link » d'une population.
-!otp-toulouse/toulouse/README_Toulouse.osm.pbf.md
-!scripts/data/gtfs/transit_service_hull.py
-!scripts/data/gtfs/otp_link_check.py
-# Feeds annuels reconstruits par `make gtfs-year` : 280 Mo décompressés,
-# entièrement régénérables depuis les exports archivés. Le code du pipeline
-# (scripts/data/gtfs_year/) et la trace de build restent versionnés, et
-# l'instantané du calendrier scolaire aussi — c'est lui qui rend le build
-# rejouable à l'identique hors ligne.
+# Réseaux de transports, feeds annuels et graphes routiers
 data/gtfs_year/*
 scripts/data/gtfs_year/cache/*
 scripts/data/population/Temp/*
+otp-toulouse/toulouse/*
+otp-toulouse/source/*
+scripts/data/gtfs/*
+# Exceptions explicitement documentées (ticket 031) :
+!otp-toulouse/toulouse/README_Toulouse.osm.pbf.md
+!scripts/data/gtfs/transit_service_hull.py
+!scripts/data/gtfs/otp_link_check.py
 
-# ============================================================
-# Données restreintes ProGEDO / EMC² / INSEE
-# ============================================================
-# Couche de zones fines dérivée de l'enquête EMC² (ProGEDO / lil-1750, accès
-# restreint). Même statut que sa source, qui n'est pas versionnée : on la
-# régénère avec `make zones` plutôt que de la committer.
-packages/mobility_core/src/mobility_core/data/zf_zones.gpkg
-packages/mobility_core/src/mobility_core/data/zf_zones.meta.json
+# Sauvegardes d'anciennes populations (seule la v6 officielle et les .dvc restent dans Git)
+data/population/sauvegardes/
 
-# Loi du type de logement par zone fine, dérivée de la même enquête (action A2).
-# Même statut, même raison : `make housing-type` la régénère.
-packages/mobility_core/src/mobility_core/data/zf_housing_type.json
+# Expériences et campagnes (seules les définitions .yaml sont dans Git, les traces sont sur DVC)
+data/jeux/
+data/experiences/
+!data/experiences/
+!data/experiences/*/
+!data/experiences/*/experience.yaml
+data/experiences/.masques.json
+services/llm-agents/data/experiences/
 
-# Table des 785 zones fines → secteur de tirage → couronne → commune (ticket 038).
-# Déversionnée le 2026-09-12 : ce n'est pas un résultat agrégé mais le PLAN DE SONDAGE de
-# l'enquête, que la convention lil-1750 ne permet pas de céder. Le dépôt ayant vocation à
-# accompagner une publication, elle en sort comme elle est sortie du paquet.
-# `make communes-couronnes` la régénère ; `commune_couronne.json` (453 communes) et
-# `couronne_perimetre.geojson`, eux, restent versionnés — statut à confirmer (ADISP).
-packages/mobility_core/src/mobility_core/data/zf_couronne.json
+# Expériences mémoire (mêmes règles : définitions .yaml seules versionnées)
+data/experiences_memoire/
+!data/experiences_memoire/
+!data/experiences_memoire/*/
+!data/experiences_memoire/*/experience_memoire.yaml
+data/experiences_memoire/*
 
+# Campagnes de rejeu (seuls les .yaml de définition sont dans Git, etat.json est ignoré)
+campagnes/*/etat.json
+.config.yaml.applique
+
+# ==============================================================================
+# 6. Données restreintes sous convention (ProGEDO / EMC² / INSEE / lil-1750)
+# ==============================================================================
+# Données soumises à la convention lil-1750 (accès restreint, non redistribuables) :
 data/insee/*
 data/PROGEDO 2023/*
 data/population/*
 data/cache/eqasim/*
+packages/mobility_core/src/mobility_core/data/zf_zones.gpkg
+packages/mobility_core/src/mobility_core/data/zf_zones.meta.json
+packages/mobility_core/src/mobility_core/data/zf_housing_type.json
+packages/mobility_core/src/mobility_core/data/zf_couronne.json
 
-# Jeux de données ProGEDO Logit générés (exploration, fits, exports) : le
-# code (*.py, *.ipynb) reste versionné, les données dérivées non.
+# Données dérivées ProGEDO Logit (le code est versionné, les sorties régénérables non)
 scripts/progedo_logit/*.csv
 scripts/progedo_logit/*.json
 scripts/progedo_logit/*.parquet
 scripts/progedo_logit/*.npz
 !scripts/progedo_logit/feature_spec.json
 
-# ============================================================
-# Fichiers de données et de debug spécifiques
-# ============================================================
+# ==============================================================================
+# 7. Traces de simulation, Runs & Monitoring local
+# ==============================================================================
+exports/
+results/
+samples/
+experiments*/
+reports/*
+services/GAMA/CityTransport/results
+services/GAMA/CityTransport/results/
+services/GAMA/CityTransport/results_legacy/
+scripts/models_influence/results*
+scripts/models_influence/calibration_results/*
+scripts/synthesis/data/*
+scripts/analysis/*.png
 scripts/general/*.csv
-Divers/*
-# Brouillons de session — sur le disque, jamais dans git (ticket 039). `Divers/` attend un
-# tri manuel de l'auteur ; `scratch/` n'a pas vocation à être trié, seulement à ne pas
-# encombrer `git status`.
-scratch/
-
-# ============================================================
-# Dépôts git externes / séparés (gérés indépendamment, ne pas versionner
-# leur contenu dans ce dépôt)
-# ============================================================
-# EQUASIM Toulouse
-services/eqasim-toulouse/
-# Calibration de prompt : SOUS-MODULE déclaré depuis le ticket 039 (pas 5), plus une
-# exclusion. Le parent enregistre désormais le COMMIT de github.com/Ytlse/prompt_calibration
-# qui a produit un score : `scripts/synthesis/` importe `calibration.metrics` par sys.path,
-# et `model_compare.py` inscrit ce fichier dans le manifeste des sources d'une page — sans
-# rien dire, jusqu'ici, de la version. Voir .gitmodules.
-# Assistant personnel — dépôt git autonome imbriqué
-docs/slides/README.md
-# Les traces d'expériences se versionnent PAR DATE ET HEURE sur disque (docs/traces/<AAAA-MM-JJ_HH-MM>_…),
-# pas dans git — décision du 2026-09-02. Ce qui se versionne dans git est l'artefact scellé
-# (data/population/population_1000_AAMAS/) et sa documentation.
+docs/capture/*.png
+docs/synthesis/*
 docs/traces/*
-# Ticket 039 : la règle ci-dessus n'a jamais désuivi les 42 fichiers déjà versionnés — un
-# `.gitignore` n'agit que sur ce qui n'est pas encore suivi. Ils sont sortis de l'index le
-# 2026-09-12 et restent sur le disque, comme la décision du 02/09 le demandait.
-
-# Sorties d'un relevé de consommation de jetons — un résultat d'exécution, pas une pièce
-# du code (ticket 039). Le dossier reste sur le disque.
 tests/token_usage/
-
-# Ticket 035 — jeux de déplacements enregistrés et résultats d'exécution : sur disque, pas dans git
-# (les définitions d'expériences, elles, se versionnent : data/experiences/<nom>/experience.yaml)
-data/jeux/
-# Ticket 045 — archives du substrat v1. Les DÉFINITIONS archivées se versionnent, comme les
-# vivantes : ce sont elles qui disent quoi reconstruire, et elles pèsent quelques kilo-octets.
-# Les exécutions archivées, non : 403 Mo de traces, et le motif au-dessus ne les couvre pas
-# (un niveau de dossier de plus). Les zips non plus : ce sont des copies transportables,
-# reproductibles depuis les dossiers par `scripts/archiver_substrat_v1.py`.
-data/experiences/
-# … SAUF les définitions, que le commentaire ci-dessus annonçait déjà sans que rien ne les
-# laisse passer : `data/experiences/` avalait tout, négation comprise. Constaté au ticket 074,
-# en versionnant les 22 définitions de la campagne v6. Ce sont quelques kilo-octets, et ce sont
-# elles qui disent quoi reconstruire — sans elles, une campagne ne se rejoue pas ailleurs.
-!data/experiences/
-!data/experiences/*/
-!data/experiences/*/experience.yaml
-data/experiences/.masques.json
-services/llm-agents/data/experiences/
-# Ticket 039 / 074 — campagnes de rejeu : même partage que les expériences ci-dessus. Le `.yaml`
-# de campagne est une DÉFINITION, il se versionne : c'est lui qui dit quoi rejouer. `etat.json`
-# est de l'ÉTAT D'EXÉCUTION (phase courante, faites, restantes, échouées, sommeils) — il est
-# réécrit à chaque tour et salissait tous les commits pris pendant qu'une campagne tourne.
-campagnes/*/etat.json
-# copie de services/llm-agents/config/config.yaml appliquée au dernier `make run` (détection de changement)
-.config.yaml.applique
-
-# Caches d'outillage
-.ruff_cache/
-.mypy_cache/
-.hypothesis/
-packages/llm_gateway/site/
-
-# Artefacts de couverture (pytest-cov)
-.coverage
-coverage.xml
-htmlcov/
-
-# Recueil de PDF de l état de l art (145 Mo, PDF d éditeurs) : seul le README est suivi
-docs/paper/sources/etat_de_lart/*.pdf
-docs/paper/sources/etat_de_lart/.DS_Store
 data/JOURNAL_archivage_ticket_045_2026-09-11.json
 
-services/GAMA/CityTransport/results
+# Données de métrologie et bases de métriques
+grafana_data/
+prometheus_data/
 
+# Archive froide de l'état français hors Git (ticket 074)
+archive/
+
+# ==============================================================================
+# 8. Rédaction du papier, Sources & Artefacts de travail
+# ==============================================================================
+# Supports de présentation volumineux (PPTX / PDF de travail)
+docs/slides/*.pptx
+docs/slides/*.pdf
+docs/slides/README.md
+
+# Recueils de PDF lourds (éditeurs / actualités gérés sur DagsHub)
+docs/paper/sources/etat_de_lart/*.pdf
+docs/paper/sources/etat_de_lart/.DS_Store
+docs/paper/sources/actualites/articles_html/*.pdf
+
+# Artefacts de travail d'écriture temporaires
+docs/paper/article-court/illustrations_candidates.html
+docs/paper/article-court/traductions/*
+docs/paper/archive/*.diff
+docs/paper/mémoire/*
+docs/paper/memoire
+*.faux_terminee_*
+
+# ==============================================================================
+# 9. Brouillons & Dossiers temporaires de travail
+# ==============================================================================
+Divers/*
+scratch/
+609_FR.md
+
+# ==============================================================================
+# 10. Modules externes & Spécifications internes
+# ==============================================================================
+services/eqasim-toulouse/
 services/otp-toulouse/source/ter_occitanie/
 services/otp-toulouse/tools/filter_ter_gtfs.py
+
 specs/dashboard-pilotage-activites-tickets.md
 specs/hygiene-prompts-et-plateforme-experiences.md
 specs/nommage-canonique-experiences.md
@@ -234,22 +217,3 @@ specs/ticket_044/questions.md
 specs/ticket_044/temoin_random_forest.md
 specs/ticket_045/questions.md
 specs/ticket_045/substrat-unique-v5.md
-
-# Ticket 074 — archive FROIDE de l'état français, à la racine du dépôt. Restaurable et
-# auditable, jamais utilisée ni référencée (`experiences.froid` refuse d'y résoudre un nom,
-# et `scripts/tests/test_074_archive_froide.py` le vérifie). Hors git, conformément à la
-# doctrine « traces sur disque, pas dans git » : 500 Mo de jeux scellés et d'exécutions.
-# Le MANIFEST.yaml et le README.md qu'elle contient disent ce qu'elle porte et d'où ça vient.
-archive/
-docs/paper/mémoire/*
-docs/paper/memoire
-data/experiences/*
-
-609_FR.md
-reports/*
-
-# Dépendances Node — générateurs de planches (scripts/slides/, ticket 071)
-node_modules/
-package-lock.json
-package.json
-docs/paper/article-court/traductions/*

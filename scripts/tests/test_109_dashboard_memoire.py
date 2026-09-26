@@ -325,7 +325,7 @@ def test_un_bras_suspendu_suspend_l_experience_sans_lancer_le_temoin(tmp_memoire
 
 
 def test_la_relance_reprend_le_bras_suspendu_puis_joue_le_temoin(tmp_memoire_env, monkeypatch):
-    cfg = {**memoire.defauts(), "nom": "exp_mem_choc_rep_gem38f_899549_42j"}
+    cfg = {**memoire.defauts(), "nom": "exp_mem_choc_rep_gem38f_899549_42j", "rejeu_ab": False}
     exp_dir, _ = memoire.enregistrer_experience(cfg)
     (exp_dir / "etat.json").write_text(json.dumps({
         "nom": cfg["nom"], "etat": "suspendue", "debut": "2026-09-24T10:00:00+00:00",
@@ -343,7 +343,7 @@ def test_la_relance_reprend_le_bras_suspendu_puis_joue_le_temoin(tmp_memoire_env
 
 
 def test_un_bras_abouti_n_est_pas_rejoue(tmp_memoire_env, monkeypatch):
-    cfg = {**memoire.defauts(), "nom": "exp_mem_choc_ok_gem38f_899549_42j"}
+    cfg = {**memoire.defauts(), "nom": "exp_mem_choc_ok_gem38f_899549_42j", "rejeu_ab": False}
     exp_dir, _ = memoire.enregistrer_experience(cfg)
     (exp_dir / "etat.json").write_text(json.dumps({
         "nom": cfg["nom"], "etat": "traite_ok",
@@ -356,6 +356,22 @@ def test_un_bras_abouti_n_est_pas_rejoue(tmp_memoire_env, monkeypatch):
     assert joues == ["control"]
     etat = json.loads((exp_dir / "etat.json").read_text(encoding="utf-8"))
     assert etat["etat"] == "terminee"   # témoin seul après un traité abouti : l'A/B est complet
+
+
+def test_un_rejeu_incomplet_marque_la_comparaison_non_conforme(tmp_memoire_env, monkeypatch):
+    cfg = {**memoire.defauts(), "nom": "exp_mem_choc_prefixe_gem38f_899549_42j"}
+    exp_dir, _ = memoire.enregistrer_experience(cfg)
+    monkeypatch.setattr(orchestrateur_memoire, "executer_bras", _bras_simule({}, []))
+    monkeypatch.setattr(
+        orchestrateur_memoire,
+        "controler_rejeu",
+        lambda nom, racine: {"payes_avant_evenement": 1},
+    )
+    monkeypatch.setattr(sys, "argv", ["orch", "--experience", cfg["nom"]])
+    orchestrateur_memoire.main()
+    etat = json.loads((exp_dir / "etat.json").read_text(encoding="utf-8"))
+    assert etat["traite"]["etat"] == etat["temoin"]["etat"] == "ok"
+    assert etat["etat"] == "non_conforme"
 
 
 def test_rapprochement_compte_un_lecteur_par_foyer(tmp_path, monkeypatch):

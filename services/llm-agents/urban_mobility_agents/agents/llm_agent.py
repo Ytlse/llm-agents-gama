@@ -30,6 +30,7 @@ from llm.axes import (
     normaliser_motif,
 )
 from llm.cache import LlmSemanticCache
+from llm import evenements as evenements_module
 from llm import foyer
 from llm.evenements import temoin
 from llm.concepts import (
@@ -578,7 +579,9 @@ def _gravite_de_la_contrainte(context: Context) -> float:
 #       ⚠ Le champ est demandé dans les DEUX bras, drapeau de partage allumé ou éteint : c'est
 #       ce qui garde une version de schéma unique entre eux, donc comparable. Drapeau éteint,
 #       aucun bloc de foyer n'entre dans l'appel et la réponse vaut `lived` partout.
-SCHEMA_REFLEXION_VERSION = 4
+#   5 — le journal servi pendant cinq jours porte un accusé de prise en compte structuré. Une
+#       réponse v4 pourrait l'ignorer tout en étant resservie par le cache.
+SCHEMA_REFLEXION_VERSION = 5
 
 
 class LlmAgent:
@@ -1961,6 +1964,20 @@ class LlmAgent:
         }
         if _bloc_foyer:
             _contexte_reflexion["household"] = _bloc_foyer
+        # L'article de presse est un service quotidien distinct d'un choc. Pendant ses cinq
+        # jours de déplacement, il est présenté à CHAQUE réflexion, sans consulter le seuil de
+        # gravité de la mémoire. Le seuil continue de gouverner les chocs et les rappels usuels.
+        _lignes_presse = await evenements_module.lignes_du_jour(
+            str(context.person.person_id), int(context.timestamp), compter=False
+        )
+        if _lignes_presse:
+            _contexte_reflexion["press_service"] = _lignes_presse
+            evenements_module.noter_reflexion_presse(
+                str(context.person.person_id),
+                int(context.timestamp),
+                _lignes_presse,
+                etape="presentee",
+            )
         experiences_text = json.dumps(
             _contexte_reflexion, indent=2, ensure_ascii=False
         )
@@ -2041,6 +2058,31 @@ class LlmAgent:
             # "reflection"/"concepts" sont portés par la catégorie stm_reflection.
             reflection = (getattr(agent_result, "reflection", "") or "").strip()
             concepts = getattr(agent_result, "concepts", []) or []
+            presse_prise_en_compte = bool(
+                getattr(agent_result, "press_service_considered", False)
+            )
+            if _lignes_presse and not presse_prise_en_compte:
+                evenements_module.noter_reflexion_presse(
+                    str(context.person.person_id),
+                    int(context.timestamp),
+                    _lignes_presse,
+                    etape="invalide",
+                    prise_en_compte=False,
+                    reflection=reflection,
+                )
+                raise ConsolidationMemoryUnavailable(
+                    f"réflexion STM de {context.person.person_id} sans prise en compte "
+                    f"explicite du service presse"
+                )
+            if _lignes_presse:
+                evenements_module.noter_reflexion_presse(
+                    str(context.person.person_id),
+                    int(context.timestamp),
+                    _lignes_presse,
+                    etape="validee",
+                    prise_en_compte=True,
+                    reflection=reflection,
+                )
             # Ticket 095, lot E — changer le modèle des réflexions change le CONTENU de la
             # mémoire, donc les décisions. Savoir lequel a écrit quoi n'est pas un détail
             # d'infrastructure.

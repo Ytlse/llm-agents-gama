@@ -1,0 +1,54 @@
+# 0. Abstract
+
+Multi-agent simulations of urban mobility choose travel modes with tabular models fitted on
+surveys of declared trips, or with rules written by domain experts. Both fix the space of
+representable behaviours before the simulation runs, so a factor held by neither a variable
+nor a rule changes no decision. Generative agents built on language models promise to lift that bound, carrying
+decision heuristics that surveys never record. To the best of our knowledge, whether the promise survives a comparison
+with a real population has not been measured.
+
+We measure it on the Toulouse area, against its certified CEREMA 2023 household travel survey. A
+sealed cohort of 1,000 synthetic personas, controlled against thirteen margins of that
+survey, makes the 3,299 trips of the day we score. Fifteen decision-makers run on those
+trips under one protocol. It gives them the same 21 input variables. It scores the
+probability each places on every option offered.
+
+Tuning the prompt by adjusting the instructions to highlight general criteria (such as comfort,
+constraints, or opportunities related to choosing an option), the generative agent approaches
+the characteristics of tabular models. None of our agents passes them. A classifier that reads
+the same context under a fixed output type, and writes no text, matches them for a fiftieth
+of the cost. The aggregate hides what a decision-level reading shows. Two decision-makers
+that the aggregate cannot tell apart disagree on one trip in three. The classifier gets more
+individual trips wrong than a rule that reads nothing.
+
+Verbalised deliberation earns its place outside that ordinary day. Traced in one agent, an
+engine failure entered memory, discouraged car use for fifteen days, then faded. No
+decision-maker holding the 21 variables alone can answer such an event. Our measurements
+encourage the use of the language model where events arrive, and leave the ordinary day to a
+decision-maker that does not deliberate.
+
+
+------
+
+
+# 0. Résumé
+
+Les simulations multi-agents de mobilité urbaine choisissent les modes de transport à l'aide de modèles tabulaires ajustés à partir d'enquêtes sur les déplacements déclarés, ou à l'aide de règles élaborées par des experts du domaine. Ces deux approches fixent l'espace des comportements représentables avant le lancement de la simulation ; ainsi, un facteur non pris en compte par une variable ou une règle n'influence aucune décision. Les agents génératifs construits sur des modèles de langage promettent de lever cette contrainte, en intégrant des heuristiques de décision que les enquêtes n'enregistrent jamais. À notre connaissance, la validité de cette promesse face à une population réelle n'a pas encore été vérifiée.
+
+Nous l'évaluons sur la région toulousaine, en nous appuyant sur l'enquête certifiée CEREMA 2023 sur les déplacements des ménages. Une cohorte fermée de 1 000 profils synthétiques, contrôlés par rapport à treize marges de cette enquête, effectue les 3 299 déplacements du jour que nous analysons. Quinze décideurs effectuent ces déplacements selon un protocole unique. Ce protocole leur fournit les mêmes 21 variables d'entrée. Il calcule la probabilité que chaque décideur attribue à chaque option proposée.
+
+En ajustant l'invite pour mettre en évidence des critères généraux (tels que le confort,
+
+les contraintes ou les opportunités liées au choix d'une option), l'agent génératif se rapproche
+des caractéristiques des modèles tabulaires. Aucun de nos agents ne les atteint. Un classificateur qui lit
+le même contexte avec un type de sortie fixe et n'écrit aucun texte, les égale pour un cinquantième
+du coût. L'agrégat masque ce qu'une lecture au niveau de la décision révèle. Deux décideurs
+que l'agrégat ne peut distinguer sont en désaccord sur un trajet sur trois. Le classificateur se trompe sur plus de
+trajets individuels qu'une règle qui ne lit rien.
+
+La délibération verbalisée trouve sa place en dehors du quotidien. Chez un agent, une
+
+panne de moteur est entrée dans la mémoire, a dissuadé l'utilisation de la voiture pendant quinze jours, puis s'est estompée. Aucun
+décideur ne disposant que des 21 variables ne peut répondre à un tel événement. Nos mesures
+encouragent l'utilisation du modèle de langage lorsque les événements surviennent et laissent le quotidien à un
+décideur qui ne délibère pas.

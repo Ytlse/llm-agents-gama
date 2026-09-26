@@ -149,6 +149,27 @@ def noter_contournement_cache() -> None:
         _registre.noter_contournement_cache()
 
 
+def noter_reflexion_presse(
+    person_id: str,
+    timestamp: int,
+    lignes: list[str],
+    *,
+    etape: str,
+    prise_en_compte: bool | None = None,
+    reflection: str = "",
+) -> None:
+    """Trace l'article présenté à une réflexion et l'accusé de lecture structuré du modèle."""
+    if _registre is not None and lignes:
+        _registre.tracer_reflexion_presse(
+            str(person_id),
+            int(timestamp),
+            lignes,
+            etape=etape,
+            prise_en_compte=prise_en_compte,
+            reflection=reflection,
+        )
+
+
 def _declaration_demandee() -> str | None:
     """Le fichier à charger, `None` si aucun.
 

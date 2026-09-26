@@ -1,0 +1,313 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AAMAS 2027 Short Paper to Supplementary Volume Cross-Reference Meta Map",
+  "description": "Maps every section and empirical claim in docs/paper/article-court/sections/*.en.md to corresponding chapters, tables, figures, and equations in docs/paper/article-court/appendices/",
+  "version": "1.0.0",
+  "mappings": [
+    {
+      "main_paper_section": "01_introduction.en.md",
+      "main_paper_title": "1. Introduction",
+      "claims": [
+        {
+          "claim_id": "intro_survey_representativeness",
+          "text": "Evaluation against Cerema EMC2 2023 household travel survey across representative urban margins",
+          "appendix_chapter": "01_demographic_control",
+          "target_elements": [
+            "Table 1.1",
+            "Sec. 1.1",
+            "Sec. 1.3"
+          ],
+          "pointer_latex": "Sec.~1 (Table~1.1)"
+        },
+        {
+          "claim_id": "intro_metric_foundations",
+          "text": "Distributional metrics (EMD, JSD) measuring alignment on unweighted population distributions",
+          "appendix_chapter": "03_mathematical_metrics",
+          "target_elements": [
+            "Eq. 3.1",
+            "Eq. 3.2",
+            "Fig. 3.1",
+            "Fig. 3.2"
+          ],
+          "pointer_latex": "Sec.~3 (Fig.~3.1)"
+        }
+      ]
+    },
+    {
+      "main_paper_section": "02_related_work.en.md",
+      "main_paper_title": "2. Related Work",
+      "claims": [
+        {
+          "claim_id": "relwork_memory_intellectual_filiation",
+          "text": "Divergences from Stanford Generative Agents (Park et al., 2023) and multi-agent mobility extensions",
+          "appendix_chapter": "11_multi_agent_specification",
+          "target_elements": [
+            "Sec. 11.2",
+            "Fig. 11.1",
+            "Fig. 11.3"
+          ],
+          "pointer_latex": "Sec.~11.2 (Fig.~11.3)"
+        }
+      ]
+    },
+    {
+      "main_paper_section": "03_agent.en.md",
+      "main_paper_title": "3. The agent under evaluation",
+      "claims": [
+        {
+          "claim_id": "agent_system_architecture",
+          "text": "Three-component system architecture (GAMA, Python Controller, Decision Module) and microservices",
+          "appendix_chapter": "15_systems_architecture",
+          "target_elements": [
+            "Fig. 15.1",
+            "Fig. 15.2",
+            "Sec. 15.1",
+            "Sec. 15.2"
+          ],
+          "pointer_latex": "Sec.~15 (Fig.~15.1, Fig.~15.2)"
+        },
+        {
+          "claim_id": "agent_feature_contract",
+          "text": "Strict 21-variable information parity contract and spatial coordinate projections",
+          "appendix_chapter": "02_protocol_variables",
+          "target_elements": [
+            "Table 2.1",
+            "Sec. 2.1",
+            "Sec. 2.3"
+          ],
+          "pointer_latex": "Sec.~2 (Table~2.1)"
+        },
+        {
+          "claim_id": "agent_memory_formalism",
+          "text": "STM/LTM cognitive memory, exponential decay, 5-component retrieval, and nycthemeral cycle",
+          "appendix_chapter": "11_multi_agent_specification",
+          "target_elements": [
+            "Eq. 11.2",
+            "Eq. 11.3",
+            "Fig. 11.1",
+            "Fig. 11.2",
+            "Fig. 11.3",
+            "Sec. 11.3-11.6"
+          ],
+          "pointer_latex": "Sec.~11 (Fig.~11.1, Fig.~11.2)"
+        },
+        {
+          "claim_id": "agent_vehicle_chain",
+          "text": "Physical vehicle chain tracking, intrafoyer sharing, and invalid mode graph pruning",
+          "appendix_chapter": "11_multi_agent_specification",
+          "target_elements": [
+            "Sec. 11.1",
+            "Eq. 11.1"
+          ],
+          "pointer_latex": "Sec.~11.1"
+        }
+      ]
+    },
+    {
+      "main_paper_section": "04_bench.en.md",
+      "main_paper_title": "4. Benchmark Protocol and Experimental Design",
+      "claims": [
+        {
+          "claim_id": "bench_demographic_control",
+          "text": "13-margin demographic control and TOST statistical equivalence testing",
+          "appendix_chapter": "01_demographic_control",
+          "target_elements": [
+            "Table 1.1",
+            "Sec. 1.2",
+            "Sec. 1.3"
+          ],
+          "pointer_latex": "Sec.~1 (Table~1.1)"
+        },
+        {
+          "claim_id": "bench_composite_loss_bias",
+          "text": "Mathematical formulation of composite loss C_EMD-JSD and empirical proof of +5.02 pt finite sample bias",
+          "appendix_chapter": "03_mathematical_metrics",
+          "target_elements": [
+            "Eq. 3.4",
+            "Table 3.1",
+            "Fig. 3.2",
+            "Sec. 3.3"
+          ],
+          "pointer_latex": "Sec.~3 (Fig.~3.2, Table~3.1)"
+        },
+        {
+          "claim_id": "bench_prompts_verbatim",
+          "text": "Verbatim prompt templates (minimal, expert, typed classifier) and Raymond decision trace",
+          "appendix_chapter": "04_prompts_and_traces",
+          "target_elements": [
+            "Sec. 4.1-4.4",
+            "Sec. 4.5"
+          ],
+          "pointer_latex": "Sec.~4"
+        },
+        {
+          "claim_id": "bench_typesafe_engine",
+          "text": "TypeSafe classifier integration engine, logprob extraction, and prompt stripping",
+          "appendix_chapter": "15_systems_architecture",
+          "target_elements": [
+            "Sec. 15.5",
+            "Listing 15.2"
+          ],
+          "pointer_latex": "Sec.~15.5"
+        }
+      ]
+    },
+    {
+      "main_paper_section": "05_results.en.md",
+      "main_paper_title": "5. Empirical Results and Benchmark Comparison",
+      "claims": [
+        {
+          "claim_id": "results_stratified_errors",
+          "text": "Granular modal error breakdowns across 6 urban dimensions and 15 deciders",
+          "appendix_chapter": "06_stratified_errors",
+          "target_elements": [
+            "Table 6.1",
+            "Table 6.2",
+            "Fig. 6.1-6.4"
+          ],
+          "pointer_latex": "Sec.~6 (Tables~6.1--6.2, Figs.~6.1--6.4)"
+        },
+        {
+          "claim_id": "results_paired_contrasts",
+          "text": "Twenty paired contrast hypothesis tests via person-level cluster bootstrap (B=2,000)",
+          "appendix_chapter": "07_paired_contrasts",
+          "target_elements": [
+            "Table 7.1",
+            "Sec. 7.1",
+            "Sec. 7.2"
+          ],
+          "pointer_latex": "Sec.~7 (Table~7.1)"
+        },
+        {
+          "claim_id": "results_ranking_reversals",
+          "text": "Instruction-dependent ranking reversals and justification clause ablation (+0.17 pt)",
+          "appendix_chapter": "07_paired_contrasts",
+          "target_elements": [
+            "Sec. 7.3"
+          ],
+          "pointer_latex": "Sec.~7.3"
+        },
+        {
+          "claim_id": "results_individual_audit",
+          "text": "Disaggregate audit on 9,621 trips, precision/recall, and target leakage autopsy",
+          "appendix_chapter": "14_individual_audit",
+          "target_elements": [
+            "Table 14.1",
+            "Fig. 14.1",
+            "Sec. 14.2",
+            "Sec. 14.3"
+          ],
+          "pointer_latex": "Sec.~14 (Fig.~14.1, Table~14.1)"
+        }
+      ]
+    },
+    {
+      "main_paper_section": "06_non_tabulated.en.md",
+      "main_paper_title": "6. Non-Tabulated Qualitative Phenomena and Adaptation",
+      "claims": [
+        {
+          "claim_id": "nontab_news_shock_protocol",
+          "text": "Pre-registered news shock protocol, 5 local dispatches, matched placebo, and 20-sign matrix",
+          "appendix_chapter": "05_news_shocks",
+          "target_elements": [
+            "Sec. 5.1-5.3",
+            "Table 5.1",
+            "Fig. 5.1"
+          ],
+          "pointer_latex": "Sec.~5 (Table~5.1, Fig.~5.1)"
+        },
+        {
+          "claim_id": "nontab_longitudinal_extinction",
+          "text": "Longitudinal memory extinction, daily propensity, and household 1-hop transmission",
+          "appendix_chapter": "05_news_shocks",
+          "target_elements": [
+            "Sec. 5.5",
+            "Fig. 5.2",
+            "Fig. 5.3"
+          ],
+          "pointer_latex": "Sec.~5.5 (Figs.~5.2--5.3)"
+        },
+        {
+          "claim_id": "nontab_tuning_regressions",
+          "text": "Sub-populations degraded by prompt tuning (education, 15-19 age group, trips >50 km)",
+          "appendix_chapter": "06_stratified_errors",
+          "target_elements": [
+            "Table 6.3",
+            "Sec. 6.4"
+          ],
+          "pointer_latex": "Sec.~6.4 (Table~6.3)"
+        },
+        {
+          "claim_id": "nontab_language_dilemma",
+          "text": "Bilingual evaluation and BPE tokenization inflation (+26.2% in French)",
+          "appendix_chapter": "10_execution_language",
+          "target_elements": [
+            "Sec. 10.1",
+            "Sec. 10.2",
+            "Table 10.1",
+            "Fig. 10.1"
+          ],
+          "pointer_latex": "Sec.~10 (Fig.~10.1, Table~10.1)"
+        }
+      ]
+    },
+    {
+      "main_paper_section": "07_implications.en.md",
+      "main_paper_title": "7. Discussion and Computational Economics",
+      "claims": [
+        {
+          "claim_id": "impl_ticket_103_factorial",
+          "text": "2x3 factorial generalization matrix on calibration cohort c2 and evaluated on sealed cohort c1",
+          "appendix_chapter": "08_factorial_generalization",
+          "target_elements": [
+            "Table 8.1",
+            "Sec. 8.1",
+            "Sec. 8.2"
+          ],
+          "pointer_latex": "Sec.~8 (Table~8.1)"
+        },
+        {
+          "claim_id": "impl_computational_economics",
+          "text": "Detailed token accounting, 1:50 cost ratio ($1.06 vs $49.28), and metropolitan scaling laws",
+          "appendix_chapter": "09_computational_economics",
+          "target_elements": [
+            "Table 9.1",
+            "Fig. 9.1",
+            "Sec. 9.1-9.3"
+          ],
+          "pointer_latex": "Sec.~9 (Table~9.1, Fig.~9.1)"
+        },
+        {
+          "claim_id": "impl_methodological_rectifications",
+          "text": "Chronology of twelve methodological rectifications across project history",
+          "appendix_chapter": "12_methodological_audit",
+          "target_elements": [
+            "Table 12.1",
+            "Sec. 12.1"
+          ],
+          "pointer_latex": "Sec.~12 (Table~12.1)"
+        },
+        {
+          "claim_id": "impl_data_governance_replication",
+          "text": "Third-party replication protocol under agreement lil-1750 and open code boundary",
+          "appendix_chapter": "13_data_governance",
+          "target_elements": [
+            "Sec. 13.1-13.3"
+          ],
+          "pointer_latex": "Sec.~13"
+        },
+        {
+          "claim_id": "impl_backpressure_scaling",
+          "text": "Reactive backpressure delay curve and EDF sync hold for metropolitan execution",
+          "appendix_chapter": "15_systems_architecture",
+          "target_elements": [
+            "Eq. 15.1",
+            "Fig. 15.3",
+            "Sec. 15.3"
+          ],
+          "pointer_latex": "Sec.~15.3 (Fig.~15.3)"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,86 @@
+\section{14. Disaggregate Individual Audit, Confusion Matrices, and Target Leakage Post-Mortem}
+
+This chapter reports the unit-level classification audit on 9,621 real survey trips. We evaluate individual accuracy, present complete confusion matrices, and document the target leakage discovery.
+
+\subsection{14.1 Individual-Level Classification Performance}
+
+\begin{table*}[t]
+\centering
+\caption{Unit-level audit metrics on 9,621 declared survey trips.}
+\label{tab-audit_metrics}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Decision-maker} & \textbf{Weighted acc. (\%)} & \textbf{Arbitrated acc. (\%)} & \textbf{Cross-entropy (nats)} & \textbf{GMPCA} \\
+\midrule
+Gradient boosting (LightGBM) & \textbf{71.5} & \textbf{67.4} & 0.419 & 0.657 \\
+Kernel logistic regression & 70.6 & 66.2 & 0.438 & 0.646 \\
+Random forest & 69.9 & 65.5 & 0.445 & 0.641 \\
+Multinomial logit & 68.6 & 64.2 & 0.478 & 0.620 \\
+Shortest duration heuristic & 68.1 & 65.3 & --- & --- \\
+All-car majority heuristic & 66.7 & 61.7 & --- & --- \\
+Expert prompt (\texttt{gemini-3.5}) & 67.6 & 65.2 & \textbf{0.356} & \textbf{0.701} \\
+Minimal prompt (\texttt{gemini-3.5}) & 64.8 & 61.6 & 0.460 & 0.631 \\
+Typed classifier (\texttt{jev-1.13.0}) & 64.7 & 61.4 & 0.468 & 0.628 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+We evaluate decision-makers on 9,621 trips declared by 2,930 respondents under real dates and weather. Table~\ref{tab-audit_metrics} summarizes weighted accuracy, arbitrated accuracy, and multiclass cross-entropy.
+
+While tabular models achieve the highest raw accuracy, \texttt{gemini-3.5} expert achieves the lowest cross-entropy (0.356 nats), indicating superior probabilistic calibration.
+
+\subsection{14.2 Confusion Matrices and Precision-Recall Profiles}
+
+\begin{table}[h]
+\centering
+\caption{Precision and recall percentages by transport mode.}
+\label{tab-prec_rec}
+\small
+\begin{tabular}{lllll}
+\toprule
+\textbf{Decision-maker} & \textbf{Car (P/R)} & \textbf{Walking (P/R)} & \textbf{Transit (P/R)} & \textbf{Cycling (P/R)} \\
+\midrule
+Gradient boosting & 85.3 / 79.0 & 53.2 / 63.4 & 53.8 / 61.7 & 27.3 / 20.4 \\
+Random forest & 84.5 / 77.2 & 50.8 / 64.0 & 51.2 / 60.6 & 25.5 / 13.9 \\
+Expert prompt (\texttt{gemini-3.5}) & 80.1 / 80.4 & 62.9 / 47.2 & 49.7 / 55.2 & 15.0 / 22.5 \\
+Typed classifier (\texttt{jev}) & 78.4 / 79.1 & 61.5 / 45.8 & 48.2 / 54.1 & 14.2 / 21.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{Confusion matrix of the expert prompt on declared trips (trip counts).}
+\label{tab-confusion_gemini}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Declared mode} & \textbf{Pred. bike} & \textbf{Pred. car} & \textbf{Pred. transit} & \textbf{Pred. walking} \\
+\midrule
+Bicycle ($n = 431$) & 97 & 227 & 62 & 45 \\
+Car ($n = 5{,}971$) & 345 & 4,799 & 540 & 283 \\
+Public transit ($n = 1{,}562$) & 88 & 481 & 862 & 132 \\
+Walking ($n = 1{,}652$) & 116 & 488 & 269 & 779 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.90\columnwidth]{images/fig_confusion_matrix_audit}
+\caption{Comparative normalized confusion matrices on 9,621 declared trips for Gemini 3.5 expert prompt and Jev-1.13.0 typed classifier.}
+\label{fig-confusion_matrix}
+\end{figure}
+
+Table~\ref{tab-prec_rec} presents the mode-by-mode precision and recall metrics across models. Table~\ref{tab-confusion_gemini} details the full confusion matrix for the expert prompt on declared trips.
+
+Furthermore, 1,295 trips (13.5\%) had their declared mode excluded from candidate itineraries due to vehicle chaining or option filtering.
+
+Figure~\ref{fig-confusion_matrix} displays normalized $4 \times 4$ confusion heatmaps comparing the generative language model against the typed zero-shot classifier across all declared choices.
+
+\subsection{14.3 Target Leakage Post-Mortem}
+
+During model development, an experimental gradient boosting variant achieved an extraordinary accuracy of 93.4\%. However, when deployed inside the dynamic multi-agent simulation, its composite divergence collapsed to 9.28 points, far worse than standard models.
+
+An internal audit revealed severe target leakage. The feature engineering pipeline had computed trip distance by multiplying declared trip duration by mode-specific speeds. Consequently, duration implicitly encoded the true transport mode. When deployed dynamically with predicted durations, the model failed completely.

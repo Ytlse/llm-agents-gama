@@ -762,6 +762,23 @@ def test_les_gardes_tracent_sans_refuser():
     assert messages[1].directif  # décision parentale : directive par nature
 
 
+def test_relais_obligatoire_refuse_un_destinataire_non_informe():
+    membres = [{"agent_id": "1", "mineur": False}]
+    reponse = SimpleNamespace(agents=[SimpleNamespace(agent_id="9", recipients=[
+        {"agent_id": "1", "speaks": False, "message": ""},
+    ])])
+    with pytest.raises(relais_module.RelaisRefuse) as exc:
+        relais_module.valider(
+            reponse, "9", membres, "H", "e", parole_obligatoire=True
+        )
+    assert exc.value.technique is True
+
+
+def test_a13_force_la_parole_a_tout_le_foyer():
+    e = charger(RACINE / "config" / "evenements" / "a13_punaises_metro.yaml")
+    assert e.relais is not None and e.relais.parole_obligatoire is True
+
+
 # ═════════════ T1 / T8 sur le VRAI chemin de décision (revue spec-critic du 2026-09-25) ═════
 class _CacheComplet(_CacheEspion):
     def __init__(self):

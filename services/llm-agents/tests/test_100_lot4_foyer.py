@@ -367,8 +367,8 @@ def test_R35_une_troncature_se_compte_et_salarme(caplog):
 def test_R41_le_schema_demande_la_provenance_et_la_version_a_bouge():
     from urban_mobility_agents.agents.llm_agent import SCHEMA_REFLEXION_VERSION
 
-    assert SCHEMA_REFLEXION_VERSION == 4, (
-        "une réponse mémoïsée sans provenance ferait passer tout ouï-dire pour du vécu"
+    assert SCHEMA_REFLEXION_VERSION == 5, (
+        "une réponse mémoïsée sans accusé de lecture pourrait ignorer le service presse"
     )
     schema = json.loads(
         (
@@ -381,6 +381,8 @@ def test_R41_le_schema_demande_la_provenance_et_la_version_a_bouge():
     assert "source" in concept["required"], (
         "demandé dans les DEUX bras : c'est ce qui garde une version de schéma unique"
     )
+    agent = schema["properties"]["agents"]["items"]
+    assert "press_service_considered" in agent["required"]
 
 
 def test_la_provenance_rendue_par_le_modele_est_traduite():

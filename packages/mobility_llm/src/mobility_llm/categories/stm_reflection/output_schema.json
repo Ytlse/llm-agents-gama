@@ -13,6 +13,10 @@
             "type": "string",
             "description": "Narrative reflection on the day, 200 words max"
           },
+          "press_service_considered": {
+            "type": "boolean",
+            "description": "true only when a present press_service was explicitly considered; false when no press_service was supplied"
+          },
           "concepts": {
             "type": "array",
             "description": "0-5 concepts for long-term memory. Each concept is an object; `severity` and `valence` qualify how much it mattered.",
@@ -112,6 +116,7 @@
         "required": [
           "agent_id",
           "reflection",
+          "press_service_considered",
           "concepts"
         ],
         "additionalProperties": false

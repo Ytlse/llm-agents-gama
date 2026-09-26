@@ -13,6 +13,7 @@ ferait passer un événement appliqué une fois pour un événement qui rate tro
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from collections import Counter
 from dataclasses import dataclass
@@ -56,6 +57,9 @@ class CompteursJournee:
     cache_contourne_ligne: int = 0       # décisions qui devaient porter une ligne : jamais du cache
     # Décisions d'un jour de service construites SANS leur ligne. Doit rester à zéro.
     decisions_sans_ligne: int = 0
+    reflexions_presse_presentees: int = 0
+    reflexions_presse_validees: int = 0
+    reflexions_presse_invalides: int = 0
 
 
 class RegistreEvenements:
@@ -81,6 +85,9 @@ class RegistreEvenements:
         # ── Ticket 111 — la ligne servie au prompt, et le relais au foyer ────────────────
         self._journal_relais = (
             Path(journal).parent / "relais_foyer.jsonl" if journal is not None else None
+        )
+        self._journal_reflexions_presse = (
+            Path(journal).parent / "reflexions_presse.jsonl" if journal is not None else None
         )
         # Relais déjà produits par CE run : relus à la reprise, jamais régénérés.
         self._relais: dict[str, relais_module.RelaisFoyer] = relais_module.relire(
@@ -641,6 +648,55 @@ class RegistreEvenements:
     def noter_contournement_cache(self) -> None:
         self._compteurs.cache_contourne_ligne += 1
 
+    def tracer_reflexion_presse(
+        self,
+        person_id: str,
+        timestamp: int,
+        lignes: list[str],
+        *,
+        etape: str,
+        prise_en_compte: bool | None = None,
+        reflection: str = "",
+    ) -> None:
+        """Trace la présentation du journal à la consolidation et son accusé de lecture.
+
+        La trace est volontairement séparée du journal des injections : une lecture initiale
+        et une présentation quotidienne pendant le service sont deux mécanismes différents.
+        """
+        if not lignes:
+            return
+        if etape == "presentee":
+            self._compteurs.reflexions_presse_presentees += 1
+        elif prise_en_compte:
+            self._compteurs.reflexions_presse_validees += 1
+        else:
+            self._compteurs.reflexions_presse_invalides += 1
+        chemin = self._journal_reflexions_presse
+        if chemin is None:
+            return
+        try:
+            texte = "\n".join(str(l) for l in lignes)
+            ligne = {
+                "evenement_id": self.evenement.evenement_id,
+                "person_id": str(person_id),
+                "timestamp": int(timestamp),
+                "date": self._date_de(int(timestamp)).isoformat(),
+                "jour_relatif": self.jour_relatif(int(timestamp), str(person_id)),
+                "etape": str(etape),
+                "prise_en_compte": prise_en_compte,
+                "service_sha256": hashlib.sha256(texte.encode("utf-8")).hexdigest(),
+                "service_apercu": texte[:240],
+                "reflection": str(reflection or ""),
+            }
+            chemin.parent.mkdir(parents=True, exist_ok=True)
+            with chemin.open("a", encoding="utf-8") as flux:
+                flux.write(json.dumps(ligne, ensure_ascii=False) + "\n")
+        except Exception as err:  # noqa: BLE001 — l'observabilité ne fait pas tomber le run
+            logger.error(
+                f"[ALARME] [evenements] trace de réflexion presse impossible pour "
+                f"{person_id} ({err})"
+            )
+
     # ── Cache de décisions ───────────────────────────────────────────────────────────────
     def cache_coupe(self, timestamp: int) -> bool:
         """Le cache de décisions doit-il être contourné à cet instant ? (Q5, 2026-09-22)
@@ -753,6 +809,12 @@ class RegistreEvenements:
                 f"{c.relais_sans_membre} sans autre membre ; "
                 f"{c.cache_contourne_ligne} décision(s) tenue(s) hors cache pour porter leur "
                 f"ligne ; {c.decisions_sans_ligne} décision(s) de jour de service sans ligne"
+            )
+            logger.info(
+                f"[evenements] jour {c.jour_run} — journal dans la réflexion : "
+                f"{c.reflexions_presse_presentees} présentation(s), "
+                f"{c.reflexions_presse_validees} prise(s) en compte validée(s), "
+                f"{c.reflexions_presse_invalides} réponse(s) invalide(s)"
             )
             if c.decisions_sans_ligne:
                 logger.error(

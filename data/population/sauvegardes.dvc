@@ -1,0 +1,6 @@
+outs:
+- md5: 15344dde78099332f787a01668d7bbd9.dir
+  size: 23901429
+  nfiles: 5
+  hash: md5
+  path: sauvegardes

@@ -1,0 +1,33 @@
+\section{13. Research Data Governance, Legal Embargo, and Third-Party Replication Protocol}
+
+This chapter defines data governance constraints and replication protocols. We detail the legal requirements governing the Cerema EMC² 2023 survey and provide independent replication instructions.
+
+\subsection{13.1 Legal Framework and Agreement `lil-1750`}
+
+The research uses microdata from the certified Cerema Household Travel Survey (EMC² 2023, Greater Toulouse). We obtained these data through the French national Quetelet-ProGEDO diffusion portal under research agreement \texttt{lil-1750}.
+
+French statistical confidentiality regulations strictly forbid transferring raw microdata to third parties. Consequently, the public replication archive cannot distribute the raw survey files.
+
+\subsection{13.2 Open Replication Package Boundary}
+
+The open replication repository contains all artifacts permissible under law.
+
+\textbf{Software and code.} Complete simulation and inference Python source code.
+
+\textbf{Configurations.} Random seeds and experimental configuration manifests.
+
+\textbf{Synthetic cohort.} The sealed synthetic cohort of 1,000 personas and validation scripts.
+
+\textbf{Spatial layers.} Multimodal routing graphs and OpenTripPlanner configurations.
+
+\subsection{13.3 Third-Party Microdata Access Protocol}
+
+Independent researchers can replicate our exact baseline fits through five sequential steps.
+
+1. Register an academic research account on the national ADISP portal (\texttt{progedo-adisp.fr}).
+2. Request the certified microdata for the Greater Toulouse 2023 mobility survey.
+3. Place received microdata files into repository directory \texttt{data/PROGEDO 2023/}.
+4. Execute \texttt{build_mode_choice_dataset.py} with seed 0 to regenerate the exact train/test split.
+5. Execute \texttt{fit_mode_choice_*.py} to reproduce the tabular benchmark metrics.
+
+---

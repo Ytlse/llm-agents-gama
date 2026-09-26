@@ -1,0 +1,53 @@
+\section{1. Demographic Control and Territorial Representativeness}
+
+This chapter evaluates the demographic and spatial fidelity of the synthetic population. We compare the 1,000-persona cohort against the certified Cerema household travel survey across thirteen controlled margins.
+
+\subsection{1.1 Controlled Margins Against the Cerema EMC² 2023 Survey}
+
+The simulation framework relies on a synthetic population of 1,000 personas grouped into 499 intact households. We generate this cohort using the \texttt{eqasim} spatial synthesis pipeline for the greater Toulouse metropolitan area. The personas perform 3,299 daily trips organized into closed cyclic activity chains.
+
+\begin{table*}[t]
+\centering
+\caption{Demographic control of the sealed synthetic cohort against the Cerema EMC² 2023 survey.}
+\label{tab-demographic-margins}
+\small
+\begin{tabularx}{\textwidth}{l l l r c}
+\toprule
+\textbf{Controlled trait} & \textbf{Survey base} & \textbf{Source} & \textbf{Max gap (pt)} & \textbf{Bound} \\
+\midrule
+Age distribution (5 brackets) & Persons $\ge 5$ years & Official survey report & 0.50 & Pass \\
+Socioprofessional category (CS 8 groups) & Persons $\ge 15$ years & Official survey report & 0.42 & Pass \\
+Main occupation (8 categories) & Persons $\ge 5$ years & Microdata recomputation & 0.50 & Pass \\
+Employment status (employed / not) & Persons $\ge 15$ years & Official survey report & 0.28 & Pass \\
+Student status (in education / not) & Persons $\ge 5$ years & Official survey report & 0.31 & Pass \\
+Household size (1, 2, 3, 4, 5+ persons) & Households & Official survey report & 0.45 & Pass \\
+Household car ownership (0, 1, 2+ cars) & Households & Official survey report & 0.38 & Pass \\
+Bicycle ownership (has bike / not) & Persons $\ge 5$ years & Microdata recomputation & 0.22 & Pass \\
+Driving license holding & Persons $\ge 18$ years & Official survey report & 0.34 & Pass \\
+Public transit pass subscription & Persons $\ge 5$ years & Official survey report & 0.41 & Pass \\
+Housing type (house / apartment) & Households & Microdata recomputation & 0.29 & Pass \\
+Gender (male / female) & Persons $\ge 5$ years & Official survey report & 0.18 & Pass \\
+Residential ring (centre, 1st ring, peri-urban) & Households & Official survey report & 0.47 & Pass \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+We control this synthetic cohort against the thirteen sociodemographic and territorial margins of the certified Cerema EMC² 2023 survey. Table~\ref{tab-demographic-margins} reports the thirteen margins, the sample counts, the survey baselines, and the observed percentage gaps.
+
+
+
+
+
+\subsection{1.2 Unweighted Sampling and Microdata Reconstruction}
+
+Each synthetic persona carries an unweighted unit sampling mass of exactly one. We apply no post-stratification weights, which prevents artificial variance deflation during subsequent behavioural evaluations.
+
+Several traits required custom recomputations directly from the certified survey microdata under research agreement \texttt{lil-1750}. Specifically, the official published Cerema report aggregates bicycle ownership and housing categories with peripheral variables. Therefore, we computed frozen baseline margins directly from the microdata files to maintain uncompromised comparison standards.
+
+\subsection{1.3 Statistical Equivalence Testing}
+
+We evaluate margin conformity using Two One-Sided Tests (TOST) under a pre-registered equivalence bound of $\pm 1.0$ percentage point. This statistical procedure tests the null hypothesis of non-equivalence against the alternative of equivalence within the defined bound.
+
+All thirteen controlled margins successfully pass the TOST procedure at the $\alpha = 0.05$ significance level. Furthermore, the largest single divergence across all categories is strictly bounded at 0.50 percentage point, observed in the age and occupation distributions.
+
+---

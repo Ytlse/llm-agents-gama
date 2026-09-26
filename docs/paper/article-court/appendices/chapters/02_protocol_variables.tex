@@ -1,0 +1,57 @@
+\section{2. The 21-Variable Protocol and Information Parity}
+
+This chapter details the input feature contract governing the benchmark. We define the 21 variables that enforce strict informational parity between tabular models and generative agents.
+
+\subsection{2.1 The Informational Contract}
+
+Fair comparison between machine learning baselines and generative language models requires identical input information. The protocol contract (\texttt{spec_version 2}) designates 21 input features and forbids supplementary tabular predictors.
+
+Supervised tabular models observe these 21 variables exclusively. In contrast, generative language models receive these identical variables embedded within narrative natural language prompts, accompanied by trip itinerary options and environmental context.
+
+\subsection{2.2 Complete Feature Dictionary}
+
+\begin{table*}[t]
+\centering
+\caption{Complete 21-variable feature dictionary of the information contract.}
+\label{tab-feature-dict}
+\small
+\begin{tabularx}{\textwidth}{l l l X}
+\toprule
+\textbf{Variable name} & \textbf{Data type} & \textbf{Modalities / Range} & \textbf{Description} \\
+\midrule
+\texttt{age} & Integer & 5--100 & Persona chronological age \\
+\texttt{sexe} & Categorical & male, female & Persona administrative sex \\
+\texttt{csp} & Categorical & 8 modalities & Occupation category \\
+\texttt{revenu\_fiscal} & Float & Positive & Household tax revenue \\
+\texttt{nb\_pers} & Integer & 1--8 & Household total size \\
+\texttt{nb\_enf} & Integer & 0--6 & Number of children under 18 \\
+\texttt{nb\_voitures} & Integer & 0--4 & Total vehicles in household \\
+\texttt{nb\_velos} & Integer & 0--6 & Total bicycles in household \\
+\texttt{permis\_conduire} & Boolean & True, False & Driving license possession \\
+\texttt{abonnement\_tc} & Boolean & True, False & Transit pass ownership \\
+\texttt{commune\_resid} & Integer & INSEE code & Residential municipality code \\
+\texttt{couronne} & Categorical & center, ring1, ring2 & Urban perimeter ring \\
+\texttt{type\_logement} & Categorical & house, apartment & Residential dwelling typology \\
+\texttt{motif} & Categorical & 9 modalities & Primary trip purpose \\
+\texttt{heure\_dep} & Float & 0.0--24.0 & Scheduled departure hour \\
+\texttt{heure\_arr} & Float & 0.0--24.0 & Expected arrival hour \\
+\texttt{distance\_vol} & Float & Positive (km) & Euclidean origin-destination distance \\
+\texttt{options\_modes} & List & Subset of 4 modes & Feasible candidate mode options \\
+\texttt{options\_durees} & List & Positive (minutes) & Routing durations per candidate mode \\
+\texttt{options\_couts} & List & Positive (euros) & Monetary trip expenses per mode \\
+\texttt{meteo\_courante} & Categorical & 4 states & Weather during departure interval \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+The 21 variables fall into three structural blocks. Table~\ref{tab-feature-dict} provides the complete variable dictionary, including data types, modalities, and physical definitions.
+
+\emph{Table~\ref{tab-feature-dict}. The 21 variables of the comparison protocol.}
+
+
+
+\subsection{2.3 Spatial Coordinates and Projections}
+
+All geometric metrics use the official French Lambert-93 planar projection (EPSG:2154). We calculate the inner city reference distance relative to the geographic centroid of the historic Capitole sector in Toulouse.
+
+---
